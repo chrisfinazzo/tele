@@ -33,6 +33,7 @@ type stubClient struct {
 	revoked       bool
 	reactedWith   string
 	reactionSent  bool
+	reactionReply []domain.Reaction
 	forwardedTo   int64
 	forwardedPeer domain.Peer
 	forwardedIDs  []int

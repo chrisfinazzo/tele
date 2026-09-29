@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -93,15 +94,20 @@ func (o *Owner) bumpForwardTarget(fromChatID, toChatID int64, msgIDs []int) {
 	o.Refresh()
 }
 
-// SendReaction sets or retracts our reaction on a message.
-func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) error {
+// SendReaction sets or retracts our reaction on a message. kept is false when
+// Telegram accepted the request but the set its reply states does not hold
+// what was asked for: the pick as our only reaction, or none of ours after a
+// retract. That set is already in the store by then, delivered through the
+// update hook, so there is nothing to put back - only something to say
+// (#248). A reply that states no set is not judged.
+func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) (kept bool, err error) {
 	peer, err := o.peer(chatID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	msg, err := o.messageByID(chatID, msgID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	prev := make([]domain.Reaction, len(msg.Reactions))
 	copy(prev, msg.Reactions)
@@ -112,15 +118,44 @@ func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji
 		zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("picked", emoji),
 		zap.String("was", domain.FormatReactions(prev)), zap.String("now", domain.FormatReactions(next)))
 	o.state.ApplyReactions(chatID, msgID, next, false, "optimistic")
-	if err := o.client.SendReaction(ctx, peer, msgID, reactionToSend(prev, emoji)); err != nil {
+	sent := reactionToSend(prev, emoji)
+	confirmed, err := o.client.SendReaction(ctx, peer, msgID, sent)
+	if err != nil {
 		o.log.Debug("reaction: rollback",
 			zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID),
 			zap.String("to", domain.FormatReactions(prev)), zap.Error(err))
 		o.state.ApplyReactions(chatID, msgID, prev, false, "rollback")
-		return err
+		return false, err
 	}
 	o.log.Debug("reaction: sent", zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID))
-	return nil
+	if confirmed != nil && !holdsOnlyOurs(confirmed, sent) {
+		o.log.Debug("reaction: not kept",
+			zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("sent", sent),
+			zap.String("confirmed", domain.FormatReactions(confirmed)))
+		return false, nil
+	}
+	return true, nil
+}
+
+// holdsOnlyOurs reports whether set marks exactly sent as ours, or nothing as
+// ours when sent is empty (a retract). The picker sends some emoji with a
+// variation selector that Telegram's reply leaves out ("❤️" comes back as
+// "❤"), so the two are compared without it.
+func holdsOnlyOurs(set []domain.Reaction, sent string) bool {
+	var ours []string
+	for _, r := range set {
+		if r.IsChosen {
+			ours = append(ours, r.Emoji)
+		}
+	}
+	if sent == "" {
+		return len(ours) == 0
+	}
+	return len(ours) == 1 && withoutVariationSelector(ours[0]) == withoutVariationSelector(sent)
+}
+
+func withoutVariationSelector(emoji string) string {
+	return strings.ReplaceAll(emoji, "️", "")
 }
 
 // reactionToSend is the emoji sent to Telegram: empty retracts, which is what

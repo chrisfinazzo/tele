@@ -106,7 +106,10 @@ type Client interface {
 	// messages.forwardMessages. Returns ErrForwardRestricted when the source
 	// chat forbids forwarding (content protection).
 	ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, ids []int) error
-	SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) error
+	// SendReaction sets our reaction (emoji == "" retracts it) and returns the
+	// set Telegram's reply states for the message, or nil when the reply states
+	// none that says which reaction is ours.
+	SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) ([]domain.Reaction, error)
 	SetTyping(ctx context.Context, peer domain.Peer, action domain.TypingAction) error
 	// SaveDraft persists (text != "") or clears (text == "") the message draft
 	// for a peer, synced with Telegram's other clients (#62).

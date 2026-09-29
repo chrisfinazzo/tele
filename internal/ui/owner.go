@@ -34,7 +34,9 @@ type Owner interface {
 	ReadMentions(ctx context.Context, chatID int64) error
 	EditMessage(ctx context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error
 	DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error
-	SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) error
+	// SendReaction answers kept=false when Telegram accepted the request but
+	// did not keep the reaction; the set it did keep is already on its way.
+	SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) (kept bool, err error)
 	Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error
 	SetTyping(ctx context.Context, chatID int64, action domain.TypingAction) error
 	SaveDraft(ctx context.Context, chatID int64, text string) error

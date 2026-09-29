@@ -556,14 +556,15 @@ func buildSaveDraftRequest(inputPeer tg.InputPeerClass, text string) *tg.Message
 	}
 }
 
-func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) error {
+func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) ([]domain.Reaction, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c.traceLog.Debug("SendReaction", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji))
 	attempt := 0
-	return WithRetry(ctx, func() error {
+	var confirmed []domain.Reaction
+	err = WithRetry(ctx, func() error {
 		attempt++
 		start := time.Now()
 		reply, err := api.MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
@@ -586,8 +587,33 @@ func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID i
 			zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji),
 			zap.Int("attempt", attempt), zap.Duration("took", time.Since(start)),
 			zap.Strings("updates", types), zap.String("reactions", found))
+		confirmed = confirmedReactions(reply, msgID)
 		return nil
 	})
+	return confirmed, err
+}
+
+// confirmedReactions is the set the reply to messages.sendReaction states for
+// msgID, or nil when it states none the owner can judge our pick against
+// (#248). Only an UpdateMessageReactions states it: an edit's copy yields to
+// one (see yieldPairedEditReactions), and a min set does not say which
+// reaction is ours.
+func confirmedReactions(reply tg.UpdatesClass, msgID int) []domain.Reaction {
+	var upds []tg.UpdateClass
+	switch r := reply.(type) {
+	case *tg.Updates:
+		upds = r.Updates
+	case *tg.UpdatesCombined:
+		upds = r.Updates
+	case *tg.UpdateShort:
+		upds = []tg.UpdateClass{r.Update}
+	}
+	for _, u := range upds {
+		if r, ok := u.(*tg.UpdateMessageReactions); ok && r.MsgID == msgID && !r.Reactions.Min {
+			return convertReactions(r.Reactions)
+		}
+	}
+	return nil
 }
 
 func buildReactionArg(emoji string) []tg.ReactionClass {

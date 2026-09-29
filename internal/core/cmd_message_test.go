@@ -104,10 +104,10 @@ func TestDeleteMessages_RestoreDoesNotCountAsUnread(t *testing.T) {
 	assert.Equal(t, before.UnreadCount, after.UnreadCount)
 }
 
-func (s *stubClient) SendReaction(_ context.Context, _ domain.Peer, _ int, emoji string) error {
+func (s *stubClient) SendReaction(_ context.Context, _ domain.Peer, _ int, emoji string) ([]domain.Reaction, error) {
 	s.reactedWith = emoji
 	s.reactionSent = true
-	return s.err
+	return s.reactionReply, s.err
 }
 
 func TestSendReaction_ShowsTheReactionBeforeTheServerAnswers(t *testing.T) {
@@ -115,7 +115,9 @@ func TestSendReaction_ShowsTheReactionBeforeTheServerAnswers(t *testing.T) {
 	o, st := newCmdOwner(t, c)
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
 
-	require.NoError(t, o.SendReaction(context.Background(), 1, 5, "👍"))
+	kept, err := o.SendReaction(context.Background(), 1, 5, "👍")
+	require.NoError(t, err)
+	assert.True(t, kept, "a reply that states no set is not judged")
 
 	got := st.Messages(1)[0].Reactions
 	require.Len(t, got, 1)
@@ -134,7 +136,8 @@ func TestSendReaction_SecondTimeRetracts(t *testing.T) {
 		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}},
 	}})
 
-	require.NoError(t, o.SendReaction(context.Background(), 1, 5, "👍"))
+	_, err := o.SendReaction(context.Background(), 1, 5, "👍")
+	require.NoError(t, err)
 
 	require.True(t, c.reactionSent)
 	assert.Empty(t, c.reactedWith, "retracting sends an empty reaction")
@@ -149,13 +152,54 @@ func TestSendReaction_RestoresThePreviousReactionsOnFailure(t *testing.T) {
 		Reactions: []domain.Reaction{{Emoji: "🔥", Count: 2}},
 	}})
 
-	err := o.SendReaction(context.Background(), 1, 5, "👍")
+	_, err := o.SendReaction(context.Background(), 1, 5, "👍")
 
 	require.Error(t, err)
 	got := st.Messages(1)[0].Reactions
 	require.Len(t, got, 1)
 	assert.Equal(t, "🔥", got[0].Emoji)
 	assert.Equal(t, 2, got[0].Count)
+}
+
+// The reply to messages.sendReaction states the set Telegram ended up with.
+// A request that succeeded but left a set without our pick is reported, never
+// silent (#248); a set with exactly our pick as ours is what was asked for.
+func TestSendReaction_JudgesTheSetTheReplyStates(t *testing.T) {
+	chosen := func(emoji ...string) []domain.Reaction {
+		out := []domain.Reaction{{Emoji: "🔥", Count: 3}}
+		for _, e := range emoji {
+			out = append(out, domain.Reaction{Emoji: e, Count: 1, IsChosen: true})
+		}
+		return out
+	}
+	tests := []struct {
+		name  string
+		had   []domain.Reaction
+		pick  string
+		reply []domain.Reaction
+		kept  bool
+	}{
+		{"set and kept", nil, "👍", chosen("👍"), true},
+		{"set but not in the reply", nil, "👍", chosen(), false},
+		{"set but another one is ours", nil, "👍", chosen("👌"), false},
+		{"switched and kept", chosen("👌"), "👍", chosen("👍"), true},
+		{"retracted and gone", chosen("👍"), "👍", chosen(), true},
+		{"retracted but still ours", chosen("👍"), "👍", chosen("👍"), false},
+		{"empty set stated", nil, "👍", []domain.Reaction{}, false},
+		{"kept without the variation selector", nil, "❤️", chosen("❤"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &stubClient{reactionReply: tt.reply}
+			o, st := newCmdOwner(t, c)
+			st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0), Reactions: tt.had}})
+
+			kept, err := o.SendReaction(context.Background(), 1, 5, tt.pick)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.kept, kept)
+		})
+	}
 }
 
 // optimisticReactions moved here from the UI, so its behaviour gets stated

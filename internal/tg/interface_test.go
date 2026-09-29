@@ -123,8 +123,8 @@ func (m *mockClient) ForwardMessages(_ context.Context, _ domain.Peer, _ domain.
 	return nil
 }
 
-func (m *mockClient) SendReaction(_ context.Context, _ domain.Peer, _ int, _ string) error {
-	return nil
+func (m *mockClient) SendReaction(_ context.Context, _ domain.Peer, _ int, _ string) ([]domain.Reaction, error) {
+	return nil, nil
 }
 
 func (m *mockClient) SetTyping(_ context.Context, _ domain.Peer, _ domain.TypingAction) error {

@@ -504,6 +504,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleVideoTick(msg)
 	case reactionFailedMsg:
 		return m.handleReactionFailed(msg)
+	case reactionNotKeptMsg:
+		return m.handleReactionNotKept(msg)
 	case deleteMsgFailedMsg:
 		return m.handleDeleteMsgFailed(msg)
 	case editMsgFailedMsg:

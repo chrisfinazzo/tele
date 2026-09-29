@@ -23,6 +23,13 @@ type reactionFailedMsg struct {
 	err    error
 }
 
+// reactionNotKeptMsg reports a reaction Telegram accepted but did not keep
+// (#248). The set it kept is already on screen, so it is only said.
+type reactionNotKeptMsg struct {
+	chatID int64
+	msgID  int
+}
+
 // deleteMsgFailedMsg reports a refused delete for presentation only: the owner
 // has already restored the message.
 type deleteMsgFailedMsg struct {
@@ -299,11 +306,19 @@ func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootM
 	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
 	msgID, emoji := m.reactionTargetID, msg.Emoji
 	return m, func() tea.Msg {
-		if err := owner.SendReaction(ctx, chatID, msgID, emoji); err != nil {
+		kept, err := owner.SendReaction(ctx, chatID, msgID, emoji)
+		if err != nil {
 			return reactionFailedMsg{chatID: chatID, msgID: msgID, err: err}
+		}
+		if !kept {
+			return reactionNotKeptMsg{chatID: chatID, msgID: msgID}
 		}
 		return nil
 	}
+}
+
+func (m RootModel) handleReactionNotKept(reactionNotKeptMsg) (RootModel, tea.Cmd) {
+	return m, m.retiringToast(components.ToastWarning, "Telegram did not keep the reaction")
 }
 
 func (m RootModel) handleReactionFailed(msg reactionFailedMsg) (RootModel, tea.Cmd) {

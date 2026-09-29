@@ -360,20 +360,20 @@ func (o *testOwner) Forward(_ context.Context, fromChatID, toChatID int64, msgID
 	return nil
 }
 
-func (o *testOwner) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) error {
+func (o *testOwner) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) (bool, error) {
 	msg, ok := o.messageByID(chatID, msgID)
 	if !ok {
-		return &telerr.Error{Kind: telerr.NotFound}
+		return false, &telerr.Error{Kind: telerr.NotFound}
 	}
 	prev := make([]domain.Reaction, len(msg.Reactions))
 	copy(prev, msg.Reactions)
 	if o.cmdErr != nil {
-		return o.cmdErr
+		return false, o.cmdErr
 	}
 	next := append([]domain.Reaction{}, prev...)
 	next = append(next, domain.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
 	o.state.ApplyReactions(chatID, msgID, next, false, "optimistic")
-	return nil
+	return true, nil
 }
 
 func (o *testOwner) DeleteMessages(_ context.Context, chatID int64, msgIDs []int, _ bool) error {

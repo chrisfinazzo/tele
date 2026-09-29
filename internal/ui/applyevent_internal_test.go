@@ -38,6 +38,9 @@ type ownerStub struct {
 	// every command answers with, standing in for a Telegram refusal.
 	calls []cmdCall
 	err   error
+	// reactionNotKept makes SendReaction answer that Telegram accepted the
+	// request but did not keep the reaction (#248).
+	reactionNotKept bool
 	// participants is what the mention query answers with.
 	participants []domain.ChatMember
 
@@ -317,14 +320,14 @@ func (o *ownerStub) Forward(_ context.Context, fromChatID, toChatID int64, _ []i
 	return nil
 }
 
-func (o *ownerStub) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) error {
+func (o *ownerStub) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) (bool, error) {
 	o.calls = append(o.calls, cmdCall{name: "SendReaction", chatID: chatID})
 	if o.err != nil {
-		return o.err
+		return false, o.err
 	}
 	o.state.ApplyReactions(chatID, msgID,
 		[]domain.Reaction{{Emoji: emoji, Count: 1, IsChosen: true}}, false, "optimistic")
-	return nil
+	return !o.reactionNotKept, nil
 }
 
 func (o *ownerStub) DeleteMessages(_ context.Context, chatID int64, msgIDs []int, _ bool) error {
