@@ -27,6 +27,22 @@ func TestReactionsHaveUnread(t *testing.T) {
 	assert.False(t, reactionsHaveUnread(tg.MessageReactions{}))
 }
 
+// A message without a reactions field says nothing about reactions and one
+// with an empty field says there are none; an edit applies only the second
+// (#248), so the two must stay apart: nil and an empty set.
+func TestConvertMessage_AbsentReactionsAreNotAnEmptySet(t *testing.T) {
+	absent, ok := convertMessage(&tg.Message{ID: 5, Date: 1700000000, Message: "hi"}, 10)
+	require.True(t, ok)
+	assert.Nil(t, absent.Reactions)
+
+	raw := &tg.Message{ID: 5, Date: 1700000000, Message: "hi"}
+	raw.SetReactions(tg.MessageReactions{Results: []tg.ReactionCount{}})
+	empty, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	assert.NotNil(t, empty.Reactions)
+	assert.Empty(t, empty.Reactions)
+}
+
 func TestConvertMessage_HasUnreadReactions(t *testing.T) {
 	raw := &tg.Message{
 		ID: 5, Date: 1700000000, Out: true, Message: "hi",

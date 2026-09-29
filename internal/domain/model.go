@@ -278,7 +278,9 @@ type Message struct {
 	// no position at all - a fetched history page, or our own edit before the
 	// server answers - and orders against nothing (ADR 0016).
 	AppliedPosition int
-	Reactions       []Reaction
+	// Reactions is nil when the source did not state the set at all and empty
+	// when it stated there are none. An edit applies only a stated set (#248).
+	Reactions []Reaction
 	// HasUnreadReactions is true when the raw message carried at least one recent
 	// reaction flagged unread (a not-yet-viewed reaction on one of our messages).
 	HasUnreadReactions bool

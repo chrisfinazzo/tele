@@ -224,6 +224,25 @@ func TestApplyEdit_HiddenEditAppliesReactionsWithoutTheLabel(t *testing.T) {
 	assert.False(t, got.ShowsEdited(), "a hidden edit must not label the message edited")
 }
 
+// An edit whose message has no reactions field says nothing about reactions,
+// so the set stays; one whose field is there but empty says there are none
+// (#248). A nil set is the first, an empty one the second.
+func TestApplyEdit_ReactionsOnlyWhenTheEditCarriesThem(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	liked := []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}}
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "hi", Reactions: liked})
+
+	_, ok := s.ApplyEdit(domain.Message{ID: 5, ChatID: 1, Text: "hi", AppliedPosition: 10})
+	require.True(t, ok)
+	assert.Equal(t, liked, st.Messages(1)[0].Reactions, "an edit without the field must leave the set alone")
+
+	_, ok = s.ApplyEdit(domain.Message{ID: 5, ChatID: 1, Text: "hi", AppliedPosition: 11,
+		Reactions: []domain.Reaction{}})
+	require.True(t, ok)
+	assert.Empty(t, st.Messages(1)[0].Reactions, "an edit with an empty set clears it")
+}
+
 // An edit update for a message nobody ever edited carries no edit date at all.
 // Applying it must not invent one.
 func TestApplyEdit_WithoutAnEditDateLeavesTheMessageUnlabelled(t *testing.T) {

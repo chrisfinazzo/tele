@@ -39,7 +39,9 @@ func (s *State) ApplyIncoming(msg domain.Message) (Change, bool) {
 // An edit update carries the message's whole current state, so everything in it
 // is applied: the text, the entities and the reaction set. None of the three is
 // an alternative to the others, and treating them as such dropped reactions
-// until the chat was reopened (#199).
+// until the chat was reopened (#199). A message that carries no reactions field
+// (a nil set) says nothing about reactions and leaves the stored set alone;
+// only an empty set says there are none (#248).
 //
 // The edit marker is the only conditional part. A message nobody edited carries
 // no edit date and must not be given one: in a 1:1 chat an incoming reaction is
@@ -59,7 +61,9 @@ func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 	if msg.EditDate != nil {
 		s.st.MarkMessageEdited(msg.ChatID, msg.ID, *msg.EditDate, msg.EditHidden)
 	}
-	s.st.UpdateMessageReactions(msg.ChatID, msg.ID, msg.Reactions, "edit")
+	if msg.Reactions != nil {
+		s.st.UpdateMessageReactions(msg.ChatID, msg.ID, msg.Reactions, "edit")
+	}
 	unreadChanged := false
 	if msg.HasUnreadReactions {
 		unreadChanged = s.st.ApplyUnreadReaction(msg.ChatID, msg.ID, true)
