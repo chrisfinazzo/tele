@@ -15,7 +15,9 @@ import (
 // It extracts UpdateReadHistoryOutbox / UpdateReadChannelOutbox directly from
 // the wire update before pts-tracking sees it. updates.Manager drops these
 // events when a pts gap exists (the pending buffer never flushes), so we must
-// intercept them here to guarantee delivery.
+// intercept them here to guarantee delivery. Being the one place that sees an
+// envelope whole, it also settles which of two updates about one message's
+// reactions decides (yieldPairedEditReactions).
 //
 // Upstream issue: gotd/td#1853, the same buffer discard as common_diff.go
 // works around. Whether its fix covers a read the difference never replays is
@@ -33,6 +35,7 @@ func newOutboxHook(next telegram.UpdateHandler, mustDeliver chan<- store.Event, 
 func (h *outboxHook) Handle(ctx context.Context, u tg.UpdatesClass) error {
 	h.logArrival(u)
 	h.extractOutboxReads(ctx, u)
+	yieldPairedEditReactions(h.log, u)
 	return h.next.Handle(ctx, u)
 }
 
