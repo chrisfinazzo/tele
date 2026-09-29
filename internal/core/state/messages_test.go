@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -246,16 +248,37 @@ func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1})
 	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
 
-	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, true)
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, true, "reactions update")
 	require.True(t, ok)
 	assert.True(t, chg.UnreadReactionChanged)
 
 	// Same message again: the count is already tracked.
-	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 2}}, true)
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 2}}, true, "reactions update")
 	require.True(t, ok)
 	assert.False(t, chg.UnreadReactionChanged)
 	c, _ := st.GetChat(1)
 	assert.Equal(t, 1, c.UnreadReactionsCount)
+}
+
+// The reaction trace (#248) names where a set came from: an edit and a
+// reactions update can describe the same change and disagree about it.
+func TestReactionWrites_NameTheirSource(t *testing.T) {
+	core, logs := observer.New(zap.DebugLevel)
+	st, err := store.NewSQLite(":memory:", zap.New(core))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	s := state.New(st)
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
+
+	s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}}, false, "optimistic")
+	s.ApplyEdit(domain.Message{ID: 5, ChatID: 1, AppliedPosition: 10,
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 2}}})
+
+	var vias []string
+	for _, e := range logs.FilterMessage("reaction: store write").All() {
+		vias = append(vias, e.ContextMap()["via"].(string))
+	}
+	assert.Equal(t, []string{"optimistic", "edit"}, vias)
 }
 
 func TestApplyDelete_WithChatID(t *testing.T) {

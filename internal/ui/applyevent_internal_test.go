@@ -323,7 +323,7 @@ func (o *ownerStub) SendReaction(_ context.Context, chatID int64, msgID int, emo
 		return o.err
 	}
 	o.state.ApplyReactions(chatID, msgID,
-		[]domain.Reaction{{Emoji: emoji, Count: 1, IsChosen: true}}, false)
+		[]domain.Reaction{{Emoji: emoji, Count: 1, IsChosen: true}}, false, "optimistic")
 	return nil
 }
 

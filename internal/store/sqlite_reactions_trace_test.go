@@ -28,20 +28,22 @@ func reactionTrace(logs *observer.ObservedLogs) []observer.LoggedEntry {
 var liked = []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}}
 
 // A reaction that vanishes without an error (#248) was overwritten by some
-// write, and the trace has to say which one did it.
+// write, and the trace has to say which one did it. A set is written by an
+// edit, a reactions update, our optimistic write and its rollback alike, so
+// the caller names the source rather than the store method.
 func TestSQLite_ReactionTrace_UpdateMessageReactions(t *testing.T) {
 	s, logs := tracedStore(t)
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5})
 
-	s.UpdateMessageReactions(5, 1, liked)
-	s.UpdateMessageReactions(5, 1, liked)
+	s.UpdateMessageReactions(5, 1, liked, "optimistic")
+	s.UpdateMessageReactions(5, 1, liked, "reactions update")
 
 	entries := reactionTrace(logs)
 	require.Len(t, entries, 1, "a write that changes nothing is not worth a line")
 	assert.Equal(t, map[string]any{
 		"chat_id": int64(5),
 		"msg_id":  int64(1),
-		"via":     "UpdateMessageReactions",
+		"via":     "optimistic",
 		"was":     "[]",
 		"now":     "[👍:1:me]",
 	}, entries[0].ContextMap())
@@ -72,7 +74,7 @@ func TestSQLite_ReactionTrace_SilentWithoutDebug(t *testing.T) {
 	t.Cleanup(func() { _ = s.Close() })
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5})
 
-	s.UpdateMessageReactions(5, 1, liked)
+	s.UpdateMessageReactions(5, 1, liked, "optimistic")
 
 	assert.Empty(t, reactionTrace(logs))
 }

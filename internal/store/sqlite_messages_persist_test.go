@@ -95,7 +95,7 @@ func TestSQLite_MessageEdit_PersistsSurvivesReopen(t *testing.T) {
 	s2.LoadMessages(4)
 	s2.UpdateMessageText(4, 1, "after", nil)
 	s2.MarkMessageEdited(4, 1, time.Unix(20, 0), true)
-	s2.UpdateMessageReactions(4, 1, []domain.Reaction{{Emoji: "👍", Count: 2}})
+	s2.UpdateMessageReactions(4, 1, []domain.Reaction{{Emoji: "👍", Count: 2}}, "reactions update")
 	require.NoError(t, s2.Close())
 
 	s3 := openStore(t, path)

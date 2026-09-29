@@ -111,12 +111,12 @@ func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji
 	o.log.Debug("reaction: optimistic",
 		zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("picked", emoji),
 		zap.String("was", domain.FormatReactions(prev)), zap.String("now", domain.FormatReactions(next)))
-	o.state.ApplyReactions(chatID, msgID, next, false)
+	o.state.ApplyReactions(chatID, msgID, next, false, "optimistic")
 	if err := o.client.SendReaction(ctx, peer, msgID, reactionToSend(prev, emoji)); err != nil {
 		o.log.Debug("reaction: rollback",
 			zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID),
 			zap.String("to", domain.FormatReactions(prev)), zap.Error(err))
-		o.state.ApplyReactions(chatID, msgID, prev, false)
+		o.state.ApplyReactions(chatID, msgID, prev, false, "rollback")
 		return err
 	}
 	o.log.Debug("reaction: sent", zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID))

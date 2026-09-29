@@ -59,7 +59,7 @@ func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 	if msg.EditDate != nil {
 		s.st.MarkMessageEdited(msg.ChatID, msg.ID, *msg.EditDate, msg.EditHidden)
 	}
-	s.st.UpdateMessageReactions(msg.ChatID, msg.ID, msg.Reactions)
+	s.st.UpdateMessageReactions(msg.ChatID, msg.ID, msg.Reactions, "edit")
 	unreadChanged := false
 	if msg.HasUnreadReactions {
 		unreadChanged = s.st.ApplyUnreadReaction(msg.ChatID, msg.ID, true)
@@ -97,9 +97,10 @@ func (s *State) ApplyEditRestore(msg domain.Message) (Change, bool) {
 }
 
 // ApplyReactions records the current reaction set for a message and tracks
-// whether the chat's unread-reaction count moved.
-func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool) (Change, bool) {
-	s.st.UpdateMessageReactions(chatID, msgID, r)
+// whether the chat's unread-reaction count moved. via names where the set came
+// from, for the reaction trace (#248).
+func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool, via string) (Change, bool) {
+	s.st.UpdateMessageReactions(chatID, msgID, r, via)
 	changed := false
 	if unread {
 		changed = s.st.ApplyUnreadReaction(chatID, msgID, true)

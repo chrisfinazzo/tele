@@ -64,7 +64,10 @@ type Store interface {
 	// the text write because a hidden edit changes the text without earning the
 	// label, and a reaction bump earns neither (#269).
 	MarkMessageEdited(chatID int64, msgID int, editDate time.Time, hidden bool)
-	UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction)
+	// UpdateMessageReactions replaces a message's reaction set. via names what
+	// the set came from, for the reaction trace only (#248): an edit, a
+	// reactions update and our own optimistic write all land here.
+	UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction, via string)
 	UpdateMessageMedia(chatID int64, msgID int, photo *domain.PhotoRef, document *domain.DocumentRef)
 	// ReplaceMessage overwrites a stored message wholesale. It is how a refused
 	// edit is undone: no field-wise update clears an edit marker, and a message

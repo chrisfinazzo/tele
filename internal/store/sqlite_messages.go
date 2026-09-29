@@ -480,14 +480,14 @@ func (s *SQLiteStore) MarkMessageEdited(chatID int64, msgID int, editDate time.T
 	}
 }
 
-func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction) {
+func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction, via string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == msgID {
 			cp := make([]domain.Reaction, len(reactions))
 			copy(cp, reactions)
-			s.traceReactionChangeLocked(chatID, msgID, "UpdateMessageReactions", s.messages[chatID][i].Reactions, cp)
+			s.traceReactionChangeLocked(chatID, msgID, via, s.messages[chatID][i].Reactions, cp)
 			s.messages[chatID][i].Reactions = cp
 			s.markMsgDirtyLocked(chatID, msgID)
 			return

@@ -19,7 +19,7 @@ func Apply(s *State, evt store.Event) (Change, bool) {
 	case store.EventEditMessage:
 		return s.ApplyEdit(evt.Message)
 	case store.EventReactionsUpdate:
-		return s.ApplyReactions(evt.ChatID, evt.MsgID, evt.Reactions, evt.ReactionsUnread)
+		return s.ApplyReactions(evt.ChatID, evt.MsgID, evt.Reactions, evt.ReactionsUnread, "reactions update")
 	case store.EventDeleteMessages:
 		return s.ApplyDelete(evt.ChatID, evt.MsgIDs)
 	case store.EventUserPresence:
