@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.9] - 2026-09-29
+
 ### Added
 
 - A reaction Telegram accepts but does not keep is reported with a warning
