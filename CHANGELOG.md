@@ -11,6 +11,32 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- A reaction Telegram accepts but does not keep is reported with a warning
+  toast instead of disappearing without a word (#248).
+
+### Changed
+
+- The mention popup opens once the chat header shows the chat is a group,
+  rather than as soon as the chat opens (#278).
+
+### Fixed
+
+- A reaction picked from the picker no longer vanishes a moment after it
+  appears. In a group, Telegram's answer carries two copies of the change, one
+  of them without the reaction, and whichever arrived last won; the copy that
+  is only about reactions now decides. An edit that says nothing about
+  reactions also leaves them alone instead of clearing them (#248).
+- A message to someone you have no chat with yet - a person found by search,
+  or one whose profile you opened from a group - is sent. It used to fail
+  because tele did not know how to reach them; forwarding to such a person
+  works too (#278).
+- A draft left in a chat with someone found by search is saved to Telegram, as
+  the official apps do, instead of being dropped (#278).
+- A message, an edit, an attachment or the "typing…" notice goes to the chat it
+  was typed in, even when another chat is opened right after `Enter` (#278).
+
 ## [1.11.8] - 2026-09-23
 
 ### Fixed
