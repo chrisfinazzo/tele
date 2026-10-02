@@ -88,8 +88,9 @@ func (o *Owner) publishChange(chg state.Change) {
 }
 
 // emit drops a delta rather than blocking when a client is not draining:
-// backpressure must never stall the owner's update loop. A dropped delta costs a
-// stale window until the next change, and a resubscribe resyncs it.
+// backpressure must never stall the owner's update loop. Reporting the drop is
+// what repairs it: the registry forgets what that subscription was told, so its
+// next delta is a resync rather than one stated against a delta never received.
 func (o *Owner) emit(d project.Delta) bool {
 	select {
 	case o.deltas <- d:

@@ -362,6 +362,85 @@ func TestRegistry_ARefreshDoesNotOvertakeTheDeltaBeforeIt(t *testing.T) {
 		"the client ends on the newest row, not on the one computed first")
 }
 
+// dropOnce takes deltas like recorder, except that it refuses the first one
+// addressed to the named subscription after it is armed, as a full client
+// queue would.
+type dropOnce struct {
+	recorder
+	sub   project.SubID
+	armed bool
+}
+
+func (d *dropOnce) emit(delta project.Delta) bool {
+	if d.armed && delta.Sub == d.sub {
+		d.armed = false
+		return false
+	}
+	return d.recorder.emit(delta)
+}
+
+// A delta the client never took leaves it with a copy the next delta cannot be
+// applied to. The rest of that refresh is withheld from the subscription, and
+// its next rebuild is the resync a fresh subscription gets, even when nothing
+// has changed since. Other subscriptions carry on as they were.
+func TestRegistry_ADroppedChatDeltaMakesTheNextOneAResync(t *testing.T) {
+	all := chats(2)
+	r := &fakeReader{chats: all, msgs: map[int64][]domain.Message{1: msgs(3), 2: msgs(3)}}
+	rec := &dropOnce{}
+	g := project.NewRegistry(r, rec.emit)
+	dropped := g.Subscribe(project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
+	})
+	g.Subscribe(project.ChatWindow{
+		ChatID: 2, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
+	})
+	rec.take()
+
+	// One change that is two deltas for the first chat: an append and a header.
+	all[0].Title = "renamed"
+	all[1].Title = "renamed too"
+	r.chats = all
+	r.msgs[1] = msgs(4)
+	rec.sub, rec.armed = dropped, true
+	g.Refresh()
+
+	for _, d := range rec.take() {
+		assert.NotEqual(t, dropped, d.Sub,
+			"what follows a dropped delta is meaningless without it and is withheld")
+	}
+
+	g.Refresh()
+	deltas := rec.take()
+
+	require.Len(t, deltas, 1, "only the subscription that lost a delta is resent")
+	assert.Equal(t, dropped, deltas[0].Sub)
+	assert.Equal(t, project.ChatReset, deltas[0].Chat.Kind)
+	assert.Equal(t, "renamed", deltas[0].Chat.Contents.Title)
+	assert.Len(t, deltas[0].Chat.Contents.Messages, 4)
+}
+
+func TestRegistry_ADroppedChatListDeltaMakesTheNextOneAResync(t *testing.T) {
+	all := chats(3)
+	r := &fakeReader{chats: all}
+	rec := &dropOnce{}
+	g := project.NewRegistry(r, rec.emit)
+	id := g.Subscribe(project.ChatListWindow{Limit: 10})
+	rec.take()
+
+	all[0].Online = true
+	r.chats = all
+	rec.sub, rec.armed = id, true
+	g.Refresh()
+	require.Empty(t, rec.take())
+
+	g.Refresh()
+	deltas := rec.take()
+
+	require.NotEmpty(t, deltas)
+	assert.Equal(t, project.ChatListReset, deltas[0].ChatList.Kind)
+	assert.True(t, deltas[0].ChatList.Rows[0].Online)
+}
+
 // Scrolling up widens the window by replacing it, carrying the same anchor
 // description the client opened with. The pin must survive that, or asking for
 // older history would re-anchor the window on whatever is unread by then.

@@ -103,9 +103,28 @@ func (g *Registry) Refresh() {
 }
 
 // send emits deltas in the order they were computed. Caller holds the lock.
+//
+// A delta the client did not take leaves it with a copy no later delta can be
+// applied to, so the rest of that subscription's deltas are withheld and its
+// contents forgotten: its next rebuild diffs against nothing, which is the
+// resync a fresh subscription gets.
 func (g *Registry) send(ds []Delta) {
+	var lost map[SubID]bool
 	for _, d := range ds {
-		g.emit(d)
+		if lost[d.Sub] {
+			continue
+		}
+		if g.emit(d) {
+			continue
+		}
+		if lost == nil {
+			lost = make(map[SubID]bool)
+		}
+		lost[d.Sub] = true
+		if s, ok := g.subs[d.Sub]; ok {
+			s.list = ChatListContents{}
+			s.chat = ChatContents{}
+		}
 	}
 }
 
