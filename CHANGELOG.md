@@ -11,6 +11,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two changes arriving close together, such as a reaction and an edit to the
+  same message or two new messages in a row, are shown in the order they
+  happened. The older one could land last and stay on screen, or two messages
+  could appear swapped, until something else touched the chat (#276).
+- A chat or the chat list that missed an update while tele was busy catches up
+  by itself a moment later. It used to stay out of date, and could keep
+  showing a message that was not there or miss one that was, until the chat
+  was reopened (#276).
+
 ## [1.11.9] - 2026-09-29
 
 ### Added
