@@ -106,30 +106,30 @@ type storeReader struct{ store.Store }
 func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
 
 func newOwnerStub(st store.Store) *ownerStub {
-	o := &ownerStub{state: state.New(st), reg: project.NewRegistry(storeReader{st}), mediaPaths: make(map[mediaKey]string)}
+	o := &ownerStub{state: state.New(st), mediaPaths: make(map[mediaKey]string)}
+	o.reg = project.NewRegistry(storeReader{st}, o.enqueue)
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
 			return
 		}
-		o.queued = append(o.queued, o.reg.Refresh()...)
+		o.reg.Refresh()
 	})
 	return o
 }
 
-func (o *ownerStub) Subscribe(w project.Window) project.SubID {
-	id, ds := o.reg.Subscribe(w)
-	o.queued = append(o.queued, ds...)
-	return id
+func (o *ownerStub) enqueue(d project.Delta) bool {
+	o.queued = append(o.queued, d)
+	return true
 }
 
-func (o *ownerStub) MoveWindow(id project.SubID, w project.Window) {
-	o.queued = append(o.queued, o.reg.MoveWindow(id, w)...)
-}
+func (o *ownerStub) Subscribe(w project.Window) project.SubID { return o.reg.Subscribe(w) }
+
+func (o *ownerStub) MoveWindow(id project.SubID, w project.Window) { o.reg.MoveWindow(id, w) }
 
 func (o *ownerStub) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
 
-func (o *ownerStub) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) }
+func (o *ownerStub) Refresh() { o.reg.Refresh() }
 
 // SetMuted mirrors the real owner: it applies the change through state (which
 // publishes a delta) and answers with o.err.
@@ -316,7 +316,7 @@ func (o *ownerStub) Forward(_ context.Context, fromChatID, toChatID int64, _ []i
 		return o.err
 	}
 	o.state.Store().BumpChatLastMessage(toChatID, domain.Message{ChatID: toChatID, IsOut: true, Date: time.Now()})
-	o.queued = append(o.queued, o.reg.Refresh()...)
+	o.reg.Refresh()
 	return nil
 }
 

@@ -2,12 +2,22 @@ package project
 
 import "sync"
 
+// Emit hands one delta to the client. It reports whether the delta was taken.
+//
+// It runs under the registry's lock, which is what keeps a subscription's
+// deltas in the order they were computed: each is stated against the one
+// before it, so two refreshes on different goroutines must not swap theirs on
+// the way out. It must therefore never block and never call back into the
+// registry.
+type Emit func(Delta) bool
+
 // Registry holds the live subscriptions and the contents each was last told
 // about. It is the only stateful piece of this package: builders and diffs are
 // pure, so everything that can go wrong concentrates here.
 type Registry struct {
 	mu     sync.Mutex
 	reader Reader
+	emit   Emit
 	next   SubID
 	subs   map[SubID]*sub
 }
@@ -18,32 +28,33 @@ type sub struct {
 	chat   ChatContents
 }
 
-func NewRegistry(r Reader) *Registry {
-	return &Registry{reader: r, subs: make(map[SubID]*sub)}
+func NewRegistry(r Reader, emit Emit) *Registry {
+	return &Registry{reader: r, emit: emit, subs: make(map[SubID]*sub)}
 }
 
 // Subscribe registers a window and replies with its current contents, so a
 // resubscribe is a full resync and no snapshot concept is needed.
-func (g *Registry) Subscribe(w Window) (SubID, []Delta) {
+func (g *Registry) Subscribe(w Window) SubID {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.next++
 	id := g.next
 	g.subs[id] = &sub{window: w}
-	return id, g.rebuild(id)
+	g.send(g.rebuild(id))
+	return id
 }
 
 // MoveWindow replaces a subscription's window. It carries a whole window rather
 // than a delta, so repeating it is equivalent to resubscribing.
-func (g *Registry) MoveWindow(id SubID, w Window) []Delta {
+func (g *Registry) MoveWindow(id SubID, w Window) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s, ok := g.subs[id]
 	if !ok {
-		return nil
+		return
 	}
 	s.window = carryPin(s.window, w)
-	return g.rebuild(id)
+	g.send(g.rebuild(id))
 }
 
 // carryPin keeps a first-unread window's pinned anchor across a move that does
@@ -82,13 +93,20 @@ func (g *Registry) Window(id SubID) (Window, bool) {
 	return s.window, true
 }
 
-// Refresh rebuilds every subscription and returns whatever actually differs.
+// Refresh rebuilds every subscription and emits whatever actually differs.
 // The owner calls it once per applied state change; a change no window contains
 // produces no deltas, which is the point.
-func (g *Registry) Refresh() []Delta {
+func (g *Registry) Refresh() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.rebuildAll()
+	g.send(g.rebuildAll())
+}
+
+// send emits deltas in the order they were computed. Caller holds the lock.
+func (g *Registry) send(ds []Delta) {
+	for _, d := range ds {
+		g.emit(d)
+	}
 }
 
 // rebuildAll refreshes every subscription. Caller holds the lock. Map iteration

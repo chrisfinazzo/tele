@@ -23,8 +23,7 @@ func (o *Owner) Subscribe(w project.Window) project.SubID {
 	if cw, ok := w.(project.ChatWindow); ok {
 		o.state.Store().LoadMessages(cw.ChatID)
 	}
-	id, deltas := o.registry.Subscribe(w)
-	o.publish(deltas)
+	id := o.registry.Subscribe(w)
 	o.maybeFetch(id, w)
 	return id
 }
@@ -32,7 +31,7 @@ func (o *Owner) Subscribe(w project.Window) project.SubID {
 // MoveWindow repositions a subscription. It returns immediately: over a socket a
 // window move cannot be synchronous, so it is not synchronous here either.
 func (o *Owner) MoveWindow(id project.SubID, w project.Window) {
-	o.publish(o.registry.MoveWindow(id, w))
+	o.registry.MoveWindow(id, w)
 	o.maybeFetch(id, w)
 }
 
@@ -43,7 +42,7 @@ func (o *Owner) Unsubscribe(id project.SubID) { o.registry.Unsubscribe(id) }
 // TRANSITIONAL (#193, #195, #196): media still writes to the store directly and
 // asks for a rebuild. Commands no longer do — they mutate through state, whose
 // commit publishes. The forward preview bump is the one caller inside the owner.
-func (o *Owner) Refresh() { o.publish(o.registry.Refresh()) }
+func (o *Owner) Refresh() { o.registry.Refresh() }
 
 // maybeFetch goes to Telegram when the store cannot answer a chat window on its
 // own, so a client never has to know where data comes from. There are two
@@ -85,18 +84,18 @@ func (o *Owner) publishChange(chg state.Change) {
 	if chg.Kind == state.ChangeNewMessage {
 		o.clearSentOutbox(chg.ChatID)
 	}
-	o.publish(o.registry.Refresh())
+	o.registry.Refresh()
 }
 
-// publish drops deltas rather than blocking when a client is not draining:
+// emit drops a delta rather than blocking when a client is not draining:
 // backpressure must never stall the owner's update loop. A dropped delta costs a
 // stale window until the next change, and a resubscribe resyncs it.
-func (o *Owner) publish(ds []project.Delta) {
-	for _, d := range ds {
-		select {
-		case o.deltas <- d:
-		default:
-			o.log.Warn("projection delta dropped: client is not draining")
-		}
+func (o *Owner) emit(d project.Delta) bool {
+	select {
+	case o.deltas <- d:
+		return true
+	default:
+		o.log.Warn("projection delta dropped: client is not draining")
+		return false
 	}
 }

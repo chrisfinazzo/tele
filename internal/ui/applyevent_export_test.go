@@ -100,29 +100,30 @@ func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
 func newTestOwner(st store.Store) *testOwner {
 	o := &testOwner{
 		state:       state.New(st),
-		reg:         project.NewRegistry(storeReader{st}),
 		mediaPaths:  make(map[mediaPathKey]string),
 		avatarPaths: make(map[avatarPathKey]string),
 	}
+	o.reg = project.NewRegistry(storeReader{st}, o.enqueue)
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
 			return
 		}
-		o.queued = append(o.queued, o.reg.Refresh()...)
+		o.reg.Refresh()
 	})
 	return o
 }
 
-func (o *testOwner) Subscribe(w project.Window) project.SubID {
-	id, ds := o.reg.Subscribe(w)
-	o.queued = append(o.queued, ds...)
-	return id
+func (o *testOwner) enqueue(d project.Delta) bool {
+	o.queued = append(o.queued, d)
+	return true
 }
+
+func (o *testOwner) Subscribe(w project.Window) project.SubID { return o.reg.Subscribe(w) }
 
 func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
 	o.moves = append(o.moves, w)
-	o.queued = append(o.queued, o.reg.MoveWindow(id, w)...)
+	o.reg.MoveWindow(id, w)
 }
 
 // lastChatWindow returns the most recent chat window the client asked for.
@@ -149,7 +150,7 @@ func (o *testOwner) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
 
 func (o *testOwner) SetFocus(chatID int64) { o.focus = append(o.focus, chatID) }
 
-func (o *testOwner) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) }
+func (o *testOwner) Refresh() { o.reg.Refresh() }
 
 // SetMuted mirrors the real owner: the change is applied through state, which
 // publishes a delta, and cmdErr stands in for a Telegram refusal.
@@ -356,7 +357,7 @@ func (o *testOwner) Forward(_ context.Context, fromChatID, toChatID int64, msgID
 		}
 	}
 	o.state.Store().BumpChatLastMessage(toChatID, preview)
-	o.queued = append(o.queued, o.reg.Refresh()...)
+	o.reg.Refresh()
 	return nil
 }
 

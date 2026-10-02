@@ -1,7 +1,9 @@
 package project_test
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,11 +12,40 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
+// recorder stands in for the client: it takes every delta the registry emits
+// and hands them back in the order they arrived.
+type recorder struct {
+	mu  sync.Mutex
+	got []project.Delta
+}
+
+func (r *recorder) emit(d project.Delta) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.got = append(r.got, d)
+	return true
+}
+
+// take returns what arrived since the last take.
+func (r *recorder) take() []project.Delta {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := r.got
+	r.got = nil
+	return out
+}
+
+func newRegistry(r project.Reader) (*project.Registry, *recorder) {
+	rec := &recorder{}
+	return project.NewRegistry(r, rec.emit), rec
+}
+
 func TestRegistry_SubscribeRepliesWithCurrentContents(t *testing.T) {
 	r := &fakeReader{chats: chats(3)}
-	g := project.NewRegistry(r)
+	g, rec := newRegistry(r)
 
-	id, deltas := g.Subscribe(project.ChatListWindow{Limit: 10})
+	id := g.Subscribe(project.ChatListWindow{Limit: 10})
+	deltas := rec.take()
 
 	require.NotZero(t, id)
 	require.Len(t, deltas, 1)
@@ -26,12 +57,14 @@ func TestRegistry_SubscribeRepliesWithCurrentContents(t *testing.T) {
 
 func TestRegistry_ResubscribeIsResync(t *testing.T) {
 	r := &fakeReader{chats: chats(3)}
-	g := project.NewRegistry(r)
-	id1, _ := g.Subscribe(project.ChatListWindow{Limit: 10})
+	g, rec := newRegistry(r)
+	id1 := g.Subscribe(project.ChatListWindow{Limit: 10})
 	g.Unsubscribe(id1)
 	r.chats = chats(5)
+	rec.take()
 
-	_, deltas := g.Subscribe(project.ChatListWindow{Limit: 10})
+	g.Subscribe(project.ChatListWindow{Limit: 10})
+	deltas := rec.take()
 
 	require.Len(t, deltas, 1)
 	assert.Len(t, deltas[0].ChatList.Rows, 5)
@@ -39,35 +72,42 @@ func TestRegistry_ResubscribeIsResync(t *testing.T) {
 
 func TestRegistry_RefreshEmitsNothingWhenNothingChanged(t *testing.T) {
 	r := &fakeReader{chats: chats(3)}
-	g := project.NewRegistry(r)
+	g, rec := newRegistry(r)
 	g.Subscribe(project.ChatListWindow{Limit: 10})
+	rec.take()
 
-	assert.Empty(t, g.Refresh())
+	g.Refresh()
+
+	assert.Empty(t, rec.take())
 }
 
 func TestRegistry_RefreshEmitsNothingForAChangeOutsideTheWindow(t *testing.T) {
 	all := chats(50)
 	r := &fakeReader{chats: all}
-	g := project.NewRegistry(r)
+	g, rec := newRegistry(r)
 	g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 10})
+	rec.take()
 
 	all[40].Online = true // a presence update for a chat nowhere near the screen
 	r.chats = all
+	g.Refresh()
 
-	assert.Empty(t, g.Refresh(),
+	assert.Empty(t, rec.take(),
 		"presence streams continuously for every online contact; only the window pays")
 }
 
 func TestRegistry_RefreshEmitsARowForAnInWindowChange(t *testing.T) {
 	all := chats(10)
 	r := &fakeReader{chats: all}
-	g := project.NewRegistry(r)
-	id, _ := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
+	g, rec := newRegistry(r)
+	id := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
+	rec.take()
 
 	all[2].Online = true
 	r.chats = all
 
-	deltas := g.Refresh()
+	g.Refresh()
+	deltas := rec.take()
 
 	require.Len(t, deltas, 1)
 	assert.Equal(t, id, deltas[0].Sub)
@@ -78,17 +118,19 @@ func TestRegistry_RefreshEmitsARowForAnInWindowChange(t *testing.T) {
 func TestRegistry_RefreshFansOutToEverySubscription(t *testing.T) {
 	all := chats(10)
 	r := &fakeReader{chats: all, msgs: map[int64][]domain.Message{1: msgs(3)}}
-	g := project.NewRegistry(r)
-	listID, _ := g.Subscribe(project.ChatListWindow{Limit: 10})
-	chatID, _ := g.Subscribe(project.ChatWindow{
+	g, rec := newRegistry(r)
+	listID := g.Subscribe(project.ChatListWindow{Limit: 10})
+	chatID := g.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
+	rec.take()
 
 	all[0].Title = "renamed"
 	r.chats = all
 	r.msgs[1] = msgs(4)
 
-	deltas := g.Refresh()
+	g.Refresh()
+	deltas := rec.take()
 
 	var sawList, sawChat bool
 	for _, d := range deltas {
@@ -105,10 +147,12 @@ func TestRegistry_RefreshFansOutToEverySubscription(t *testing.T) {
 
 func TestRegistry_MoveWindowReplacesTheWindowAndEmits(t *testing.T) {
 	r := &fakeReader{chats: chats(50)}
-	g := project.NewRegistry(r)
-	id, _ := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
+	g, rec := newRegistry(r)
+	id := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
+	rec.take()
 
-	deltas := g.MoveWindow(id, project.ChatListWindow{Offset: 20, Limit: 5})
+	g.MoveWindow(id, project.ChatListWindow{Offset: 20, Limit: 5})
+	deltas := rec.take()
 
 	require.Len(t, deltas, 1)
 	require.Equal(t, project.ChatListReset, deltas[0].ChatList.Kind)
@@ -118,35 +162,42 @@ func TestRegistry_MoveWindowReplacesTheWindowAndEmits(t *testing.T) {
 
 func TestRegistry_MoveWindowToTheSameWindowEmitsNothing(t *testing.T) {
 	r := &fakeReader{chats: chats(50)}
-	g := project.NewRegistry(r)
+	g, rec := newRegistry(r)
 	w := project.ChatListWindow{Offset: 0, Limit: 5}
-	id, _ := g.Subscribe(w)
+	id := g.Subscribe(w)
+	rec.take()
 
-	assert.Empty(t, g.MoveWindow(id, w), "MoveWindow is idempotent")
+	g.MoveWindow(id, w)
+
+	assert.Empty(t, rec.take(), "MoveWindow is idempotent")
 }
 
 func TestRegistry_UnsubscribedSubscriptionStopsEmitting(t *testing.T) {
 	all := chats(10)
 	r := &fakeReader{chats: all}
-	g := project.NewRegistry(r)
-	id, _ := g.Subscribe(project.ChatListWindow{Limit: 10})
+	g, rec := newRegistry(r)
+	id := g.Subscribe(project.ChatListWindow{Limit: 10})
 	g.Unsubscribe(id)
+	rec.take()
 
 	all[0].Online = true
 	r.chats = all
+	g.Refresh()
 
-	assert.Empty(t, g.Refresh())
+	assert.Empty(t, rec.take())
 }
 
 func TestRegistry_MoveWindowOnAnUnknownSubscriptionIsANoOp(t *testing.T) {
-	g := project.NewRegistry(&fakeReader{chats: chats(1)})
+	g, rec := newRegistry(&fakeReader{chats: chats(1)})
 
-	assert.Empty(t, g.MoveWindow(project.SubID(99), project.ChatListWindow{Limit: 5}))
+	g.MoveWindow(project.SubID(99), project.ChatListWindow{Limit: 5})
+
+	assert.Empty(t, rec.take())
 }
 
 func TestRegistry_WindowReportsTheCurrentWindow(t *testing.T) {
-	g := project.NewRegistry(&fakeReader{chats: chats(3)})
-	id, _ := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
+	g, _ := newRegistry(&fakeReader{chats: chats(3)})
+	id := g.Subscribe(project.ChatListWindow{Offset: 0, Limit: 5})
 	g.MoveWindow(id, project.ChatListWindow{Offset: 1, Limit: 5})
 
 	w, ok := g.Window(id)
@@ -161,8 +212,8 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 		chats: all,
 		msgs:  map[int64][]domain.Message{1: msgs(2), 2: msgs(2)},
 	}
-	g := project.NewRegistry(r)
-	sub1, _ := g.Subscribe(project.ChatWindow{
+	g, rec := newRegistry(r)
+	sub1 := g.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 	})
 	g.Subscribe(project.ChatWindow{
@@ -170,10 +221,12 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 	})
 	// Drain the two opening Resets.
 	g.Refresh()
+	rec.take()
 
 	all[0].Online = true
 	r.chats = all
-	deltas := g.Refresh()
+	g.Refresh()
+	deltas := rec.take()
 
 	require.Len(t, deltas, 1)
 	assert.Equal(t, sub1, deltas[0].Sub)
@@ -186,20 +239,20 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 func TestRegistry_FirstUnreadWindowHoldsItsAnchorAsMessagesAreRead(t *testing.T) {
 	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
 	r := readerWith(chat, msgs(10))
-	g := project.NewRegistry(r)
-	id, deltas := g.Subscribe(project.ChatWindow{
+	g, rec := newRegistry(r)
+	id := g.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
-	require.Len(t, deltas, 1)
+	require.Len(t, rec.take(), 1)
 
 	// The first screen is marked read: the pointer moves, the history does not.
 	chat.ReadInboxMaxID = 8
 	chat.UnreadCount = 2
 	r.chats = []domain.Chat{chat}
 
-	out := g.Refresh()
+	g.Refresh()
 
-	for _, d := range out {
+	for _, d := range rec.take() {
 		assert.NotEqual(t, project.ChatRemove, d.Chat.Kind,
 			"messages already on screen must not leave the window when they are read")
 		assert.NotEqual(t, project.ChatReset, d.Chat.Kind,
@@ -217,7 +270,7 @@ func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
 	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
 	all := msgs(10)
 	r := readerWith(chat, all)
-	g := project.NewRegistry(r)
+	g, rec := newRegistry(r)
 	g.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
@@ -227,9 +280,86 @@ func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
 	r.msgs[1] = kept
 
 	g.Refresh()
+	rec.take()
 
-	deltas := g.Refresh()
-	assert.Empty(t, deltas, "the window settles instead of rebuilding itself every time")
+	g.Refresh()
+	assert.Empty(t, rec.take(), "the window settles instead of rebuilding itself every time")
+}
+
+// Every delta is stated against the one before it, so a client that receives
+// two in the opposite order draws something the owner never had. Two goroutines
+// changing state close together must not be able to swap their deltas on the
+// way out: the second refresh waits until the first one's delta is taken.
+func TestRegistry_ARefreshDoesNotOvertakeTheDeltaBeforeIt(t *testing.T) {
+	all := chats(3)
+	r := &fakeReader{chats: all}
+
+	var (
+		mu       sync.Mutex
+		got      []project.Delta
+		hold     bool
+		entered  = make(chan struct{})
+		released = make(chan struct{})
+	)
+	emit := func(d project.Delta) bool {
+		mu.Lock()
+		block := hold
+		hold = false
+		mu.Unlock()
+		if block {
+			close(entered)
+			<-released
+		}
+		mu.Lock()
+		got = append(got, d)
+		mu.Unlock()
+		return true
+	}
+	g := project.NewRegistry(r, emit)
+	g.Subscribe(project.ChatListWindow{Limit: 10})
+
+	// The first change is computed and held on its way to the client.
+	mu.Lock()
+	got = nil
+	hold = true
+	mu.Unlock()
+	first := append([]domain.Chat{}, all...)
+	first[0].Online = true
+	r.chats = first
+	firstDone := make(chan struct{})
+	go func() {
+		g.Refresh()
+		close(firstDone)
+	}()
+	<-entered
+
+	// A second change lands while the first delta is still in flight.
+	second := append([]domain.Chat{}, first...)
+	second[0].Title = "renamed"
+	r.chats = second
+	secondDone := make(chan struct{})
+	go func() {
+		g.Refresh()
+		close(secondDone)
+	}()
+
+	select {
+	case <-secondDone:
+		t.Fatal("the second refresh emitted while the first delta was still in flight")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(released)
+	<-firstDone
+	<-secondDone
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 2)
+	assert.Equal(t, "chat", got[0].ChatList.Row.Title)
+	assert.True(t, got[0].ChatList.Row.Online)
+	assert.Equal(t, "renamed", got[1].ChatList.Row.Title,
+		"the client ends on the newest row, not on the one computed first")
 }
 
 // Scrolling up widens the window by replacing it, carrying the same anchor
@@ -238,8 +368,8 @@ func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
 func TestRegistry_WideningKeepsThePinnedAnchor(t *testing.T) {
 	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
 	r := readerWith(chat, msgs(10))
-	g := project.NewRegistry(r)
-	id, _ := g.Subscribe(project.ChatWindow{
+	g, _ := newRegistry(r)
+	id := g.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
 
