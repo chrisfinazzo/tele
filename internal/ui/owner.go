@@ -76,7 +76,7 @@ type Owner interface {
 	// Media. The owner downloads and caches; the client decodes. Paths cross
 	// the boundary, never bytes (#196).
 	FetchMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error)
-	SaveMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error)
+	SaveMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, ref string) (string, error)
 	// InvalidateMedia drops a cached file that turned out to be undecodable, so
 	// the next fetch downloads it again instead of returning the same bytes.
 	InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot)

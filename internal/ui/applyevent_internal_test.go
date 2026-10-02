@@ -230,7 +230,7 @@ func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot 
 
 // SaveMedia copies the registered file into destDir, the way the real owner
 // streams it there.
-func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, _ string) (string, error) {
 	if o.mediaErr != nil {
 		return "", o.mediaErr
 	}

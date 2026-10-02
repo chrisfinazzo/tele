@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ type mediaStub struct {
 	refreshCalls   int
 	delay          time.Duration
 	lastPhotoSize  string
+	chunk          int // write the payload this many bytes at a time, as the downloader does
 }
 
 func (s *mediaStub) stream(dst io.Writer, n *int) error {
@@ -41,6 +43,7 @@ func (s *mediaStub) stream(dst io.Writer, n *int) error {
 	payload := s.payload
 	stale := attempt <= s.staleUntilCall
 	delay := s.delay
+	chunk := s.chunk
 	s.mu.Unlock()
 	if delay > 0 {
 		time.Sleep(delay)
@@ -51,8 +54,17 @@ func (s *mediaStub) stream(dst io.Writer, n *int) error {
 		_, _ = dst.Write([]byte("stale-partial-bytes"))
 		return &telerr.Error{Kind: telerr.StaleReference}
 	}
-	_, err := dst.Write([]byte(payload))
-	return err
+	if chunk <= 0 {
+		chunk = len(payload)
+	}
+	for b := []byte(payload); len(b) > 0; {
+		n := min(chunk, len(b))
+		if _, err := dst.Write(b[:n]); err != nil {
+			return err
+		}
+		b = b[n:]
+	}
+	return nil
 }
 
 func (s *mediaStub) DownloadPhotoToFile(_ context.Context, ref domain.PhotoRef, dst io.Writer) error {
@@ -301,7 +313,7 @@ func TestSaveMedia_WritesTheDocumentUnderItsOwnNameOutsideTheCache(t *testing.T)
 	o, cacheDir := newMediaOwner(t, c)
 	dest := t.TempDir()
 
-	path, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest)
+	path, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dest, "clip.mp4"), path)
@@ -319,7 +331,7 @@ func TestSaveMedia_ResolvesANameCollision(t *testing.T) {
 	dest := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dest, "clip.mp4"), []byte("existing"), 0600))
 
-	path, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest)
+	path, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dest, "clip (1).mp4"), path)
@@ -333,7 +345,7 @@ func TestSaveMedia_NamesAPhotoFromItsID(t *testing.T) {
 	o, _ := newMediaOwner(t, c)
 	dest := t.TempDir()
 
-	path, err := o.SaveMedia(context.Background(), 1, 5, domain.PhotoFull, dest)
+	path, err := o.SaveMedia(context.Background(), 1, 5, domain.PhotoFull, dest, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dest, "photo_9.jpg"), path)
@@ -344,7 +356,7 @@ func TestSaveMedia_AsksForTheFullPhotoSize(t *testing.T) {
 	c := &mediaStub{payload: "bytes"}
 	o, _ := newMediaOwner(t, c)
 
-	_, err := o.SaveMedia(context.Background(), 1, 5, domain.PhotoFull, t.TempDir())
+	_, err := o.SaveMedia(context.Background(), 1, 5, domain.PhotoFull, t.TempDir(), "")
 
 	require.NoError(t, err)
 	c.mu.Lock()
@@ -369,12 +381,83 @@ func TestSaveMedia_RemovesThePartialFileWhenTheDownloadFails(t *testing.T) {
 	o, _ := newMediaOwner(t, c)
 	dest := t.TempDir()
 
-	_, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest)
+	_, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, dest, "")
 
 	require.Error(t, err)
 	ents, derr := os.ReadDir(dest)
 	require.NoError(t, derr)
 	assert.Empty(t, ents, "a failed save must leave nothing behind")
+}
+
+// sizedDocOwner is newMediaOwner with a document of the given size and a
+// payload of that many bytes, written in chunks, and a progress buffer roomy
+// enough that no frame is dropped for want of a reader.
+func sizedDocOwner(t *testing.T, size int) *Owner {
+	t.Helper()
+	c := &mediaStub{payload: strings.Repeat("a", size), chunk: 7}
+	o, _ := newMediaOwner(t, c)
+	o.downloads = make(chan DownloadProgress, 256)
+	o.state.Store().SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Date: time.Unix(1, 0),
+		Document: &domain.DocumentRef{ID: 11, FileName: "clip.mp4", MimeType: "video/mp4", Size: int64(size)},
+		Media:    &domain.MediaRef{Kind: domain.MediaVideo},
+	}})
+	return o
+}
+
+func drainDownloads(o *Owner) []DownloadProgress {
+	var out []DownloadProgress
+	for {
+		select {
+		case p := <-o.downloads:
+			out = append(out, p)
+		default:
+			return out
+		}
+	}
+}
+
+// A save someone is watching reports its progress under the ref it was given,
+// once per whole percent: a 400 MB file arrives in some 800 chunks, and a frame
+// for each would be traffic nobody can see the difference of (#204).
+func TestSaveMedia_ReportsProgressOncePerPercent(t *testing.T) {
+	o := sizedDocOwner(t, 1000)
+
+	_, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, t.TempDir(), "r1")
+
+	require.NoError(t, err)
+	frames := drainDownloads(o)
+	require.NotEmpty(t, frames)
+	last := int64(-1)
+	for _, f := range frames {
+		assert.Equal(t, "r1", f.Ref)
+		assert.Equal(t, int64(1000), f.Total)
+		pct := f.Done * 100 / f.Total
+		assert.Greater(t, pct, last, "a frame is sent only when the percentage moves")
+		last = pct
+	}
+	assert.Equal(t, DownloadProgress{Ref: "r1", Done: 1000, Total: 1000}, frames[len(frames)-1])
+}
+
+func TestSaveMedia_ReportsNothingWithoutARef(t *testing.T) {
+	o := sizedDocOwner(t, 1000)
+
+	_, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, t.TempDir(), "")
+
+	require.NoError(t, err)
+	assert.Empty(t, drainDownloads(o), "nobody asked to watch this save")
+}
+
+// With no size there is no percentage, and a made-up one would be worse than
+// the spinner the client keeps showing.
+func TestSaveMedia_ReportsNothingForMediaOfUnknownSize(t *testing.T) {
+	o := sizedDocOwner(t, 0)
+	o.media.client.(*mediaStub).payload = "bytes"
+
+	_, err := o.SaveMedia(context.Background(), 1, 5, domain.DocFull, t.TempDir(), "r1")
+
+	require.NoError(t, err)
+	assert.Empty(t, drainDownloads(o))
 }
 
 func TestSavedFileName_UsesTheDocumentsOwnNameWhenPresent(t *testing.T) {

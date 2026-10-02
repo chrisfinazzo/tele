@@ -189,7 +189,7 @@ func (m RootModel) startPhotoDownload(msgID int) (RootModel, tea.Cmd) {
 // picks, and reports the saved path (or the error).
 func saveFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot domain.MediaSlot, destDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, slot, destDir)
+		path, err := o.SaveMedia(ctx, chatID, msgID, slot, destDir, "")
 		if err != nil {
 			text, sev, _ := errText("download", err)
 			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
@@ -204,7 +204,7 @@ func saveFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot dom
 // download indicator identified by serial (and surface any error).
 func openDocumentCmd(ctx context.Context, o Owner, chatID int64, msgID int, tmpDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir, "")
 		if err != nil {
 			text, sev, _ := errText("open file", err)
 			return documentOpenDoneMsg{serial: serial, errText: text, sev: sev}
@@ -267,7 +267,7 @@ func SetOpenPathForTest(fn func(string)) func() {
 // would otherwise wonder why it stays at preview quality.
 func saveFullPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64, tmpDir string, quiet bool) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, domain.PhotoFull, tmpDir)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.PhotoFull, tmpDir, "")
 		if err != nil {
 			if quiet {
 				return errStatusBackground("full photo download", err)

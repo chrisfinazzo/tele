@@ -52,10 +52,13 @@ type mediaFetcher struct {
 	// passed, which keeps the map the size of what is currently failing.
 	refreshMu sync.Mutex
 	refreshed map[string]time.Time
+
+	// report hands a save's progress to whoever asked for it.
+	report func(DownloadProgress)
 }
 
-func newMediaFetcher(client internaltg.Client, st *state.State, log *zap.Logger) *mediaFetcher {
-	return &mediaFetcher{client: client, state: st, log: log, refreshed: make(map[string]time.Time)}
+func newMediaFetcher(client internaltg.Client, st *state.State, log *zap.Logger, report func(DownloadProgress)) *mediaFetcher {
+	return &mediaFetcher{client: client, state: st, log: log, refreshed: make(map[string]time.Time), report: report}
 }
 
 // claimRefresh reports whether key may be refreshed now, and records the
@@ -153,7 +156,7 @@ func (f *mediaFetcher) stream(ctx context.Context, r mediaRef, dst io.Writer) er
 // expired file reference it refreshes the message once, records the fresh
 // reference in state, rewinds the file and retries. The rewind matters: a
 // partial first attempt would otherwise be prefixed to the retry's bytes.
-func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, file *os.File) error {
+func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, file *os.File, progressRef string) error {
 	msg, err := messageByID(f.state, chatID, msgID)
 	if err != nil {
 		return err
@@ -163,7 +166,7 @@ func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, 
 		return err
 	}
 
-	err = f.attempt(ctx, ref, file)
+	err = f.attempt(ctx, ref, file, progressRef)
 	if telerr.Of(err) != telerr.StaleReference {
 		return err
 	}
@@ -199,7 +202,7 @@ func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, 
 			append(where, zap.Error(err))...)
 		return err
 	}
-	if err := f.attempt(ctx, freshRef, file); err != nil {
+	if err := f.attempt(ctx, freshRef, file, progressRef); err != nil {
 		f.log.Warn("media: download failed after refreshing the file reference",
 			append(where, zap.Error(err))...)
 		return err
@@ -207,15 +210,54 @@ func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, 
 	return nil
 }
 
-// attempt rewinds file and streams one download into it.
-func (f *mediaFetcher) attempt(ctx context.Context, ref mediaRef, file *os.File) error {
+// attempt rewinds file and streams one download into it. A watched download
+// counts from zero again on a retry, because the file does.
+func (f *mediaFetcher) attempt(ctx context.Context, ref mediaRef, file *os.File, progressRef string) error {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	if err := file.Truncate(0); err != nil {
 		return err
 	}
-	return f.stream(ctx, ref, file)
+	var dst io.Writer = file
+	if total := ref.size(); progressRef != "" && total > 0 && f.report != nil {
+		dst = &progressWriter{w: file, ref: progressRef, total: total, pct: -1, report: f.report}
+	}
+	return f.stream(ctx, ref, dst)
+}
+
+// size is the file's length in bytes, or 0 when Telegram did not say. Only a
+// whole document carries one: a photo size and a thumbnail are not given a
+// length in what is stored.
+func (r mediaRef) size() int64 {
+	if r.slot == domain.DocFull {
+		return r.doc.Size
+	}
+	return 0
+}
+
+// progressWriter counts what passes through it and reports each time the whole
+// percentage moves: the downloader writes in chunks of half a megabyte, and a
+// frame per chunk would be traffic with no visible difference (#204).
+type progressWriter struct {
+	w      io.Writer
+	ref    string
+	done   int64
+	total  int64
+	pct    int64
+	report func(DownloadProgress)
+}
+
+func (p *progressWriter) Write(b []byte) (int, error) {
+	n, err := p.w.Write(b)
+	p.done += int64(n)
+	// Capped, so a file longer than announced reads as finished rather than
+	// past it.
+	if pct := min(p.done*100/p.total, 100); pct != p.pct {
+		p.pct = pct
+		p.report(DownloadProgress{Ref: p.ref, Done: p.done, Total: p.total})
+	}
+	return n, err
 }
 
 // Fetch returns a path to the media, downloading it into the cache on a miss.
@@ -247,7 +289,7 @@ func (f *mediaFetcher) Fetch(ctx context.Context, chatID int64, msgID int, slot 
 		f.log.Debug("media: fetch downloading",
 			zap.String("key", key), zap.String("slot", slot.String()))
 		return f.cache.Put(key, func(file *os.File) error {
-			return f.streamInto(ctx, chatID, msgID, slot, file)
+			return f.streamInto(ctx, chatID, msgID, slot, file, "")
 		})
 	})
 	if err != nil {
@@ -261,7 +303,7 @@ func (f *mediaFetcher) Fetch(ctx context.Context, chatID int64, msgID int, slot 
 // Save streams the media into destDir under a name derived from the media
 // itself, bypassing the cache: what the user saved must not be evicted, and a
 // large file must not push thumbnails out of a budget sized for thumbnails.
-func (f *mediaFetcher) Save(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+func (f *mediaFetcher) Save(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, progressRef string) (string, error) {
 	msg, err := messageByID(f.state, chatID, msgID)
 	if err != nil {
 		return "", err
@@ -275,7 +317,7 @@ func (f *mediaFetcher) Save(ctx context.Context, chatID int64, msgID int, slot d
 		return "", err
 	}
 	name := file.Name()
-	if err := f.streamInto(ctx, chatID, msgID, slot, file); err != nil {
+	if err := f.streamInto(ctx, chatID, msgID, slot, file, progressRef); err != nil {
 		_ = file.Close()
 		_ = os.Remove(name)
 		return "", err

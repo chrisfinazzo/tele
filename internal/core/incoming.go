@@ -80,6 +80,29 @@ type Progress struct {
 // Progress reports upload advance for the queued sends a client may be showing.
 func (o *Owner) Progress() <-chan Progress { return o.progress }
 
+// DownloadProgress is how far a save the client asked to watch has come. It is
+// addressed to the call rather than to every client: Ref is whatever the caller
+// passed to SaveMedia, and over a socket it is the call's own id. Like upload
+// progress it is an absolute value, so a frame lost on the way is corrected by
+// the next one (#204).
+type DownloadProgress struct {
+	Ref   string
+	Done  int64
+	Total int64
+}
+
+// Downloads reports progress for saves that were given a ref.
+func (o *Owner) Downloads() <-chan DownloadProgress { return o.downloads }
+
+// publishDownload drops rather than blocks, and quietly, for the reason
+// publishProgress does.
+func (o *Owner) publishDownload(p DownloadProgress) {
+	select {
+	case o.downloads <- p:
+	default:
+	}
+}
+
 // publishProgress drops rather than blocks. Unlike typing it does not log the
 // drop: under a large upload that would be thousands of lines about a repaint
 // nobody missed.

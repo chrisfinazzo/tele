@@ -50,7 +50,7 @@ func (m *RootModel) updateGifLoadingSpinner() {
 // instead of launching an external player.
 func saveGifFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir, "")
 		if err != nil {
 			return nil
 		}

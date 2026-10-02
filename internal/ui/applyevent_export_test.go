@@ -252,7 +252,7 @@ func (o *testOwner) FetchMedia(_ context.Context, chatID int64, msgID int, slot 
 
 // SaveMedia copies the registered file into destDir, the way the real owner
 // streams it there.
-func (o *testOwner) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+func (o *testOwner) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, _ string) (string, error) {
 	src, ok := o.mediaPaths[mediaPathKey{chatID, msgID, slot}]
 	if !ok {
 		return "", &telerr.Error{Kind: telerr.NotFound}
