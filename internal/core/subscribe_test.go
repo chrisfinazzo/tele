@@ -215,3 +215,31 @@ func TestOwner_BackfillKeepsAMessageThatArrivedWhileItWasFetching(t *testing.T) 
 	}
 	assert.Equal(t, []int{1, 2, 5, 6}, ids)
 }
+
+// A delta dropped on a full queue is repaired by a resync, and the resync must
+// not wait for some unrelated change to come along: in a quiet account the
+// client would keep its wrong copy indefinitely. Once the client drains, the
+// subscription is resent on its own.
+func TestOwner_ADroppedDeltaIsResyncedWithoutAnotherChange(t *testing.T) {
+	o, _, st := newTestOwner(t)
+	o.deltas = make(chan project.Delta, 1)
+	st.SetChat(domain.Chat{ID: 1, Title: "Ada"})
+	id := o.Subscribe(project.ChatListWindow{Limit: 10})
+	_, _ = recvDelta(t, o.Deltas())
+
+	// The client stops draining, and a change arrives that it cannot take.
+	o.deltas <- project.Delta{}
+	st.SetChat(domain.Chat{ID: 1, Title: "Grace"})
+	o.Refresh()
+
+	// The client drains again; nothing else changes.
+	<-o.deltas
+
+	d, ok := recvDelta(t, o.Deltas())
+	require.True(t, ok, "the lost delta must be repaired without waiting on another change")
+	assert.Equal(t, id, d.Sub)
+	require.NotNil(t, d.ChatList)
+	assert.Equal(t, project.ChatListReset, d.ChatList.Kind)
+	require.Len(t, d.ChatList.Rows, 1)
+	assert.Equal(t, "Grace", d.ChatList.Rows[0].Title)
+}

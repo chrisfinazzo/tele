@@ -1,6 +1,8 @@
 package core
 
 import (
+	"time"
+
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 )
@@ -87,16 +89,33 @@ func (o *Owner) publishChange(chg state.Change) {
 	o.registry.Refresh()
 }
 
+// resyncDelay is how long after a dropped delta the owner rebuilds on its own.
+// Long enough for a stalled client to drain, short enough that the repair is
+// not noticed.
+const resyncDelay = 200 * time.Millisecond
+
 // emit drops a delta rather than blocking when a client is not draining:
 // backpressure must never stall the owner's update loop. Reporting the drop is
 // what repairs it: the registry forgets what that subscription was told, so its
 // next delta is a resync rather than one stated against a delta never received.
+//
+// That next delta must not wait for an unrelated change, so a drop also
+// schedules one rebuild. It runs on a timer of its own: emit is called under
+// the registry's lock and must not call back into it.
 func (o *Owner) emit(d project.Delta) bool {
 	select {
 	case o.deltas <- d:
 		return true
 	default:
 		o.log.Warn("projection delta dropped: client is not draining")
+		if o.resyncArmed.CompareAndSwap(false, true) {
+			time.AfterFunc(resyncDelay, func() {
+				// Disarmed before the rebuild, so a drop during it schedules
+				// another rather than being lost.
+				o.resyncArmed.Store(false)
+				o.Refresh()
+			})
+		}
 		return false
 	}
 }

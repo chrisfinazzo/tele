@@ -55,8 +55,11 @@ type Owner struct {
 	// renders rather than judges (#192).
 	notifications chan Notification
 	registry      *project.Registry
-	readyCh       chan struct{}
-	onAuthFn      func(userID int64, username string)
+	// resyncArmed is set while a rebuild is scheduled to repair a dropped delta,
+	// so a burst of drops schedules one rebuild rather than one each (#276).
+	resyncArmed atomic.Bool
+	readyCh     chan struct{}
+	onAuthFn    func(userID int64, username string)
 
 	// ctx bounds the owner's background work (history backfill). It is stored
 	// rather than passed because that work is started by a subscription, which
