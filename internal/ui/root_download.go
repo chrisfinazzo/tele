@@ -4,9 +4,11 @@ import (
 	"context"
 	"image"
 	"os"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -185,11 +187,27 @@ func (m RootModel) startPhotoDownload(msgID int) (RootModel, tea.Cmd) {
 	return m, saveFileCmd(m.ctx, m.owner, m.currentChatID, msgID, domain.PhotoFull, downloadsDir(), serial)
 }
 
+// downloadRef is the progress ref a download behind the status-bar indicator
+// passes to the owner: the indicator's serial, so a progress frame finds the
+// indicator it belongs to, and one for a superseded download is ignored there
+// (#204).
+func downloadRef(serial int) string { return strconv.Itoa(serial) }
+
+// handleDownloadProgress moves the status-bar indicator. Like upload progress
+// it is an event, not state: a frame dropped on the way is corrected by the
+// next one.
+func (m RootModel) handleDownloadProgress(p core.DownloadProgress) (RootModel, tea.Cmd) {
+	if serial, err := strconv.Atoi(p.Ref); err == nil {
+		m.statusBar.SetTransferProgress(serial, p.Done, p.Total)
+	}
+	return m, nil
+}
+
 // saveFileCmd streams the named media into destDir under the name the owner
 // picks, and reports the saved path (or the error).
 func saveFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot domain.MediaSlot, destDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, slot, destDir, "")
+		path, err := o.SaveMedia(ctx, chatID, msgID, slot, destDir, downloadRef(serial))
 		if err != nil {
 			text, sev, _ := errText("download", err)
 			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
@@ -204,7 +222,7 @@ func saveFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot dom
 // download indicator identified by serial (and surface any error).
 func openDocumentCmd(ctx context.Context, o Owner, chatID int64, msgID int, tmpDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir, "")
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir, downloadRef(serial))
 		if err != nil {
 			text, sev, _ := errText("open file", err)
 			return documentOpenDoneMsg{serial: serial, errText: text, sev: sev}

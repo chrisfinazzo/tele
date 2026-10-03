@@ -355,6 +355,8 @@ func (a *App) Run() error {
 				prog.Send(tp)
 			case pr := <-a.owner.Progress():
 				prog.Send(pr)
+			case dp := <-a.owner.Downloads():
+				prog.Send(dp)
 			case sk := <-a.owner.ClockSkew():
 				prog.Send(sk)
 			}

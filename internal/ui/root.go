@@ -490,6 +490,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSendMedia(msg)
 	case core.Progress:
 		return m.handleUploadProgress(msg)
+	case core.DownloadProgress:
+		return m.handleDownloadProgress(msg)
 	case gifFileReadyMsg:
 		return m.handleGifFileReady(msg)
 	case gifFramesReadyMsg:

@@ -62,6 +62,8 @@ type ownerStub struct {
 	mediaErr    error
 	fetched     []mediaKey
 	invalidated []mediaKey
+	// saveRefs records the progress ref of every save, in order.
+	saveRefs []string
 
 	// The same three for avatars, which travel their own path: a person and a
 	// picture id rather than a message slot (#223).
@@ -230,7 +232,8 @@ func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot 
 
 // SaveMedia copies the registered file into destDir, the way the real owner
 // streams it there.
-func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, _ string) (string, error) {
+func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir, ref string) (string, error) {
+	o.saveRefs = append(o.saveRefs, ref)
 	if o.mediaErr != nil {
 		return "", o.mediaErr
 	}

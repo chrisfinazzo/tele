@@ -11,6 +11,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Downloading a file, or opening a video or document in an outside app, shows
+  how far it has got in the status bar, as `42% · 168/400 MB`, instead of a
+  spinner alone. A photo, or a file whose size Telegram does not give, keeps
+  the spinner (#204).
+
 ### Fixed
 
 - Two changes arriving close together, such as a reaction and an edit to the
