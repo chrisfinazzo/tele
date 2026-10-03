@@ -240,23 +240,34 @@ func TestStatusBar_DownloadBeatsStatus(t *testing.T) {
 	assert.NotContains(t, view, "idle status")
 }
 
-func TestTransfer_UpdateReplacesLabelForMatchingSerial(t *testing.T) {
-	sb := components.NewStatusBar(80)
-	serial := sb.StartTransfer("up 1/3 0%")
-	sb.UpdateTransfer(serial, "up 2/3 45%")
+// The label says what is coming, the progress how far it has got; the spinner
+// stays, so a percentage that stops moving still shows the app has not (#204).
+func TestTransfer_ProgressFollowsTheLabel(t *testing.T) {
+	sb := components.NewStatusBar(100)
+	serial := sb.StartDownload("downloading video…")
+	sb.SetTransferProgress(serial, 168<<20, 400<<20)
 
-	assert.Contains(t, strip(sb.View()), "up 2/3 45%")
-	assert.True(t, sb.DownloadActive())
+	view := strip(sb.View())
+	assert.Contains(t, view, "downloading video… 42% · 168/400 MB")
+	assert.Contains(t, view, "[=", "the spinner keeps going beside the percentage")
 }
 
-func TestTransfer_UpdateIgnoresStaleSerial(t *testing.T) {
-	sb := components.NewStatusBar(80)
-	sb.StartTransfer("first")
-	serial := sb.StartTransfer("second")
-	sb.UpdateTransfer(serial-1, "stale")
+func TestTransfer_ProgressIgnoresAStaleSerial(t *testing.T) {
+	sb := components.NewStatusBar(100)
+	stale := sb.StartDownload("first")
+	sb.StartDownload("second")
+	sb.SetTransferProgress(stale, 1, 2)
 
-	assert.Contains(t, strip(sb.View()), "second")
-	assert.NotContains(t, strip(sb.View()), "stale")
+	assert.NotContains(t, strip(sb.View()), "%", "a superseded download must not paint over the current one")
+}
+
+func TestTransfer_ANewTransferStartsWithoutProgress(t *testing.T) {
+	sb := components.NewStatusBar(100)
+	first := sb.StartDownload("first")
+	sb.SetTransferProgress(first, 1, 2)
+	sb.StartDownload("second")
+
+	assert.NotContains(t, strip(sb.View()), "%")
 }
 
 func TestTransfer_ClearMatchingSerialClearsIt(t *testing.T) {

@@ -22,6 +22,9 @@ type StatusBar struct {
 	dlText     string  // active download indicator label, "" when idle
 	dlSerial   int     // identifies the active download, for matched clears
 	dlSpinner  Spinner // ping-pong spinner animated by TickDownloadSpinner
+	// dlDone and dlTotal are the active transfer's bytes; a zero total means
+	// none has been reported and only the label shows (#204).
+	dlDone, dlTotal int64
 	// attachStaged is true while a file is staged in the composer (chip shown);
 	// pickerOpen is true while the file-picker overlay is open. Both drive hints.
 	attachStaged bool
@@ -53,21 +56,22 @@ func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
 func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
 
 // StartTransfer shows a transient, animated transfer indicator with label and
-// returns the serial identifying it, so a later UpdateTransfer/ClearTransfer
+// returns the serial identifying it, so a later SetTransferProgress/ClearTransfer
 // only touches this exact transfer (a newer StartTransfer supersedes it).
 // Downloads and uploads share the slot: only one long transfer is shown at a
 // time.
 func (sb *StatusBar) StartTransfer(label string) int {
 	sb.dlSerial++
 	sb.dlText = label
+	sb.dlDone, sb.dlTotal = 0, 0
 	return sb.dlSerial
 }
 
-// UpdateTransfer replaces the label of the active transfer, ignoring a stale or
-// superseded serial. Used to tick a percentage without restarting the spinner.
-func (sb *StatusBar) UpdateTransfer(serial int, label string) {
+// SetTransferProgress shows how far the active transfer has come, ignoring a
+// stale or superseded serial. The spinner keeps going beside it.
+func (sb *StatusBar) SetTransferProgress(serial int, done, total int64) {
 	if serial == sb.dlSerial {
-		sb.dlText = label
+		sb.dlDone, sb.dlTotal = done, total
 	}
 }
 
@@ -111,7 +115,11 @@ func (sb *StatusBar) View() string {
 		segs = append(segs, theme.S().Bar.Render(sb.clockSkew))
 	}
 	if sb.dlText != "" {
-		segs = append(segs, theme.S().Bar.Render(sb.dlSpinner.View()+" "+sb.dlText))
+		text := sb.dlSpinner.View() + " " + sb.dlText
+		if sb.dlTotal > 0 {
+			text += " " + transferProgress(sb.dlDone, sb.dlTotal)
+		}
+		segs = append(segs, theme.S().Bar.Render(text))
 	} else if sb.status != "" {
 		segs = append(segs, theme.S().Bar.Render(sb.status))
 	}
@@ -137,6 +145,26 @@ func (sb *StatusBar) View() string {
 		}
 	}
 	return theme.S().Bar.Width(sb.width).Render(left)
+}
+
+// transferProgress renders "42% · 168/400 MB". Both sizes are in the unit of
+// the whole, so the pair reads as one quantity, and carry a decimal only when
+// the whole is under ten of that unit: below that a whole number moves too
+// seldom to show progress (#204).
+func transferProgress(done, total int64) string {
+	pct := min(done*100/total, 100)
+	const unit = 1024
+	div, prefix := int64(1), ""
+	for i := 0; total/div >= unit && i < len("KMGT"); i++ {
+		div *= unit
+		prefix = string("KMGT"[i])
+	}
+	verb := "%.0f"
+	if total/div < 10 {
+		verb = "%.1f"
+	}
+	format := "%d%% · " + verb + "/" + verb + " %sB"
+	return fmt.Sprintf(format, pct, float64(done)/float64(div), float64(total)/float64(div), prefix)
 }
 
 // versionLabel formats the build version for the bar: local builds keep their

@@ -17,6 +17,27 @@ func TestVersionLabel(t *testing.T) {
 	assert.Equal(t, "v1.2.3", versionLabel("v1.2.3"))
 }
 
+// Both sizes are written in the unit of the whole, with a decimal only where a
+// whole number would be too coarse to see move (#204).
+func TestTransferProgress(t *testing.T) {
+	const kb, mb, gb = int64(1) << 10, int64(1) << 20, int64(1) << 30
+	cases := []struct {
+		done, total int64
+		want        string
+	}{
+		{168 * mb, 400 * mb, "42% · 168/400 MB"},
+		{gb + gb/5, 3*gb + 2*gb/5, "35% · 1.2/3.4 GB"},
+		{3 * mb / 10, 2*mb + mb/10, "14% · 0.3/2.1 MB"},
+		{200 * kb, 800 * kb, "25% · 200/800 KB"},
+		{300, 900, "33% · 300/900 B"},
+		{0, 400 * mb, "0% · 0/400 MB"},
+		{410 * mb, 400 * mb, "100% · 410/400 MB"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, transferProgress(c.done, c.total))
+	}
+}
+
 func TestOverlayHint_JoinsPairs(t *testing.T) {
 	out := OverlayHint([][2]string{{"space", "pause"}, {"q", "close"}}, nil)
 	if !strings.Contains(out, "pause") || !strings.Contains(out, "close") {
