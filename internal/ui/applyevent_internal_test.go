@@ -78,7 +78,7 @@ type ownerStub struct {
 	discarded []string
 }
 
-func (o *ownerStub) SetFocus(chatID int64) { o.focus = append(o.focus, chatID) }
+func (o *ownerStub) SetFocus(h domain.HistoryKey) { o.focus = append(o.focus, h.ChatID) }
 
 // mediaKey identifies one piece of media the way a client names it.
 type mediaKey struct {
@@ -135,7 +135,8 @@ func (o *ownerStub) Refresh() { o.reg.Refresh() }
 
 // SetMuted mirrors the real owner: it applies the change through state (which
 // publishes a delta) and answers with o.err.
-func (o *ownerStub) SetMuted(_ context.Context, chatID int64, muted bool) error {
+func (o *ownerStub) SetMuted(_ context.Context, h domain.HistoryKey, muted bool) error {
+	chatID := h.ChatID
 	o.calls = append(o.calls, cmdCall{name: "SetMuted", chatID: chatID, flag: muted})
 	if o.err != nil {
 		return o.err
@@ -380,7 +381,8 @@ func (o *ownerStub) EditMessage(_ context.Context, chatID int64, msgID int, text
 	return nil
 }
 
-func (o *ownerStub) ReadReactions(_ context.Context, chatID int64) error {
+func (o *ownerStub) ReadReactions(_ context.Context, h domain.HistoryKey) error {
+	chatID := h.ChatID
 	o.calls = append(o.calls, cmdCall{name: "ReadReactions", chatID: chatID})
 	if o.err != nil {
 		return o.err
@@ -389,7 +391,8 @@ func (o *ownerStub) ReadReactions(_ context.Context, chatID int64) error {
 	return nil
 }
 
-func (o *ownerStub) ReadMentions(_ context.Context, chatID int64) error {
+func (o *ownerStub) ReadMentions(_ context.Context, h domain.HistoryKey) error {
+	chatID := h.ChatID
 	o.calls = append(o.calls, cmdCall{name: "ReadMentions", chatID: chatID})
 	if o.err != nil {
 		return o.err
@@ -398,7 +401,8 @@ func (o *ownerStub) ReadMentions(_ context.Context, chatID int64) error {
 	return nil
 }
 
-func (o *ownerStub) MarkRead(_ context.Context, chatID int64, maxID int) error {
+func (o *ownerStub) MarkRead(_ context.Context, h domain.HistoryKey, maxID int) error {
+	chatID := h.ChatID
 	o.calls = append(o.calls, cmdCall{name: "MarkRead", chatID: chatID})
 	if o.err != nil {
 		return o.err

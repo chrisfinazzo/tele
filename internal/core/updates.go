@@ -79,7 +79,7 @@ func (o *Owner) handleEvent(evt store.Event) {
 		o.refreshTopics(c.ChatID, []int{c.UnknownTopic})
 	}
 
-	focused := o.focus.focused
+	focused := o.focus.showing
 	now := time.Now()
 	// One snapshot for the decision and both gates: a reload between two reads
 	// would deliver a body rendered under one config to a sink chosen under

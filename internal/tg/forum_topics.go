@@ -121,6 +121,15 @@ func replyHeader(replyToMsgID, topicID int) tg.InputReplyToClass {
 	return nil
 }
 
+// notifyPeer names whose notification setting is changed: a chat's, or one
+// forum topic's (#275).
+func notifyPeer(peer tg.InputPeerClass, topicID int) tg.InputNotifyPeerClass {
+	if topicID != 0 {
+		return &tg.InputNotifyForumTopic{Peer: peer, TopMsgID: topicID}
+	}
+	return &tg.InputNotifyPeer{Peer: peer}
+}
+
 // buildSetTypingRequest reports typing in a chat, or in one topic of a forum;
 // in General it is reported as in any ordinary chat.
 func buildSetTypingRequest(inputPeer tg.InputPeerClass, action tg.SendMessageActionClass, topicID int) *tg.MessagesSetTypingRequest {
@@ -193,6 +202,12 @@ func parseForumTopics(res *tg.MessagesForumTopics, chatID int64) ForumTopicsPage
 			}
 			if d, ok := t.Draft.(*tg.DraftMessage); ok {
 				topic.Draft = d.Message
+			}
+			if _, own := t.NotifySettings.GetMuteUntil(); own {
+				topic.Mute = domain.TopicUnmuted
+				if mutedFromSettings(t.NotifySettings) {
+					topic.Mute = domain.TopicMuted
+				}
 			}
 			if m, ok := selectMessageByID(msgs, t.TopMessage); ok {
 				topic.LastMessage = &m

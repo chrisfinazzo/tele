@@ -463,27 +463,52 @@ func (c *GotdClient) MarkRead(ctx context.Context, peer domain.Peer, maxID int) 
 	})
 }
 
-func (c *GotdClient) ReadReactions(ctx context.Context, peer domain.Peer) error {
+func (c *GotdClient) ReadReactions(ctx context.Context, peer domain.Peer, topicID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
 	}
 	return WithRetry(ctx, func() error {
-		_, err := api.MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
-			Peer: peerToInput(peer),
-		})
+		_, err := api.MessagesReadReactions(ctx, buildReadReactionsRequest(peerToInput(peer), topicID))
 		return err
 	})
 }
 
-func (c *GotdClient) ReadMentions(ctx context.Context, peer domain.Peer) error {
+func (c *GotdClient) ReadMentions(ctx context.Context, peer domain.Peer, topicID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
 	}
 	return WithRetry(ctx, func() error {
-		_, err := api.MessagesReadMentions(ctx, &tg.MessagesReadMentionsRequest{
-			Peer: peerToInput(peer),
+		_, err := api.MessagesReadMentions(ctx, buildReadMentionsRequest(peerToInput(peer), topicID))
+		return err
+	})
+}
+
+// buildReadReactionsRequest reads a chat's unread reactions, or one forum
+// topic's (#275).
+func buildReadReactionsRequest(peer tg.InputPeerClass, topicID int) *tg.MessagesReadReactionsRequest {
+	return &tg.MessagesReadReactionsRequest{Peer: peer, TopMsgID: topicID}
+}
+
+// buildReadMentionsRequest reads a chat's unread mentions, or one forum
+// topic's (#275).
+func buildReadMentionsRequest(peer tg.InputPeerClass, topicID int) *tg.MessagesReadMentionsRequest {
+	return &tg.MessagesReadMentionsRequest{Peer: peer, TopMsgID: topicID}
+}
+
+// ReadDiscussion marks a forum topic read up to maxID. A topic is a replies
+// thread, General's being thread 1, and is read as one (#275).
+func (c *GotdClient) ReadDiscussion(ctx context.Context, peer domain.Peer, topicID, maxID int) error {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+	return WithRetry(ctx, func() error {
+		_, err := api.MessagesReadDiscussion(ctx, &tg.MessagesReadDiscussionRequest{
+			Peer:      peerToInput(peer),
+			MsgID:     topicID,
+			ReadMaxID: maxID,
 		})
 		return err
 	})

@@ -126,6 +126,25 @@ func TestBuildTopicList_WindowsTheForumsTopics(t *testing.T) {
 	assert.True(t, got.Rows[2].Closed)
 }
 
+// A topic row shows whether the topic is muted, which it is by its own setting
+// when it has one and by the forum's when it follows it.
+func TestBuildTopicList_ARowIsMutedByItsOwnSettingOrTheForums(t *testing.T) {
+	f := forumChat()
+	f.IsMuted = true
+	r := &fakeReader{chats: []domain.Chat{f}, topics: map[int64][]domain.Topic{forum: {
+		{ChatID: forum, ID: 12, Mute: domain.TopicFollowsForum},
+		{ChatID: forum, ID: 13, Mute: domain.TopicUnmuted},
+		{ChatID: forum, ID: 14, Mute: domain.TopicMuted},
+	}}}
+
+	got := project.BuildTopicList(r, project.TopicListWindow{ChatID: forum, Limit: 10})
+
+	require.Len(t, got.Rows, 3)
+	assert.True(t, got.Rows[0].Muted, "follows the muted forum")
+	assert.False(t, got.Rows[1].Muted, "unmuted in a muted forum")
+	assert.True(t, got.Rows[2].Muted)
+}
+
 func TestDiffTopicList_AChangedTopicIsOneRow(t *testing.T) {
 	r := &fakeReader{chats: []domain.Chat{forumChat()}, topics: map[int64][]domain.Topic{forum: listedTopics()}}
 	w := project.TopicListWindow{ChatID: forum, Limit: 10}

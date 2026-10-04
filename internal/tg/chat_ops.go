@@ -24,7 +24,7 @@ func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer domain.Peer, unr
 	})
 }
 
-func (c *GotdClient) SetMuted(ctx context.Context, peer domain.Peer, muted bool) error {
+func (c *GotdClient) SetMuted(ctx context.Context, peer domain.Peer, topicID int, muted bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -37,7 +37,7 @@ func (c *GotdClient) SetMuted(ctx context.Context, peer domain.Peer, muted bool)
 			settings.SetMuteUntil(0)
 		}
 		_, err := api.AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
-			Peer:     &tg.InputNotifyPeer{Peer: peerToInput(peer)},
+			Peer:     notifyPeer(peerToInput(peer), topicID),
 			Settings: settings,
 		})
 		return err

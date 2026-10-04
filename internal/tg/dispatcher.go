@@ -322,8 +322,12 @@ func setupDispatcher(
 	// without a restart. NotifySettings is a generic (non-pts) update, so it is
 	// safe to handle via the dispatcher.
 	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNotifySettings) error {
-		// We only track per-chat mute state; ignore global category defaults
-		// (NotifyUsers/NotifyChats/NotifyBroadcasts) and forum-topic settings.
+		// We track per-chat and per-topic mute state; global category defaults
+		// (NotifyUsers/NotifyChats/NotifyBroadcasts) are ignored. A topic's is
+		// read again with the topic, like everything else about it (#275).
+		if nt, ok := upd.Peer.(*tg.NotifyForumTopic); ok {
+			return topicsChanged(ctx, store.Event{ChatID: peerIDFromPeer(nt.Peer), MsgIDs: []int{nt.TopMsgID}})
+		}
 		np, ok := upd.Peer.(*tg.NotifyPeer)
 		if !ok {
 			return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
@@ -24,7 +25,7 @@ func (m RootModel) markReadCmd() tea.Cmd {
 	}
 	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
 	return func() tea.Msg {
-		if err := owner.MarkRead(ctx, chatID, maxID); err != nil {
+		if err := owner.MarkRead(ctx, domain.HistoryKey{ChatID: chatID}, maxID); err != nil {
 			return errStatusBackground("mark read", err)
 		}
 		return nil
@@ -39,7 +40,7 @@ func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
 	}
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := owner.ReadReactions(ctx, chatID); err != nil {
+		if err := owner.ReadReactions(ctx, domain.HistoryKey{ChatID: chatID}); err != nil {
 			return errStatusBackground("read reactions", err)
 		}
 		return nil
@@ -53,7 +54,7 @@ func (m RootModel) readMentionsCmd(chatID int64) tea.Cmd {
 	}
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := owner.ReadMentions(ctx, chatID); err != nil {
+		if err := owner.ReadMentions(ctx, domain.HistoryKey{ChatID: chatID}); err != nil {
 			return errStatusBackground("read mentions", err)
 		}
 		return nil

@@ -22,10 +22,10 @@ func (m *mockNotifier) Notify(title, body string) error {
 
 // focusOn builds the focus input the policy takes: the chats some client has
 // open. Passing none means nobody is looking at anything.
-func focusOn(ids ...int64) func(int64) bool {
-	return func(id int64) bool {
+func focusOn(ids ...int64) func(domain.HistoryKey) bool {
+	return func(h domain.HistoryKey) bool {
 		for _, want := range ids {
-			if id == want && id != 0 {
+			if h.ChatID == want && want != 0 {
 				return true
 			}
 		}
@@ -50,7 +50,7 @@ func TestDecideNotification(t *testing.T) {
 		name      string
 		chats     []domain.Chat
 		evt       store.Event
-		focused   func(int64) bool
+		focused   func(domain.HistoryKey) bool
 		preview   bool
 		wantOK    bool
 		wantTitle string

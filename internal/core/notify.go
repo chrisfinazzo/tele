@@ -3,6 +3,7 @@ package core
 import (
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -28,21 +29,28 @@ const NotifyFreshnessWindow = 10 * time.Second
 // banner to disagree about the same event (#192).
 type Notification struct {
 	ChatID int64
-	Title  string
-	Body   string
+	// TopicID is the forum topic the event landed in, 0 outside a forum, so a
+	// client opening the notification opens that topic (#275).
+	TopicID int
+	Title   string
+	Body    string
 }
 
 // decideNotification is the whole notification policy. It is pure: the store,
 // the clients' focus and the clock all arrive as arguments, so every rule is a
 // table test with no owner in sight.
 //
-// focused reports that some attached client is showing that chat. With nobody
-// attached nothing is focused, which is what lets a daemon notify with no client
-// running at all (#182).
+// focused reports that some attached client is showing that history: a chat,
+// or one topic of a forum. With nobody attached nothing is focused, which is
+// what lets a daemon notify with no client running at all (#182).
+//
+// In a forum the event belongs to a topic, and the topic decides: the one on
+// screen is silent while the others are not, and a topic's own mute setting
+// wins over the forum's (#275).
 func decideNotification(
 	st store.Store,
 	evt store.Event,
-	focused func(int64) bool,
+	focused func(domain.HistoryKey) bool,
 	preview bool,
 	now time.Time,
 ) (Notification, bool) {
@@ -50,18 +58,45 @@ func decideNotification(
 	if !ok {
 		return Notification{}, false
 	}
-	if focused(chatID) {
+	chat, ok := st.GetChat(chatID)
+	if !ok || chat.IsArchived {
+		return Notification{}, false
+	}
+	h := historyOfEvent(st, chat, evt)
+	if focused(h) {
 		// You are looking at it; a banner would tell you nothing.
 		return Notification{}, false
 	}
-	chat, ok := st.GetChat(chatID)
-	if !ok || chat.IsMuted || chat.IsArchived {
+	muted, title := chat.IsMuted, chat.Title
+	if h.TopicID != 0 {
+		topic, _ := st.Topic(chatID, h.TopicID)
+		muted = topic.MutedIn(chat.IsMuted)
+		if topic.Title != "" {
+			title = chat.Title + " › " + topic.Title
+		}
+	}
+	if muted {
 		return Notification{}, false
 	}
 	if at.IsZero() || now.Sub(at) > NotifyFreshnessWindow {
 		return Notification{}, false
 	}
-	return Notification{ChatID: chatID, Title: chat.Title, Body: body}, true
+	return Notification{ChatID: chatID, TopicID: h.TopicID, Title: title, Body: body}, true
+}
+
+// historyOfEvent names the history an event landed in. A message names its own
+// topic; a reaction is in the topic of the message it is on, and on a message
+// not held the topic is unknown, so the forum's own settings decide.
+func historyOfEvent(st store.Store, chat domain.Chat, evt store.Event) domain.HistoryKey {
+	switch evt.Kind {
+	case store.EventNewMessage, store.EventEditMessage:
+		return chat.HistoryOf(evt.Message)
+	case store.EventReactionsUpdate:
+		if m, ok := st.Message(chat.ID, evt.MsgID); ok {
+			return chat.HistoryOf(m)
+		}
+	}
+	return domain.HistoryKey{ChatID: chat.ID}
 }
 
 // trigger reduces an event to what a notification would be made of, or reports

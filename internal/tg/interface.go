@@ -76,12 +76,14 @@ type Client interface {
 	MarkDialogUnread(ctx context.Context, peer domain.Peer, unread bool) error
 	// ReadReactions marks all unread reactions in a dialog as read
 	// (messages.readReactions), clearing the unread-reaction indicator server-side.
-	ReadReactions(ctx context.Context, peer domain.Peer) error
+	ReadReactions(ctx context.Context, peer domain.Peer, topicID int) error
 	// ReadMentions marks all unread mentions in a dialog as read
 	// (messages.readMentions), clearing the unread-mention indicator server-side.
-	ReadMentions(ctx context.Context, peer domain.Peer) error
+	ReadMentions(ctx context.Context, peer domain.Peer, topicID int) error
+	// ReadDiscussion marks a forum topic read up to maxID (#275).
+	ReadDiscussion(ctx context.Context, peer domain.Peer, topicID, maxID int) error
 	// SetMuted mutes (indefinitely) or unmutes a peer's notifications.
-	SetMuted(ctx context.Context, peer domain.Peer, muted bool) error
+	SetMuted(ctx context.Context, peer domain.Peer, topicID int, muted bool) error
 	// AddToFolder adds or removes a peer from an existing dialog filter's
 	// include list.
 	AddToFolder(ctx context.Context, filterID int, peer domain.Peer, add bool) error

@@ -49,7 +49,7 @@ func TestOwner_ChannelGapRepairsTheFocusedChatAtOnce(t *testing.T) {
 	s.Store().SetMessages(7, gapMsgs(1, 5))
 	a := o.Attach()
 	defer a.Detach()
-	a.SetFocus(7)
+	a.SetFocus(domain.HistoryKey{ChatID: 7})
 
 	o.handleEvent(store.Event{Kind: store.EventChannelGap, ChatID: 7})
 

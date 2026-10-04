@@ -123,6 +123,15 @@ type Store interface {
 	UpdateTopics(chatID int64, topics []domain.Topic)
 	// RemoveTopics forgets topics Telegram reported deleted.
 	RemoveTopics(chatID int64, ids []int)
+	// SetTopicRead moves a forum topic's read pointer up to maxID.
+	SetTopicRead(chatID int64, topicID, maxID int)
+	// SetTopicMentionsRead and SetTopicReactionsRead clear a forum topic's
+	// unread mentions and reactions.
+	SetTopicMentionsRead(chatID int64, topicID int)
+	SetTopicReactionsRead(chatID int64, topicID int)
+	// SetTopicMute records a forum topic's own notification setting and
+	// reports the one it replaced.
+	SetTopicMute(chatID int64, topicID int, mute domain.TopicMute) domain.TopicMute
 	// SetTopicDraft records a forum topic's unsent draft.
 	SetTopicDraft(chatID int64, topicID int, text string)
 	// ApplyIncomingTopic records what an arriving message means for its topic:

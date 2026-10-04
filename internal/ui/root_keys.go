@@ -238,7 +238,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.owner != nil {
 			// The owner cannot see the screen: leaving a chat has to be reported
 			// as explicitly as entering one, or it stays silenced (#192).
-			m.owner.SetFocus(0)
+			m.owner.SetFocus(domain.HistoryKey{})
 		}
 		m.chatList.SetActiveByID(0)
 		if m.owner != nil && m.chatSub != 0 {

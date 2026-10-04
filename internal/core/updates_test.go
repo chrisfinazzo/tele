@@ -286,7 +286,7 @@ func TestNotify_FocusedChatDoesNeither(t *testing.T) {
 	n := &mockNotifier{}
 	o, st := newTestOwnerNotified(t, n)
 	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	o.Attach().SetFocus(2)
+	o.Attach().SetFocus(domain.HistoryKey{ChatID: 2})
 
 	o.handleEvent(store.Event{Kind: store.EventNewMessage,
 		Message: domain.Message{ChatID: 2, Text: "hey", Date: time.Now()}})

@@ -58,6 +58,18 @@ func TestDispatcher_ATopicReadIsReadAgain(t *testing.T) {
 	assert.Equal(t, []int{12}, out.MsgIDs)
 }
 
+// A topic's notification setting changed on another device is read again with
+// the topic, like everything else about it.
+func TestDispatcher_ATopicsMuteIsReadAgain(t *testing.T) {
+	evt := topicsEvent(t, &tg.UpdateNotifySettings{
+		Peer: &tg.NotifyForumTopic{Peer: &tg.PeerChannel{ChannelID: 50}, TopMsgID: 12},
+	})
+
+	assert.Equal(t, store.EventTopicsChanged, evt.Kind)
+	assert.Equal(t, int64(50), evt.ChatID)
+	assert.Equal(t, []int{12}, evt.MsgIDs)
+}
+
 // A draft is kept per topic, and Telegram says which.
 func TestDispatcher_ADraftNamesItsTopic(t *testing.T) {
 	evt := topicsEventOn(t, &tg.UpdateDraftMessage{

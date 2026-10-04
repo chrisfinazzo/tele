@@ -63,6 +63,12 @@ type stubClient struct {
 	forwardedTopic int
 	draftTopic     int
 	typingTopic    int
+	// discussions are the topics read; mentionsReadIn and reactionsReadIn the
+	// topics whose mentions and reactions were read (0 is a whole chat).
+	discussions     []discussionRead
+	mentionsReadIn  []int
+	reactionsReadIn []int
+	topicMutedWith  map[int]bool
 	// sendBlock, when set, holds SendMessage open so a test can catch an entry
 	// mid-flight and drop the owner under it.
 	sendBlock chan struct{}
@@ -88,7 +94,14 @@ func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFl
 
 func (s *stubClient) Updates() <-chan store.Event { return nil }
 
-func (s *stubClient) SetMuted(_ context.Context, _ domain.Peer, muted bool) error {
+func (s *stubClient) SetMuted(_ context.Context, _ domain.Peer, topic int, muted bool) error {
+	if topic != 0 {
+		if s.topicMutedWith == nil {
+			s.topicMutedWith = make(map[int]bool)
+		}
+		s.topicMutedWith[topic] = muted
+		return s.err
+	}
 	s.mutedWith = &muted
 	return s.err
 }
@@ -112,9 +125,23 @@ func (s *stubClient) MarkRead(_ context.Context, _ domain.Peer, maxID int) error
 	return s.err
 }
 
-func (s *stubClient) ReadReactions(_ context.Context, _ domain.Peer) error { return s.err }
+func (s *stubClient) ReadReactions(_ context.Context, _ domain.Peer, topic int) error {
+	s.reactionsReadIn = append(s.reactionsReadIn, topic)
+	return s.err
+}
 
-func (s *stubClient) ReadMentions(_ context.Context, _ domain.Peer) error { return s.err }
+func (s *stubClient) ReadMentions(_ context.Context, _ domain.Peer, topic int) error {
+	s.mentionsReadIn = append(s.mentionsReadIn, topic)
+	return s.err
+}
+
+// discussionRead is one readDiscussion: a topic read up to a message.
+type discussionRead struct{ topic, maxID int }
+
+func (s *stubClient) ReadDiscussion(_ context.Context, _ domain.Peer, topic, maxID int) error {
+	s.discussions = append(s.discussions, discussionRead{topic: topic, maxID: maxID})
+	return s.err
+}
 
 // The media send path (#195). UploadFile reports two progress frames so the
 // aggregation across an entry's parts is observable.
@@ -241,7 +268,7 @@ func TestSetMuted_AppliesOptimisticallyAndKeepsItOnSuccess(t *testing.T) {
 	c := &stubClient{}
 	o, st := newCmdOwner(t, c)
 
-	require.NoError(t, o.SetMuted(context.Background(), 1, true))
+	require.NoError(t, o.SetMuted(context.Background(), domain.HistoryKey{ChatID: 1}, true))
 
 	chat, _ := st.GetChat(1)
 	assert.True(t, chat.IsMuted)
@@ -253,7 +280,7 @@ func TestSetMuted_RollsBackAndReturnsTheError(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}}
 	o, st := newCmdOwner(t, c)
 
-	err := o.SetMuted(context.Background(), 1, true)
+	err := o.SetMuted(context.Background(), domain.HistoryKey{ChatID: 1}, true)
 
 	require.Error(t, err)
 	assert.Equal(t, telerr.Forbidden, telerr.Of(err))
@@ -264,7 +291,7 @@ func TestSetMuted_RollsBackAndReturnsTheError(t *testing.T) {
 func TestSetMuted_UnknownChatIsPeerNotFound(t *testing.T) {
 	o, _ := newCmdOwner(t, &stubClient{})
 
-	err := o.SetMuted(context.Background(), 99, true)
+	err := o.SetMuted(context.Background(), domain.HistoryKey{ChatID: 99}, true)
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 }
@@ -274,7 +301,7 @@ func TestSetMuted_PublishesADeltaToTheChatList(t *testing.T) {
 	o.Subscribe(project.ChatListWindow{Limit: 10})
 	recvDelta(t, o.Deltas()) // the subscription's opening Reset
 
-	require.NoError(t, o.SetMuted(context.Background(), 1, true))
+	require.NoError(t, o.SetMuted(context.Background(), domain.HistoryKey{ChatID: 1}, true))
 
 	d, ok := recvDelta(t, o.Deltas())
 	require.True(t, ok, "the mute must reach subscribed clients")
@@ -368,7 +395,7 @@ func TestMarkRead_MovesThePointerOnlyAfterConfirmation(t *testing.T) {
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, ReadInboxMaxID: 10})
 
-	err := o.MarkRead(context.Background(), 1, 20)
+	err := o.MarkRead(context.Background(), domain.HistoryKey{ChatID: 1}, 20)
 
 	require.Error(t, err)
 	chat, _ := st.GetChat(1)
@@ -380,7 +407,7 @@ func TestMarkRead_AdvancesThePointerOnSuccess(t *testing.T) {
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, ReadInboxMaxID: 10})
 
-	require.NoError(t, o.MarkRead(context.Background(), 1, 20))
+	require.NoError(t, o.MarkRead(context.Background(), domain.HistoryKey{ChatID: 1}, 20))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 20, chat.ReadInboxMaxID)
@@ -397,7 +424,7 @@ func TestMarkRead_ZeroMaxIDClearsTheWholeChat(t *testing.T) {
 		ReadInboxMaxID: 10, UnreadCount: 7, UnreadMark: true,
 	})
 
-	require.NoError(t, o.MarkRead(context.Background(), 1, 0))
+	require.NoError(t, o.MarkRead(context.Background(), domain.HistoryKey{ChatID: 1}, 0))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 0, chat.UnreadCount)
@@ -411,7 +438,7 @@ func TestReadReactions_ClearsTheBadgeOnSuccess(t *testing.T) {
 		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadReactionsCount: 2,
 	})
 
-	require.NoError(t, o.ReadReactions(context.Background(), 1))
+	require.NoError(t, o.ReadReactions(context.Background(), domain.HistoryKey{ChatID: 1}))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 0, chat.UnreadReactionsCount)
@@ -427,7 +454,7 @@ func TestReadReactions_ClearsTheBadgeBeforeTheRequest(t *testing.T) {
 		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadReactionsCount: 2,
 	})
 
-	require.Error(t, o.ReadReactions(context.Background(), 1))
+	require.Error(t, o.ReadReactions(context.Background(), domain.HistoryKey{ChatID: 1}))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 0, chat.UnreadReactionsCount)
@@ -439,7 +466,7 @@ func TestReadMentions_ClearsTheBadgeOnSuccess(t *testing.T) {
 		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadMentionsCount: 3,
 	})
 
-	require.NoError(t, o.ReadMentions(context.Background(), 1))
+	require.NoError(t, o.ReadMentions(context.Background(), domain.HistoryKey{ChatID: 1}))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 0, chat.UnreadMentionsCount)
@@ -452,7 +479,7 @@ func TestReadMentions_ClearsTheBadgeBeforeTheRequest(t *testing.T) {
 		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadMentionsCount: 3,
 	})
 
-	require.Error(t, o.ReadMentions(context.Background(), 1))
+	require.Error(t, o.ReadMentions(context.Background(), domain.HistoryKey{ChatID: 1}))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 0, chat.UnreadMentionsCount)
@@ -470,7 +497,7 @@ func TestMarkRead_ZeroMaxIDMovesThePointerToTheNewestMessage(t *testing.T) {
 		LastMessage: &domain.Message{ID: 42, ChatID: 1},
 	})
 
-	require.NoError(t, o.MarkRead(context.Background(), 1, 0))
+	require.NoError(t, o.MarkRead(context.Background(), domain.HistoryKey{ChatID: 1}, 0))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, 42, chat.ReadInboxMaxID, "everything up to the newest message is read")

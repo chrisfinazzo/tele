@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -27,7 +28,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		clear(m.gifFrames)
 		m.chatList.SetActiveByID(msg.ChatID)
 		if m.owner != nil {
-			m.owner.SetFocus(msg.ChatID)
+			m.owner.SetFocus(domain.HistoryKey{ChatID: msg.ChatID})
 		}
 		m.chat.ClearPendingAction()
 		// Paint the title immediately; everything else arrives on the

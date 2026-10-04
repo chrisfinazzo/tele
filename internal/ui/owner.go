@@ -19,19 +19,19 @@ type Owner interface {
 
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.
-	SetMuted(ctx context.Context, chatID int64, muted bool) error
+	SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error
 	SetArchived(ctx context.Context, chatID int64, archived bool) error
 	SetUnreadMark(ctx context.Context, chatID int64, unread bool) error
 	AddToFolder(ctx context.Context, filterID int, chatID int64, add bool) error
 	// MarkRead with maxID 0 reads the whole chat.
-	MarkRead(ctx context.Context, chatID int64, maxID int) error
+	MarkRead(ctx context.Context, h domain.HistoryKey, maxID int) error
 	// SetFocus reports which chat this client is showing, 0 for none. The owner
 	// needs it because a chat you are looking at must not interrupt you; the
 	// client must report leaving a chat as well as entering one, or the owner
 	// goes on believing an abandoned chat is still on screen (#192).
-	SetFocus(chatID int64)
-	ReadReactions(ctx context.Context, chatID int64) error
-	ReadMentions(ctx context.Context, chatID int64) error
+	SetFocus(h domain.HistoryKey)
+	ReadReactions(ctx context.Context, h domain.HistoryKey) error
+	ReadMentions(ctx context.Context, h domain.HistoryKey) error
 	EditMessage(ctx context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error
 	DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error
 	// SendReaction answers kept=false when Telegram accepted the request but

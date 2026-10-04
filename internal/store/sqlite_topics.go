@@ -180,6 +180,64 @@ func (s *SQLiteStore) forgetTopicCountsLocked(h domain.HistoryKey) {
 	delete(s.topicMentions, h)
 }
 
+// SetTopicRead moves a topic's read pointer up to maxID. Read up to its newest
+// message, nothing is unread there; read short of it, the count is Telegram's
+// to state, and the read update that follows has the topic read again.
+func (s *SQLiteStore) SetTopicRead(chatID int64, topicID, maxID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.topics[chatID][topicID]
+	if !ok {
+		return
+	}
+	t.ReadInboxMaxID = max(t.ReadInboxMaxID, maxID)
+	if maxID >= t.TopMessageID {
+		t.UnreadCount = 0
+	}
+	s.topicUnread[domain.HistoryKey{ChatID: chatID, TopicID: topicID}] = &topicCounter{base: t.UnreadCount}
+	s.putTopicLocked(t)
+}
+
+// SetTopicMentionsRead clears a topic's unread mentions.
+func (s *SQLiteStore) SetTopicMentionsRead(chatID int64, topicID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.topics[chatID][topicID]
+	if !ok {
+		return
+	}
+	t.UnreadMentionsCount = 0
+	s.topicMentions[domain.HistoryKey{ChatID: chatID, TopicID: topicID}] = &topicCounter{}
+	s.putTopicLocked(t)
+}
+
+// SetTopicReactionsRead clears a topic's unread reactions.
+func (s *SQLiteStore) SetTopicReactionsRead(chatID int64, topicID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.topics[chatID][topicID]
+	if !ok {
+		return
+	}
+	t.UnreadReactionsCount = 0
+	s.putTopicLocked(t)
+}
+
+// SetTopicMute records a topic's own notification setting, reporting the one
+// it replaced so a refused change can be undone.
+func (s *SQLiteStore) SetTopicMute(chatID int64, topicID int, mute domain.TopicMute) domain.TopicMute {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.topics[chatID][topicID]
+	if !ok {
+		t = domain.Topic{ChatID: chatID, ID: topicID}
+	}
+	was := t.Mute
+	t.Mute = mute
+	s.putTopicLocked(t)
+	return was
+}
+
 // SetTopicDraft records a topic's unsent draft. A topic nothing is known about
 // yet is held by its id, as an arriving message would hold it.
 func (s *SQLiteStore) SetTopicDraft(chatID int64, topicID int, text string) {

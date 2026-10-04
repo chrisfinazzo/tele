@@ -15,6 +15,9 @@ type TopicRow struct {
 	Closed    bool
 	// Hidden is General folded away by the forum's admins.
 	Hidden bool
+	// Muted is whether the topic is muted, by its own setting or by following
+	// its forum's.
+	Muted bool
 }
 
 // TopicListContents is everything a topic-list subscription currently shows.
@@ -29,17 +32,19 @@ type TopicListContents struct {
 // the reader; this function never sorts.
 func BuildTopicList(r Reader, w TopicListWindow) TopicListContents {
 	all := r.Topics(w.ChatID)
+	chat, _ := r.GetChat(w.ChatID)
+	forumMuted := chat.IsMuted
 	out := TopicListContents{ChatID: w.ChatID, Offset: w.Offset, Total: len(all)}
 	start := min(max(w.Offset, 0), len(all))
 	end := min(start+w.Limit, len(all))
 	out.Rows = make([]TopicRow, 0, end-start)
 	for _, t := range all[start:end] {
-		out.Rows = append(out.Rows, topicRow(t))
+		out.Rows = append(out.Rows, topicRow(t, forumMuted))
 	}
 	return out
 }
 
-func topicRow(t domain.Topic) TopicRow {
+func topicRow(t domain.Topic, forumMuted bool) TopicRow {
 	return TopicRow{
 		ID:        t.ID,
 		Title:     t.Title,
@@ -49,6 +54,7 @@ func topicRow(t domain.Topic) TopicRow {
 		Pinned:    t.Pinned,
 		Closed:    t.Closed,
 		Hidden:    t.Hidden,
+		Muted:     t.MutedIn(forumMuted),
 	}
 }
 

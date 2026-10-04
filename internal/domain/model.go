@@ -276,6 +276,31 @@ type Topic struct {
 	UnreadMentionsCount  int
 	UnreadReactionsCount int
 	Draft                string
+	// Mute is the topic's own notification setting, or that it has none and
+	// follows its forum's.
+	Mute TopicMute
+}
+
+// TopicMute is a topic's notification setting. Following the forum is an
+// answer of its own and not the absence of one: a topic unmuted in a muted
+// forum is unmuted.
+type TopicMute int
+
+const (
+	TopicFollowsForum TopicMute = iota
+	TopicMuted
+	TopicUnmuted
+)
+
+// MutedIn reports whether the topic is muted, given whether its forum is.
+func (t Topic) MutedIn(forumMuted bool) bool {
+	switch t.Mute {
+	case TopicMuted:
+		return true
+	case TopicUnmuted:
+		return false
+	}
+	return forumMuted
 }
 
 // GeneralTopicID is the id of the topic every forum has from the start, where

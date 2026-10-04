@@ -286,7 +286,7 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		// cannot disagree about what muting means.
 		ctx, owner, userID, muted := m.ctx, m.owner, req.UserID, req.Muted
 		return m, func() tea.Msg {
-			if err := owner.SetMuted(ctx, userID, muted); err != nil {
+			if err := owner.SetMuted(ctx, domain.HistoryKey{ChatID: userID}, muted); err != nil {
 				return errStatus("mute", err)
 			}
 			return nil

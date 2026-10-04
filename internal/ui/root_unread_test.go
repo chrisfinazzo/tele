@@ -31,7 +31,7 @@ func TestRoot_OpenChat_UnreadClearedOnMarkReadConfirmation(t *testing.T) {
 	require.Equal(t, 1, c.UnreadCount, "unread is counted before the server confirms the read")
 
 	// Reading is the owner's command now, and it moves the pointer itself.
-	require.NoError(t, m.owner.MarkRead(context.Background(), 1, 7))
+	require.NoError(t, m.owner.MarkRead(context.Background(), domain.HistoryKey{ChatID: 1}, 7))
 
 	c, _ = st.GetChat(1)
 	assert.Equal(t, 0, c.UnreadCount)

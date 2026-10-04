@@ -1,6 +1,10 @@
 package core
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/sorokin-vladimir/tele/internal/domain"
+)
 
 // clientID identifies one attached client for the lifetime of its attachment.
 type clientID uint64
@@ -16,11 +20,13 @@ type clientID uint64
 type focusRegistry struct {
 	mu   sync.Mutex
 	next clientID
-	on   map[clientID]int64 // 0 means the client has no chat open
+	// on is the history each client shows: a chat, or one topic of a forum.
+	// The zero key means the client has nothing open.
+	on map[clientID]domain.HistoryKey
 }
 
 func newFocusRegistry() *focusRegistry {
-	return &focusRegistry{on: make(map[clientID]int64)}
+	return &focusRegistry{on: make(map[clientID]domain.HistoryKey)}
 }
 
 // attach registers a client with no chat open and returns its id.
@@ -28,20 +34,37 @@ func (r *focusRegistry) attach() clientID {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.next++
-	r.on[r.next] = 0
+	r.on[r.next] = domain.HistoryKey{}
 	return r.next
 }
 
-// set records the chat a client is showing; 0 means it has none open. A set from
-// a client that has already detached is dropped: its focus is gone and must not
-// come back.
-func (r *focusRegistry) set(id clientID, chatID int64) {
+// set records the history a client is showing; the zero key means it has none
+// open. A set from a client that has already detached is dropped: its focus is
+// gone and must not come back.
+func (r *focusRegistry) set(id clientID, h domain.HistoryKey) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.on[id]; !ok {
 		return
 	}
-	r.on[id] = chatID
+	r.on[id] = h
+}
+
+// showing reports that some attached client shows exactly this history. It is
+// what silences a notification: in a forum, only the topic on screen is being
+// looked at (#275).
+func (r *focusRegistry) showing(h domain.HistoryKey) bool {
+	if h.ChatID == 0 {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, on := range r.on {
+		if on == h {
+			return true
+		}
+	}
+	return false
 }
 
 // detach forgets a client and the focus it held.
@@ -51,7 +74,8 @@ func (r *focusRegistry) detach(id clientID) {
 	delete(r.on, id)
 }
 
-// focused reports that some attached client is looking at chatID. Chat 0 is
+// focused reports that some attached client is looking at chatID, through any
+// history of it: a forum is on screen while one of its topics is. Chat 0 is
 // never focused: it is how a client says it has no chat open, not a chat.
 func (r *focusRegistry) focused(chatID int64) bool {
 	if chatID == 0 {
@@ -60,7 +84,7 @@ func (r *focusRegistry) focused(chatID int64) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, on := range r.on {
-		if on == chatID {
+		if on.ChatID == chatID {
 			return true
 		}
 	}
@@ -86,8 +110,9 @@ func (o *Owner) Attach() *Attachment {
 	return &Attachment{Owner: o, id: o.focus.attach()}
 }
 
-// SetFocus reports the chat this client is showing, 0 for none.
-func (a *Attachment) SetFocus(chatID int64) { a.focus.set(a.id, chatID) }
+// SetFocus reports the history this client is showing - a chat, or one topic
+// of a forum - and the zero key for none.
+func (a *Attachment) SetFocus(h domain.HistoryKey) { a.focus.set(a.id, h) }
 
 // Detach ends the attachment and drops the focus it held.
 func (a *Attachment) Detach() { a.focus.detach(a.id) }

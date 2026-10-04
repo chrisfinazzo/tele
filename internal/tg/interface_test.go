@@ -96,10 +96,11 @@ func (m *mockClient) MarkRead(_ context.Context, _ domain.Peer, _ int) error { r
 
 func (m *mockClient) MarkDialogUnread(_ context.Context, _ domain.Peer, _ bool) error { return nil }
 
-func (m *mockClient) ReadReactions(_ context.Context, _ domain.Peer) error { return nil }
-func (m *mockClient) ReadMentions(_ context.Context, _ domain.Peer) error  { return nil }
+func (m *mockClient) ReadReactions(_ context.Context, _ domain.Peer, _ int) error     { return nil }
+func (m *mockClient) ReadMentions(_ context.Context, _ domain.Peer, _ int) error      { return nil }
+func (m *mockClient) ReadDiscussion(_ context.Context, _ domain.Peer, _, _ int) error { return nil }
 
-func (m *mockClient) SetMuted(_ context.Context, _ domain.Peer, _ bool) error { return nil }
+func (m *mockClient) SetMuted(_ context.Context, _ domain.Peer, _ int, _ bool) error { return nil }
 
 func (m *mockClient) AddToFolder(_ context.Context, _ int, _ domain.Peer, _ bool) error { return nil }
 

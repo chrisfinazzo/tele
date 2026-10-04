@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -13,6 +14,8 @@ import (
 // separately. The gates differ: a muted chat still flashes.
 type Incoming struct {
 	ChatID int64
+	// TopicID is the forum topic the message arrived in, 0 outside a forum.
+	TopicID int
 }
 
 // Failure reports work the owner could not finish on a client's behalf. A client
@@ -147,18 +150,20 @@ func (o *Owner) publishNotification(n Notification) {
 // Outgoing messages and the focused chat are excluded: neither should flash a
 // row. Mute is deliberately not consulted — that gates the interruption, not the
 // reorder cue.
-func (o *Owner) publishIncoming(evt store.Event, focused func(int64) bool) {
+func (o *Owner) publishIncoming(evt store.Event, focused func(domain.HistoryKey) bool) {
 	if evt.Kind != store.EventNewMessage || evt.Message.IsOut {
 		return
 	}
-	if focused(evt.Message.ChatID) {
+	chat, ok := o.state.Store().GetChat(evt.Message.ChatID)
+	if !ok {
 		return
 	}
-	if _, ok := o.state.Store().GetChat(evt.Message.ChatID); !ok {
+	h := chat.HistoryOf(evt.Message)
+	if focused(h) {
 		return
 	}
 	select {
-	case o.incoming <- Incoming{ChatID: evt.Message.ChatID}:
+	case o.incoming <- Incoming{ChatID: h.ChatID, TopicID: h.TopicID}:
 	default:
 		o.log.Warn("incoming event dropped: client is not draining")
 	}

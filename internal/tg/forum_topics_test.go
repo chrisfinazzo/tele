@@ -1,11 +1,14 @@
 package tg
 
 import (
+	"math"
 	"testing"
 
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // A message lands in a topic by naming it as what it replies to; a reply inside
@@ -38,6 +41,27 @@ func TestReplyHeader(t *testing.T) {
 			assert.Equal(t, want.TopMsgID, gotMsg.TopMsgID)
 		})
 	}
+}
+
+// A topic either has a notification setting of its own or follows its forum's,
+// and the two are different answers: unmuting one topic of a muted forum is a
+// setting, not the absence of one.
+func TestParseForumTopics_Mute(t *testing.T) {
+	var muted, unmuted tg.PeerNotifySettings
+	muted.SetMuteUntil(math.MaxInt32)
+	unmuted.SetMuteUntil(0)
+	res := &tg.MessagesForumTopics{Topics: []tg.ForumTopicClass{
+		&tg.ForumTopic{ID: 12, NotifySettings: muted},
+		&tg.ForumTopic{ID: 13, NotifySettings: unmuted},
+		&tg.ForumTopic{ID: 14},
+	}}
+
+	page := parseForumTopics(res, 50)
+
+	require.Len(t, page.Topics, 3)
+	assert.Equal(t, domain.TopicMuted, page.Topics[0].Mute)
+	assert.Equal(t, domain.TopicUnmuted, page.Topics[1].Mute)
+	assert.Equal(t, domain.TopicFollowsForum, page.Topics[2].Mute)
 }
 
 func TestParseForumTopics(t *testing.T) {

@@ -148,13 +148,14 @@ func (o *testOwner) lastChatListWindow() (project.ChatListWindow, bool) {
 
 func (o *testOwner) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
 
-func (o *testOwner) SetFocus(chatID int64) { o.focus = append(o.focus, chatID) }
+func (o *testOwner) SetFocus(h domain.HistoryKey) { o.focus = append(o.focus, h.ChatID) }
 
 func (o *testOwner) Refresh() { o.reg.Refresh() }
 
 // SetMuted mirrors the real owner: the change is applied through state, which
 // publishes a delta, and cmdErr stands in for a Telegram refusal.
-func (o *testOwner) SetMuted(_ context.Context, chatID int64, muted bool) error {
+func (o *testOwner) SetMuted(_ context.Context, h domain.HistoryKey, muted bool) error {
+	chatID := h.ChatID
 	if o.cmdErr != nil {
 		return o.cmdErr
 	}
@@ -424,7 +425,8 @@ func (o *testOwner) messageByID(chatID int64, msgID int) (domain.Message, bool) 
 	return domain.Message{}, false
 }
 
-func (o *testOwner) ReadReactions(_ context.Context, chatID int64) error {
+func (o *testOwner) ReadReactions(_ context.Context, h domain.HistoryKey) error {
+	chatID := h.ChatID
 	o.reactionsRead++
 	if o.cmdErr != nil {
 		return o.cmdErr
@@ -433,7 +435,8 @@ func (o *testOwner) ReadReactions(_ context.Context, chatID int64) error {
 	return nil
 }
 
-func (o *testOwner) ReadMentions(_ context.Context, chatID int64) error {
+func (o *testOwner) ReadMentions(_ context.Context, h domain.HistoryKey) error {
+	chatID := h.ChatID
 	o.mentionsRead++
 	if o.cmdErr != nil {
 		return o.cmdErr
@@ -453,7 +456,8 @@ func ownerOf(t *testing.T, m ui.RootModel) *testOwner {
 	return o
 }
 
-func (o *testOwner) MarkRead(_ context.Context, chatID int64, maxID int) error {
+func (o *testOwner) MarkRead(_ context.Context, h domain.HistoryKey, maxID int) error {
+	chatID := h.ChatID
 	if o.cmdErr != nil {
 		return o.cmdErr
 	}

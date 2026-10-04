@@ -43,6 +43,30 @@ func TestADraftAndTypingNameTheirTopic(t *testing.T) {
 	assert.Zero(t, buildSetTypingRequest(peer, &tg.SendMessageTypingAction{}, 1).TopMsgID)
 }
 
+// Reading a topic's mentions and reactions reads that topic's alone. General is
+// read as the topic it is, by its id.
+func TestReadingMentionsAndReactionsNamesTheTopic(t *testing.T) {
+	peer := &tg.InputPeerChannel{ChannelID: 50}
+
+	assert.Equal(t, 12, buildReadMentionsRequest(peer, 12).TopMsgID)
+	assert.Equal(t, 1, buildReadMentionsRequest(peer, 1).TopMsgID)
+	assert.Zero(t, buildReadMentionsRequest(peer, 0).TopMsgID)
+	assert.Equal(t, 12, buildReadReactionsRequest(peer, 12).TopMsgID)
+	assert.Zero(t, buildReadReactionsRequest(peer, 0).TopMsgID)
+}
+
+// Muting a topic is muting that topic; muting a chat, or a forum as a whole, is
+// what it always was.
+func TestMutingNamesTheTopic(t *testing.T) {
+	peer := &tg.InputPeerChannel{ChannelID: 50}
+
+	topic, ok := notifyPeer(peer, 12).(*tg.InputNotifyForumTopic)
+	require.True(t, ok)
+	assert.Equal(t, 12, topic.TopMsgID)
+	_, ok = notifyPeer(peer, 0).(*tg.InputNotifyPeer)
+	assert.True(t, ok)
+}
+
 // A forward into a topic names the topic as its top; into General it names
 // nothing, since that is where a message naming no topic lands.
 func TestAForwardIntoATopicNamesIt(t *testing.T) {
