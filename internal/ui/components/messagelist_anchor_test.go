@@ -49,7 +49,7 @@ func assertNoBlankBand(t *testing.T, ml *MessageList, msg string) {
 	assert.Zero(t, leadingBlankRows(view), msg)
 }
 
-// The chat-open path: ChatReset seats a stale chat's last few messages, the
+// The chat-open path: HistoryReset seats a stale chat's last few messages, the
 // backfill then prepends the history above them. PrependMessages preserves the
 // visual position, which on an already top-padded frame parks the new messages
 // off-screen and keeps the blank band (#225).

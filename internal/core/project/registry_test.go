@@ -120,7 +120,7 @@ func TestRegistry_RefreshFansOutToEverySubscription(t *testing.T) {
 	r := &fakeReader{chats: all, msgs: map[int64][]domain.Message{1: msgs(3)}}
 	g, rec := newRegistry(r)
 	listID := g.Subscribe(project.ChatListWindow{Limit: 10})
-	chatID := g.Subscribe(project.ChatWindow{
+	chatID := g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
 	rec.take()
@@ -137,7 +137,7 @@ func TestRegistry_RefreshFansOutToEverySubscription(t *testing.T) {
 		if d.Sub == listID && d.ChatList != nil {
 			sawList = true
 		}
-		if d.Sub == chatID && d.Chat != nil {
+		if d.Sub == chatID && d.History != nil {
 			sawChat = true
 		}
 	}
@@ -213,10 +213,10 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 		msgs:  map[int64][]domain.Message{1: msgs(2), 2: msgs(2)},
 	}
 	g, rec := newRegistry(r)
-	sub1 := g.Subscribe(project.ChatWindow{
+	sub1 := g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 	})
-	g.Subscribe(project.ChatWindow{
+	g.Subscribe(project.HistoryWindow{
 		ChatID: 2, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 	})
 	// Drain the two opening Resets.
@@ -230,7 +230,7 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 
 	require.Len(t, deltas, 1)
 	assert.Equal(t, sub1, deltas[0].Sub)
-	assert.Equal(t, project.ChatHeaderUpdate, deltas[0].Chat.Kind)
+	assert.Equal(t, project.HistoryHeaderUpdate, deltas[0].History.Kind)
 }
 
 // Reading through a long unread tail advances the read pointer while the chat
@@ -240,7 +240,7 @@ func TestRegistry_FirstUnreadWindowHoldsItsAnchorAsMessagesAreRead(t *testing.T)
 	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
 	r := readerWith(chat, msgs(10))
 	g, rec := newRegistry(r)
-	id := g.Subscribe(project.ChatWindow{
+	id := g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
 	require.Len(t, rec.take(), 1)
@@ -253,14 +253,14 @@ func TestRegistry_FirstUnreadWindowHoldsItsAnchorAsMessagesAreRead(t *testing.T)
 	g.Refresh()
 
 	for _, d := range rec.take() {
-		assert.NotEqual(t, project.ChatRemove, d.Chat.Kind,
+		assert.NotEqual(t, project.HistoryRemove, d.History.Kind,
 			"messages already on screen must not leave the window when they are read")
-		assert.NotEqual(t, project.ChatReset, d.Chat.Kind,
+		assert.NotEqual(t, project.HistoryReset, d.History.Kind,
 			"a moved read pointer must not re-seat the message list")
 	}
 	w, ok := g.Window(id)
 	require.True(t, ok)
-	assert.Equal(t, 7, w.(project.ChatWindow).Anchor.MsgID,
+	assert.Equal(t, 7, w.(project.HistoryWindow).Anchor.MsgID,
 		"the anchor is pinned to the message the window opened on")
 }
 
@@ -271,7 +271,7 @@ func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
 	all := msgs(10)
 	r := readerWith(chat, all)
 	g, rec := newRegistry(r)
-	g.Subscribe(project.ChatWindow{
+	g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
 
@@ -388,10 +388,10 @@ func TestRegistry_ADroppedChatDeltaMakesTheNextOneAResync(t *testing.T) {
 	r := &fakeReader{chats: all, msgs: map[int64][]domain.Message{1: msgs(3), 2: msgs(3)}}
 	rec := &dropOnce{}
 	g := project.NewRegistry(r, rec.emit)
-	dropped := g.Subscribe(project.ChatWindow{
+	dropped := g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
-	g.Subscribe(project.ChatWindow{
+	g.Subscribe(project.HistoryWindow{
 		ChatID: 2, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
 	rec.take()
@@ -414,9 +414,9 @@ func TestRegistry_ADroppedChatDeltaMakesTheNextOneAResync(t *testing.T) {
 
 	require.Len(t, deltas, 1, "only the subscription that lost a delta is resent")
 	assert.Equal(t, dropped, deltas[0].Sub)
-	assert.Equal(t, project.ChatReset, deltas[0].Chat.Kind)
-	assert.Equal(t, "renamed", deltas[0].Chat.Contents.Title)
-	assert.Len(t, deltas[0].Chat.Contents.Messages, 4)
+	assert.Equal(t, project.HistoryReset, deltas[0].History.Kind)
+	assert.Equal(t, "renamed", deltas[0].History.Contents.Title)
+	assert.Len(t, deltas[0].History.Contents.Messages, 4)
 }
 
 func TestRegistry_ADroppedChatListDeltaMakesTheNextOneAResync(t *testing.T) {
@@ -448,7 +448,7 @@ func TestRegistry_WideningKeepsThePinnedAnchor(t *testing.T) {
 	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
 	r := readerWith(chat, msgs(10))
 	g, _ := newRegistry(r)
-	id := g.Subscribe(project.ChatWindow{
+	id := g.Subscribe(project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
 
@@ -457,12 +457,12 @@ func TestRegistry_WideningKeepsThePinnedAnchor(t *testing.T) {
 	r.chats = []domain.Chat{chat}
 	g.Refresh()
 
-	g.MoveWindow(id, project.ChatWindow{
+	g.MoveWindow(id, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 4,
 	})
 
 	w, ok := g.Window(id)
 	require.True(t, ok)
-	assert.Equal(t, 7, w.(project.ChatWindow).Anchor.MsgID, "the pin survives a widen")
-	assert.Equal(t, 4, w.(project.ChatWindow).Before, "and the widen still took effect")
+	assert.Equal(t, 7, w.(project.HistoryWindow).Anchor.MsgID, "the pin survives a widen")
+	assert.Equal(t, 4, w.(project.HistoryWindow).Before, "and the widen still took effect")
 }

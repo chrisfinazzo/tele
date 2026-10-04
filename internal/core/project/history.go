@@ -2,9 +2,9 @@ package project
 
 import "github.com/sorokin-vladimir/tele/internal/domain"
 
-// ChatContents is everything a chat subscription currently shows: the message
+// HistoryContents is everything a chat subscription currently shows: the message
 // window plus the header and per-chat state the pane renders around it.
-type ChatContents struct {
+type HistoryContents struct {
 	ChatID int64
 	Title  string
 	IsUser bool
@@ -34,15 +34,15 @@ type ChatContents struct {
 	Outbox []domain.OutboxEntry
 }
 
-// BuildChat resolves the window's anchor against the stored history and slices
+// BuildHistory resolves the window's anchor against the stored history and slices
 // out Before..After around it.
 //
 // HasOlder and HasNewer report what the store holds outside the window; they
 // drive the client's scroll affordance and say nothing about Telegram. It never
 // fetches: a window that comes back shorter than it asked for is how the core
 // learns the store fell short (see Owner.needsBackfill).
-func BuildChat(r Reader, w ChatWindow) ChatContents {
-	out := ChatContents{ChatID: w.ChatID}
+func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
+	out := HistoryContents{ChatID: w.ChatID}
 	chat, ok := r.GetChat(w.ChatID)
 	if ok {
 		out.Title = chat.Title

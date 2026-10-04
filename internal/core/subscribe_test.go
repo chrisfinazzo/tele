@@ -130,7 +130,7 @@ func TestOwner_SubscribingToAnUnfilledChatWindowBackfills(t *testing.T) {
 	o, s := newOwnerWithClient(t, c)
 	s.Store().SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7}})
 
-	o.Subscribe(project.ChatWindow{
+	o.Subscribe(project.HistoryWindow{
 		ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 20,
 	})
 
@@ -138,8 +138,8 @@ func TestOwner_SubscribingToAnUnfilledChatWindowBackfills(t *testing.T) {
 	_, _ = recvDelta(t, o.Deltas())
 	d, ok := recvDelta(t, o.Deltas())
 	require.True(t, ok, "the client must not have to know the store was empty")
-	require.NotNil(t, d.Chat)
-	assert.Len(t, d.Chat.Contents.Messages, 2)
+	require.NotNil(t, d.History)
+	assert.Len(t, d.History.Contents.Messages, 2)
 }
 
 func TestOwner_FullWindowDoesNotBackfill(t *testing.T) {
@@ -152,7 +152,7 @@ func TestOwner_FullWindowDoesNotBackfill(t *testing.T) {
 		{ID: 3, ChatID: 7, Date: time.Unix(3, 0)},
 	})
 
-	o.Subscribe(project.ChatWindow{
+	o.Subscribe(project.HistoryWindow{
 		ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 1,
 	})
 
@@ -166,11 +166,11 @@ func TestOwner_ConcurrentBackfillsCollapseToOneFetch(t *testing.T) {
 	c := &stubConn{release: make(chan struct{})}
 	o, s := newOwnerWithClient(t, c)
 	s.Store().SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7}})
-	w := project.ChatWindow{ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 20}
+	w := project.HistoryWindow{ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 20}
 	id := o.Subscribe(w)
 
 	for i := 0; i < 5; i++ {
-		o.MoveWindow(id, project.ChatWindow{
+		o.MoveWindow(id, project.HistoryWindow{
 			ChatID: 7, Anchor: w.Anchor, Before: 20 + i,
 		})
 	}
@@ -199,7 +199,7 @@ func TestOwner_BackfillKeepsAMessageThatArrivedWhileItWasFetching(t *testing.T) 
 	s.Store().SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7}})
 	s.Store().SetMessages(7, []domain.Message{{ID: 5, ChatID: 7, Date: time.Unix(5, 0)}})
 
-	o.Subscribe(project.ChatWindow{
+	o.Subscribe(project.HistoryWindow{
 		ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 20,
 	})
 	require.Eventually(t, func() bool { return c.calls.Load() >= 1 }, time.Second, time.Millisecond,

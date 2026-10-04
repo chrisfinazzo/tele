@@ -110,8 +110,8 @@ func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 // Dropping the delivered ones is what makes the swap unobservable. An entry and
 // its message carry the same text, so a frame holding both draws it twice, one
 // bubble taller, and shifts everything above it — then the next frame shifts it
-// back. That frame is not hypothetical: one recompute yields ChatAppend and
-// ChatOutbox as separate deltas, and the client consumes one per tea.Msg, so it
+// back. That frame is not hypothetical: one recompute yields HistoryAppend and
+// HistoryOutbox as separate deltas, and the client consumes one per tea.Msg, so it
 // always renders between them (#226). SentMsgIDs is the correlation, set
 // between a successful request and the moment the entry goes.
 //

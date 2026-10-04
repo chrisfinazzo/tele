@@ -22,7 +22,7 @@ func (m *RootModel) subscribeChat(chatID int64) {
 		m.owner.Unsubscribe(m.chatSub)
 		m.chatSub = 0
 	}
-	m.chatWindow = project.ChatWindow{
+	m.chatWindow = project.HistoryWindow{
 		ChatID: chatID,
 		Anchor: project.Anchor{Kind: project.AnchorFirstUnread},
 		Before: m.historyLimit,
@@ -43,9 +43,9 @@ func (m *RootModel) widenChatWindow() {
 }
 
 // handleChatDelta renders one chat:<id> delta into the chat pane.
-func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
+func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd) {
 	switch d.Kind {
-	case project.ChatReset:
+	case project.HistoryReset:
 		c := d.Contents
 		m.chat.SetHeader(screens.ChatHeader{
 			ChatID:          c.ChatID,
@@ -93,7 +93,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		nm, gifCmd := m.ensureGifAnimForSelection()
 		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd, mentionsCmd)
 
-	case project.ChatHeaderUpdate:
+	case project.HistoryHeaderUpdate:
 		// Only the state around the window changed. The message list is left
 		// alone: re-seating it would re-anchor the viewport, so a contact coming
 		// online would scroll the chat you are reading back to the bottom.
@@ -111,7 +111,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		cmd := m.readReactionsOnScreen(c)
 		return m, cmd
 
-	case project.ChatOlder:
+	case project.HistoryOlder:
 		if len(d.Messages) == 0 {
 			break
 		}
@@ -119,7 +119,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.PrependMessages(d.Messages) // dedups + preserves viewport position
 		return m, m.pendingDownloadCmds(d.Messages)
 
-	case project.ChatNewer:
+	case project.HistoryNewer:
 		if len(d.Messages) == 0 {
 			break
 		}
@@ -127,7 +127,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.SetMessagesKeepScroll(m.chatMsgs)
 		return m, m.pendingDownloadCmds(d.Messages)
 
-	case project.ChatAppend:
+	case project.HistoryAppend:
 		m.chatMsgs = append(m.chatMsgs, d.Message)
 		// KeepScroll re-anchors to the bottom only when the viewport was already
 		// there, so a message arriving while you are reading history does not
@@ -139,7 +139,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
-	case project.ChatUpdate:
+	case project.HistoryUpdate:
 		// An edit or a reaction on a message already on screen: re-render in
 		// place and keep the scroll position. An arriving reaction also needs
 		// marking read while the user is looking at the chat (#199).
@@ -160,7 +160,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
-	case project.ChatRemove:
+	case project.HistoryRemove:
 		gone := make(map[int]struct{}, len(d.MsgIDs))
 		for _, id := range d.MsgIDs {
 			gone[id] = struct{}{}
@@ -174,14 +174,14 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		}
 		m.chatMsgs = kept
 
-	case project.ChatRead:
+	case project.HistoryRead:
 		// Only the outbox pointer, which moves the delivery ticks. The inbound
 		// one is deliberately left where the chat was opened: opening marks the
 		// chat read, and following that live would erase the unread separator
 		// the moment it appeared, leaving no sign of where to start reading.
 		m.chat.SetOutboxReadMaxID(d.ReadOutboxMaxID)
 
-	case project.ChatDraft:
+	case project.HistoryDraft:
 		m.chatDraft = d.Draft
 		// Reflect a draft synced from another device only while the user is not
 		// typing — otherwise it would clobber an in-progress local edit (#62).
@@ -189,7 +189,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 			m.chat.SetComposerValue(d.Draft)
 		}
 
-	case project.ChatOutbox:
+	case project.HistoryOutbox:
 		m.chat.SetOutbox(d.Outbox)
 	}
 	return m, nil
@@ -198,7 +198,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 // readReactionsOnScreen marks a chat's reactions read when the user is looking
 // at it. The count is per-chat state, so the message the reaction landed on need
 // not be in the window (#199).
-func (m *RootModel) readReactionsOnScreen(c project.ChatContents) tea.Cmd {
+func (m *RootModel) readReactionsOnScreen(c project.HistoryContents) tea.Cmd {
 	m.chatUnreadReactions = c.UnreadReactions
 	if m.focus != FocusChat || c.UnreadReactions == 0 {
 		return nil

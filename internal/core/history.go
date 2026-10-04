@@ -18,7 +18,7 @@ import (
 // come.
 //
 // One fetch per subscription is in flight at a time (issue #120).
-func (o *Owner) fill(ctx context.Context, id project.SubID, w project.ChatWindow) {
+func (o *Owner) fill(ctx context.Context, id project.SubID, w project.HistoryWindow) {
 	if !o.beginFetch(id) {
 		return
 	}
@@ -27,7 +27,7 @@ func (o *Owner) fill(ctx context.Context, id project.SubID, w project.ChatWindow
 	o.forwardFill(ctx, w.ChatID)
 	// Re-read the window: the repair may have filled it, and asking again costs
 	// a projection build against messages already in memory.
-	if needsBackfill(project.BuildChat(o.reader(), w), w) {
+	if needsBackfill(project.BuildHistory(o.reader(), w), w) {
 		o.backfill(ctx, w)
 	}
 }
@@ -35,7 +35,7 @@ func (o *Owner) fill(ctx context.Context, id project.SubID, w project.ChatWindow
 // backfill fetches older history for a chat subscription whose window the store
 // could not fill and applies it to state; the registry then emits the resulting
 // delta through the same path as any other change. Caller holds the fetch guard.
-func (o *Owner) backfill(ctx context.Context, w project.ChatWindow) {
+func (o *Owner) backfill(ctx context.Context, w project.HistoryWindow) {
 	chat, ok := o.state.Store().GetChat(w.ChatID)
 	if !ok {
 		return

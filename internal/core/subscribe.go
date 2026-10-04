@@ -22,7 +22,7 @@ func (o *Owner) Subscribe(w project.Window) project.SubID {
 	// Bring the chat's persisted tail into memory before the window is built, so
 	// it paints cached history at once instead of waiting on the network — and
 	// still shows something when there is no network at all (#139).
-	if cw, ok := w.(project.ChatWindow); ok {
+	if cw, ok := w.(project.HistoryWindow); ok {
 		o.state.Store().LoadMessages(cw.ChatID)
 	}
 	id := o.registry.Subscribe(w)
@@ -51,12 +51,12 @@ func (o *Owner) Refresh() { o.registry.Refresh() }
 // reasons: the chat has a recorded gap, which is a hole somebody has to close,
 // and the window came back short, which is history nobody has fetched yet.
 func (o *Owner) maybeFetch(id project.SubID, w project.Window) {
-	cw, ok := w.(project.ChatWindow)
+	cw, ok := w.(project.HistoryWindow)
 	if !ok || o.client == nil {
 		return
 	}
 	_, hasGap := o.state.Store().Gap(cw.ChatID)
-	if !hasGap && !needsBackfill(project.BuildChat(o.reader(), cw), cw) {
+	if !hasGap && !needsBackfill(project.BuildHistory(o.reader(), cw), cw) {
 		return
 	}
 	go o.fill(o.ctx, id, cw)
@@ -66,7 +66,7 @@ func (o *Owner) maybeFetch(id project.SubID, w project.Window) {
 // fewer messages than were asked for and has nothing older left to give. This is
 // deliberately not HasOlder, which reports the opposite — that the store does
 // hold more, so no fetch is needed.
-func needsBackfill(c project.ChatContents, w project.ChatWindow) bool {
+func needsBackfill(c project.HistoryContents, w project.HistoryWindow) bool {
 	return !c.HasOlder && len(c.Messages) < w.Before+w.After+1
 }
 

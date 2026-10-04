@@ -44,7 +44,7 @@ func ids(m []domain.Message) []int {
 func TestBuildChat_NewestAnchorTakesTheTail(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 3, After: 0,
 	})
 
@@ -58,7 +58,7 @@ func TestBuildChat_NewestAnchorTakesTheTail(t *testing.T) {
 func TestBuildChat_FirstUnreadAnchorKeepsContextAbove(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 5,
 	})
 
@@ -72,7 +72,7 @@ func TestBuildChat_FirstUnreadAnchorKeepsContextAbove(t *testing.T) {
 func TestBuildChat_FirstUnreadWithNoUnreadBehavesAsNewest(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1, UnreadCount: 0, ReadInboxMaxID: 10}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 5,
 	})
 
@@ -85,7 +85,7 @@ func TestBuildChat_FirstUnreadWithReadPointerPastEverythingStoredIsNewest(t *tes
 	// pointer: the unread messages have not been fetched yet.
 	r := readerWith(domain.Chat{ID: 1, UnreadCount: 3, ReadInboxMaxID: 10}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
 	})
 
@@ -95,7 +95,7 @@ func TestBuildChat_FirstUnreadWithReadPointerPastEverythingStoredIsNewest(t *tes
 func TestBuildChat_MessageAnchorIsSymmetric(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: 5}, Before: 2, After: 2,
 	})
 
@@ -108,7 +108,7 @@ func TestBuildChat_MessageAnchorIsSymmetric(t *testing.T) {
 func TestBuildChat_MessageAnchorNotInStoreYieldsEmptyWindow(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: 99}, Before: 2, After: 2,
 	})
 
@@ -121,7 +121,7 @@ func TestBuildChat_MessageAnchorNotInStoreYieldsEmptyWindow(t *testing.T) {
 func TestBuildChat_ClampsAtBothEnds(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, msgs(3))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 50, After: 50,
 	})
 
@@ -133,7 +133,7 @@ func TestBuildChat_ClampsAtBothEnds(t *testing.T) {
 func TestBuildChat_EmptyChat(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, nil)
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
 
@@ -157,7 +157,7 @@ func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
 	}
 	r := readerWith(c, msgs(5))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 2,
 	})
 
@@ -174,7 +174,7 @@ func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
 func TestBuildChat_UnknownChat(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1}, msgs(3))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 77, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
 	})
 
@@ -196,7 +196,7 @@ func TestBuildChat_GroupAndChannelAreGroups(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := readerWith(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: tc.typ}}, msgs(2))
 
-			got := project.BuildChat(r, project.ChatWindow{
+			got := project.BuildHistory(r, project.HistoryWindow{
 				ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 			})
 
@@ -211,7 +211,7 @@ func TestBuildChat_GroupAndChannelAreGroups(t *testing.T) {
 func TestBuildChat_FirstUnreadWindowReachesTheNewestMessage(t *testing.T) {
 	r := readerWith(domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}, msgs(10))
 
-	got := project.BuildChat(r, project.ChatWindow{
+	got := project.BuildHistory(r, project.HistoryWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 0,
 	})
 
@@ -227,7 +227,7 @@ func TestBuildChat_CarriesTheChatsOutboxEntries(t *testing.T) {
 		1: {{Ref: "r1", ChatID: 1, State: domain.OutboxQueued}},
 	}
 
-	got := project.BuildChat(r, project.ChatWindow{ChatID: 1, Before: 10})
+	got := project.BuildHistory(r, project.HistoryWindow{ChatID: 1, Before: 10})
 
 	require.Len(t, got.Outbox, 1)
 	assert.Equal(t, "r1", got.Outbox[0].Ref)
@@ -241,7 +241,7 @@ func TestBuildChat_CarriesTheOutboxWhenTheChatHasNoHistory(t *testing.T) {
 		1: {{Ref: "r1", ChatID: 1, State: domain.OutboxQueued}},
 	}
 
-	got := project.BuildChat(r, project.ChatWindow{ChatID: 1, Before: 10})
+	got := project.BuildHistory(r, project.HistoryWindow{ChatID: 1, Before: 10})
 
 	require.Len(t, got.Outbox, 1)
 	assert.Empty(t, got.Messages)

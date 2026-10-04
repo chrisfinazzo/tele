@@ -33,9 +33,9 @@ func runCmdTree(cmd tea.Cmd) {
 func TestChatReset_AnchoredOnFirstUnread_StillFetchesMedia(t *testing.T) {
 	o, m := anchorTestModel()
 
-	_, cmd := m.handleChatDelta(&project.ChatDelta{
-		Kind: project.ChatReset,
-		Contents: project.ChatContents{
+	_, cmd := m.handleChatDelta(&project.HistoryDelta{
+		Kind: project.HistoryReset,
+		Contents: project.HistoryContents{
 			ChatID:   1,
 			Messages: mediaWindow(),
 			// The window was pinned to the first unread (#202): the anchor is set
@@ -59,9 +59,9 @@ func TestChatReset_AnchoredOnFirstUnread_StillFetchesMedia(t *testing.T) {
 func TestChatReset_Unanchored_FetchesMedia(t *testing.T) {
 	o, m := anchorTestModel()
 
-	_, cmd := m.handleChatDelta(&project.ChatDelta{
-		Kind:     project.ChatReset,
-		Contents: project.ChatContents{ChatID: 1, Messages: mediaWindow()},
+	_, cmd := m.handleChatDelta(&project.HistoryDelta{
+		Kind:     project.HistoryReset,
+		Contents: project.HistoryContents{ChatID: 1, Messages: mediaWindow()},
 	})
 
 	runCmdTree(cmd)
@@ -79,8 +79,8 @@ func TestChatUpdate_FetchesTheMediaOfTheUpdatedMessage(t *testing.T) {
 	o, m := anchorTestModel()
 	m.chatMsgs = mediaWindow()
 
-	_, cmd := m.handleChatDelta(&project.ChatDelta{
-		Kind:    project.ChatUpdate,
+	_, cmd := m.handleChatDelta(&project.HistoryDelta{
+		Kind:    project.HistoryUpdate,
 		Message: mediaWindow()[0],
 	})
 

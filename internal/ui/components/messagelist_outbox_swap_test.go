@@ -32,7 +32,7 @@ func countIn(view, s string) int {
 	return strings.Count(xansi.Strip(view), s)
 }
 
-// The frame between ChatAppend and ChatOutbox holds the message and the entry
+// The frame between HistoryAppend and HistoryOutbox holds the message and the entry
 // that produced it. Drawing both doubles the text and shifts the pane by a
 // bubble, then the next frame shifts it back - the blink of #226.
 func TestOutbox_DeliveredEntryIsNotDrawnBesideItsMessage(t *testing.T) {

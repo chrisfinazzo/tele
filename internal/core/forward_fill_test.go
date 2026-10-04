@@ -34,7 +34,7 @@ func openChatWithGap(t *testing.T, c *stubConn, held []domain.Message, top int) 
 }
 
 func openWindow(o *Owner) project.SubID {
-	return o.Subscribe(project.ChatWindow{
+	return o.Subscribe(project.HistoryWindow{
 		ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 20,
 	})
 }
@@ -121,7 +121,7 @@ func TestOwner_NoGapAndAFullWindowFetchesNothing(t *testing.T) {
 	s.Store().SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7}})
 	s.Store().SetMessages(7, gapMsgs(1, 5))
 
-	o.Subscribe(project.ChatWindow{
+	o.Subscribe(project.HistoryWindow{
 		ChatID: 7, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 1,
 	})
 

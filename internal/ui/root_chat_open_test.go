@@ -26,7 +26,7 @@ func countCalls(o *ownerStub, name string) int {
 
 // openTestChat opens chat 1 the way a user does and delivers contents as the
 // subscription's opening Reset, running every command both steps return.
-func openTestChat(t *testing.T, contents project.ChatContents, held ...domain.Chat) (*ownerStub, RootModel) {
+func openTestChat(t *testing.T, contents project.HistoryContents, held ...domain.Chat) (*ownerStub, RootModel) {
 	t.Helper()
 	st := store.NewMemory()
 	for _, c := range held {
@@ -38,7 +38,7 @@ func openTestChat(t *testing.T, contents project.ChatContents, held ...domain.Ch
 	m = nm.(RootModel)
 	runCmdTree(cmd)
 	contents.ChatID = 1
-	m, cmd = m.handleChatDelta(&project.ChatDelta{Kind: project.ChatReset, Contents: contents})
+	m, cmd = m.handleChatDelta(&project.HistoryDelta{Kind: project.HistoryReset, Contents: contents})
 	runCmdTree(cmd)
 	return o, m
 }
@@ -46,7 +46,7 @@ func openTestChat(t *testing.T, contents project.ChatContents, held ...domain.Ch
 // The store is empty here: the message exists only in the window, which is
 // where the client finds it now.
 func TestActivateEdit_FindsTheMessageInTheWindow(t *testing.T) {
-	_, m := openTestChat(t, project.ChatContents{
+	_, m := openTestChat(t, project.HistoryContents{
 		IsGroup:  true,
 		Messages: []domain.Message{{ID: 5, ChatID: 1, IsOut: true, Text: "typo", Date: time.Unix(1, 0)}},
 	})
@@ -64,14 +64,14 @@ func TestActivateEdit_FindsTheMessageInTheWindow(t *testing.T) {
 // Mentions are read once, when the chat is opened. A later Reset - a window
 // that moved, a retry after a failed load - is not an opening.
 func TestChatReset_OnlyTheFirstAfterOpeningReadsMentions(t *testing.T) {
-	o, m := openTestChat(t, project.ChatContents{IsGroup: true, UnreadMentions: 2})
+	o, m := openTestChat(t, project.HistoryContents{IsGroup: true, UnreadMentions: 2})
 	if n := countCalls(o, "ReadMentions"); n != 1 {
 		t.Fatalf("ReadMentions after opening = %d, want 1", n)
 	}
 
-	_, cmd := m.handleChatDelta(&project.ChatDelta{
-		Kind:     project.ChatReset,
-		Contents: project.ChatContents{ChatID: 1, IsGroup: true, UnreadMentions: 2},
+	_, cmd := m.handleChatDelta(&project.HistoryDelta{
+		Kind:     project.HistoryReset,
+		Contents: project.HistoryContents{ChatID: 1, IsGroup: true, UnreadMentions: 2},
 	})
 	runCmdTree(cmd)
 
@@ -81,7 +81,7 @@ func TestChatReset_OnlyTheFirstAfterOpeningReadsMentions(t *testing.T) {
 }
 
 func TestChatReset_NoMentionsNoRequest(t *testing.T) {
-	o, _ := openTestChat(t, project.ChatContents{IsGroup: true})
+	o, _ := openTestChat(t, project.HistoryContents{IsGroup: true})
 	if n := countCalls(o, "ReadMentions"); n != 0 {
 		t.Fatalf("ReadMentions = %d, want none for a chat with nothing to read", n)
 	}
@@ -90,7 +90,7 @@ func TestChatReset_NoMentionsNoRequest(t *testing.T) {
 // Opening a chat with unread reactions reads them once. The opening Reset is
 // what does it; the open path used to send a second request of its own.
 func TestOpenChat_ReadsReactionsOnce(t *testing.T) {
-	o, _ := openTestChat(t, project.ChatContents{UnreadReactions: 3},
+	o, _ := openTestChat(t, project.HistoryContents{UnreadReactions: 3},
 		domain.Chat{ID: 1, Title: "Ada", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadReactionsCount: 3})
 	if n := countCalls(o, "ReadReactions"); n != 1 {
 		t.Fatalf("ReadReactions = %d, want exactly 1", n)
@@ -100,7 +100,7 @@ func TestOpenChat_ReadsReactionsOnce(t *testing.T) {
 // The draft the composer is compared against is the one the projection
 // carries, so leaving a chat whose draft is unchanged sends nothing.
 func TestFlushDraft_ComparesAgainstTheProjectionsDraft(t *testing.T) {
-	_, m := openTestChat(t, project.ChatContents{Draft: "wip"})
+	_, m := openTestChat(t, project.HistoryContents{Draft: "wip"})
 
 	m.chat.SetComposerValue("wip")
 	if cmd := m.flushCurrentDraftCmd(); cmd != nil {
@@ -115,8 +115,8 @@ func TestFlushDraft_ComparesAgainstTheProjectionsDraft(t *testing.T) {
 
 // A draft synced from another device moves what counts as unchanged.
 func TestFlushDraft_FollowsADraftSyncedFromElsewhere(t *testing.T) {
-	_, m := openTestChat(t, project.ChatContents{Draft: "wip"})
-	m, _ = m.handleChatDelta(&project.ChatDelta{Kind: project.ChatDraft, Draft: "from phone"})
+	_, m := openTestChat(t, project.HistoryContents{Draft: "wip"})
+	m, _ = m.handleChatDelta(&project.HistoryDelta{Kind: project.HistoryDraft, Draft: "from phone"})
 
 	m.chat.SetComposerValue("from phone")
 	if cmd := m.flushCurrentDraftCmd(); cmd != nil {

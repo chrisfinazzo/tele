@@ -67,7 +67,7 @@ type RootModel struct {
 	// it rather than describe a delta. chatMsgs is the window's contents, which
 	// the client maintains from the deltas because the pane renders from a whole
 	// slice rather than applying edits itself.
-	chatWindow project.ChatWindow
+	chatWindow project.HistoryWindow
 	chatMsgs   []domain.Message
 	// chatUnreadReactions is the open chat's unread-reaction count, from the
 	// projection. Kept so focusing the pane can mark them read: a reaction that

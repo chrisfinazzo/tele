@@ -10,16 +10,16 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
-func chatContents(m []domain.Message) project.ChatContents {
-	c := project.ChatContents{ChatID: 1, Messages: m}
+func chatContents(m []domain.Message) project.HistoryContents {
+	c := project.HistoryContents{ChatID: 1, Messages: m}
 	if len(m) > 0 {
 		c.AnchorMsgID = m[len(m)-1].ID
 	}
 	return c
 }
 
-func kinds(ds []project.ChatDelta) []project.ChatDeltaKind {
-	out := make([]project.ChatDeltaKind, 0, len(ds))
+func kinds(ds []project.HistoryDelta) []project.HistoryDeltaKind {
+	out := make([]project.HistoryDeltaKind, 0, len(ds))
 	for _, d := range ds {
 		out = append(out, d.Kind)
 	}
@@ -29,14 +29,14 @@ func kinds(ds []project.ChatDelta) []project.ChatDeltaKind {
 func TestDiffChat_IdenticalContentsProduceNothing(t *testing.T) {
 	c := chatContents(msgs(3))
 
-	assert.Empty(t, project.DiffChat(c, c))
+	assert.Empty(t, project.DiffHistory(c, c))
 }
 
 func TestDiffChat_FirstContentsAreAReset(t *testing.T) {
-	got := project.DiffChat(project.ChatContents{}, chatContents(msgs(3)))
+	got := project.DiffHistory(project.HistoryContents{}, chatContents(msgs(3)))
 
 	require.NotEmpty(t, got)
-	assert.Equal(t, project.ChatReset, got[0].Kind)
+	assert.Equal(t, project.HistoryReset, got[0].Kind)
 	assert.Len(t, got[0].Contents.Messages, 3)
 }
 
@@ -44,10 +44,10 @@ func TestDiffChat_NewMessageAtTheTailIsAnAppend(t *testing.T) {
 	prev := chatContents(msgs(3))
 	next := chatContents(msgs(4))
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatAppend, got[0].Kind)
+	assert.Equal(t, project.HistoryAppend, got[0].Kind)
 	assert.Equal(t, 4, got[0].Message.ID)
 }
 
@@ -57,10 +57,10 @@ func TestDiffChat_NewMessageWhileScrolledIntoThePastIsNotAppended(t *testing.T) 
 	next := chatContents(msgs(3))
 	next.HasNewer = true
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatNewer, got[0].Kind, "no Append: the message is outside the window")
+	assert.Equal(t, project.HistoryNewer, got[0].Kind, "no Append: the message is outside the window")
 	assert.True(t, got[0].HasNewer)
 	assert.Empty(t, got[0].Messages, "nothing entered the window")
 }
@@ -71,10 +71,10 @@ func TestDiffChat_OlderMessagesPrependedAreAnOlderDelta(t *testing.T) {
 	prev.HasOlder = true
 	next := chatContents(all) // 1..6
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatOlder, got[0].Kind)
+	assert.Equal(t, project.HistoryOlder, got[0].Kind)
 	assert.Equal(t, []int{1, 2, 3}, ids(got[0].Messages))
 	assert.False(t, got[0].HasOlder)
 }
@@ -85,10 +85,10 @@ func TestDiffChat_NewerMessagesAppendedInBulkAreANewerDelta(t *testing.T) {
 	prev.HasNewer = true
 	next := chatContents(all)
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatNewer, got[0].Kind)
+	assert.Equal(t, project.HistoryNewer, got[0].Kind)
 	assert.Equal(t, []int{4, 5, 6}, ids(got[0].Messages))
 }
 
@@ -98,10 +98,10 @@ func TestDiffChat_EditInsideTheWindowIsAnUpdate(t *testing.T) {
 	edited[1].Text = "edited"
 	next := chatContents(edited)
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatUpdate, got[0].Kind)
+	assert.Equal(t, project.HistoryUpdate, got[0].Kind)
 	assert.Equal(t, 2, got[0].Message.ID)
 	assert.Equal(t, "edited", got[0].Message.Text)
 }
@@ -112,10 +112,10 @@ func TestDiffChat_ReactionChangeInsideTheWindowIsAnUpdate(t *testing.T) {
 	reacted[0].Reactions = []domain.Reaction{{Emoji: "👍", Count: 1}}
 	next := chatContents(reacted)
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatUpdate, got[0].Kind)
+	assert.Equal(t, project.HistoryUpdate, got[0].Kind)
 	assert.Equal(t, 1, got[0].Message.ID)
 }
 
@@ -124,10 +124,10 @@ func TestDiffChat_DeletionInsideTheWindowIsARemove(t *testing.T) {
 	prev := chatContents(all)
 	next := chatContents([]domain.Message{all[0], all[2]})
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatRemove, got[0].Kind)
+	assert.Equal(t, project.HistoryRemove, got[0].Kind)
 	assert.Equal(t, []int{2}, got[0].MsgIDs)
 }
 
@@ -137,10 +137,10 @@ func TestDiffChat_ReadPointerChangeIsAReadDelta(t *testing.T) {
 	next.ReadInboxMaxID = 3
 	next.ReadOutboxMaxID = 2
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatRead, got[0].Kind)
+	assert.Equal(t, project.HistoryRead, got[0].Kind)
 	assert.Equal(t, 3, got[0].ReadInboxMaxID)
 	assert.Equal(t, 2, got[0].ReadOutboxMaxID)
 }
@@ -150,9 +150,9 @@ func TestDiffChat_DraftChangeIsADraftDelta(t *testing.T) {
 	next := chatContents(msgs(1))
 	next.Draft = "typed elsewhere"
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatDraft}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryDraft}, kinds(got))
 	assert.Equal(t, "typed elsewhere", got[0].Draft)
 }
 
@@ -164,9 +164,9 @@ func TestDiffChat_PresenceChangeUpdatesOnlyTheHeader(t *testing.T) {
 	next := chatContents(msgs(1))
 	next.Online = true
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryHeaderUpdate}, kinds(got))
 	assert.True(t, got[0].Contents.Online)
 }
 
@@ -177,9 +177,9 @@ func TestDiffChat_UnreadReactionsAreHeaderState(t *testing.T) {
 	next := chatContents(msgs(3))
 	next.UnreadReactions = 1
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryHeaderUpdate}, kinds(got))
 	assert.Equal(t, 1, got[0].Contents.UnreadReactions)
 }
 
@@ -188,9 +188,9 @@ func TestDiffChat_UnreadMentionsAreHeaderState(t *testing.T) {
 	next := chatContents(msgs(3))
 	next.UnreadMentions = 2
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryHeaderUpdate}, kinds(got))
 	assert.Equal(t, 2, got[0].Contents.UnreadMentions)
 }
 
@@ -199,9 +199,9 @@ func TestDiffChat_HeaderAndWindowChangeTogether(t *testing.T) {
 	next := chatContents(msgs(4))
 	next.Online = true
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	assert.Equal(t, []project.ChatDeltaKind{project.ChatAppend, project.ChatHeaderUpdate}, kinds(got))
+	assert.Equal(t, []project.HistoryDeltaKind{project.HistoryAppend, project.HistoryHeaderUpdate}, kinds(got))
 }
 
 func TestDiffChat_SwitchingChatIsAReset(t *testing.T) {
@@ -209,10 +209,10 @@ func TestDiffChat_SwitchingChatIsAReset(t *testing.T) {
 	next := chatContents(msgs(3))
 	next.ChatID = 2
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.NotEmpty(t, got)
-	assert.Equal(t, project.ChatReset, got[0].Kind)
+	assert.Equal(t, project.HistoryReset, got[0].Kind)
 }
 
 func TestDiffChat_AnchorMoveIsAReset(t *testing.T) {
@@ -222,10 +222,10 @@ func TestDiffChat_AnchorMoveIsAReset(t *testing.T) {
 	next.AnchorMsgID = 4
 	next.HasOlder, next.HasNewer = true, true
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.NotEmpty(t, got)
-	assert.Equal(t, project.ChatReset, got[0].Kind,
+	assert.Equal(t, project.HistoryReset, got[0].Kind,
 		"a jump to a quoted message replaces the window, it does not extend it")
 }
 
@@ -234,10 +234,10 @@ func TestDiffChat_AnchorMoveWithinTheSameWindowIsAReset(t *testing.T) {
 	next := chatContents(msgs(5))
 	next.AnchorMsgID = 2 // jumped to a quoted message the window already held
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatReset, got[0].Kind)
+	assert.Equal(t, project.HistoryReset, got[0].Kind)
 	assert.Equal(t, 2, got[0].Contents.AnchorMsgID)
 }
 
@@ -245,10 +245,10 @@ func TestDiffChat_EmptyingTheWindowRemovesEveryMessage(t *testing.T) {
 	prev := chatContents(msgs(3))
 	next := chatContents(nil)
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.NotEmpty(t, got)
-	assert.Equal(t, project.ChatRemove, got[0].Kind, "every message in the window went away")
+	assert.Equal(t, project.HistoryRemove, got[0].Kind, "every message in the window went away")
 	assert.Equal(t, []int{1, 2, 3}, got[0].MsgIDs)
 }
 
@@ -260,9 +260,9 @@ func TestDiffChat_SlidingWindowIsARemovePlusAnAppend(t *testing.T) {
 	prev := chatContents(all[2:7]) // 3,4,5,6,7
 	next := chatContents(all[3:8]) // 4,5,6,7,8
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatRemove, project.ChatAppend}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryRemove, project.HistoryAppend}, kinds(got))
 	assert.Equal(t, []int{3}, got[0].MsgIDs)
 	assert.Equal(t, 8, got[1].Message.ID)
 }
@@ -272,40 +272,40 @@ func TestDiffChat_SlidingByMoreThanOne(t *testing.T) {
 	prev := chatContents(all[0:5]) // 1..5
 	next := chatContents(all[3:8]) // 4..8
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatRemove, project.ChatNewer}, kinds(got))
+	require.Equal(t, []project.HistoryDeltaKind{project.HistoryRemove, project.HistoryNewer}, kinds(got))
 	assert.Equal(t, []int{1, 2, 3}, got[0].MsgIDs)
 	assert.Equal(t, []int{6, 7, 8}, ids(got[1].Messages))
 }
 
 func TestDiffChat_EmitsAnOutboxDeltaWhenTheQueueChanges(t *testing.T) {
-	prev := project.ChatContents{ChatID: 1, Messages: []domain.Message{{ID: 10}}}
+	prev := project.HistoryContents{ChatID: 1, Messages: []domain.Message{{ID: 10}}}
 	next := prev
 	next.Outbox = []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}}
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatOutbox, got[0].Kind)
+	assert.Equal(t, project.HistoryOutbox, got[0].Kind)
 	require.Len(t, got[0].Outbox, 1)
 	assert.Equal(t, "r1", got[0].Outbox[0].Ref)
 }
 
 func TestDiffChat_SaysNothingWhenTheQueueIsUnchanged(t *testing.T) {
-	prev := project.ChatContents{
+	prev := project.HistoryContents{
 		ChatID:   1,
 		Messages: []domain.Message{{ID: 10}},
 		Outbox:   []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}},
 	}
 
-	got := project.DiffChat(prev, prev)
+	got := project.DiffHistory(prev, prev)
 
 	assert.Empty(t, got)
 }
 
 func TestDiffChat_AnEntryChangingStateIsAnOutboxDelta(t *testing.T) {
-	prev := project.ChatContents{
+	prev := project.HistoryContents{
 		ChatID:   1,
 		Messages: []domain.Message{{ID: 10}},
 		Outbox:   []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}},
@@ -313,9 +313,9 @@ func TestDiffChat_AnEntryChangingStateIsAnOutboxDelta(t *testing.T) {
 	next := prev
 	next.Outbox = []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxFailed}}
 
-	got := project.DiffChat(prev, next)
+	got := project.DiffHistory(prev, next)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, project.ChatOutbox, got[0].Kind)
+	assert.Equal(t, project.HistoryOutbox, got[0].Kind)
 	assert.Equal(t, domain.OutboxFailed, got[0].Outbox[0].State)
 }

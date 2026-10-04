@@ -5,5 +5,5 @@ package project
 type Delta struct {
 	Sub      SubID
 	ChatList *ChatListDelta
-	Chat     *ChatDelta
+	History  *HistoryDelta
 }

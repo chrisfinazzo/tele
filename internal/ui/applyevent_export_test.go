@@ -127,13 +127,13 @@ func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
 }
 
 // lastChatWindow returns the most recent chat window the client asked for.
-func (o *testOwner) lastChatWindow() (project.ChatWindow, bool) {
+func (o *testOwner) lastChatWindow() (project.HistoryWindow, bool) {
 	for i := len(o.moves) - 1; i >= 0; i-- {
-		if w, ok := o.moves[i].(project.ChatWindow); ok {
+		if w, ok := o.moves[i].(project.HistoryWindow); ok {
 			return w, true
 		}
 	}
-	return project.ChatWindow{}, false
+	return project.HistoryWindow{}, false
 }
 
 // lastChatListWindow returns the most recent chatlist window the client asked for.

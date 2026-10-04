@@ -25,7 +25,7 @@ type Registry struct {
 type sub struct {
 	window Window
 	list   ChatListContents
-	chat   ChatContents
+	chat   HistoryContents
 }
 
 func NewRegistry(r Reader, emit Emit) *Registry {
@@ -63,8 +63,8 @@ func (g *Registry) MoveWindow(id SubID, w Window) {
 // to be unread by then. A client asking for a different chat, or naming an
 // anchor itself, gets exactly what it asked for.
 func carryPin(prev, next Window) Window {
-	p, okPrev := prev.(ChatWindow)
-	n, okNext := next.(ChatWindow)
+	p, okPrev := prev.(HistoryWindow)
+	n, okNext := next.(HistoryWindow)
 	if !okPrev || !okNext {
 		return next
 	}
@@ -123,7 +123,7 @@ func (g *Registry) send(ds []Delta) {
 		lost[d.Sub] = true
 		if s, ok := g.subs[d.Sub]; ok {
 			s.list = ChatListContents{}
-			s.chat = ChatContents{}
+			s.chat = HistoryContents{}
 		}
 	}
 }
@@ -151,8 +151,8 @@ func (g *Registry) rebuild(id SubID) []Delta {
 			out = append(out, Delta{Sub: id, ChatList: &d})
 		}
 		s.list = next
-	case ChatWindow:
-		next := BuildChat(g.reader, w)
+	case HistoryWindow:
+		next := BuildHistory(g.reader, w)
 		// Pin a first-unread window to the message it actually opened on. The
 		// anchor is otherwise a function of the read pointer, which moves as the
 		// user reads: the window would walk forward and drop the messages above
@@ -163,8 +163,8 @@ func (g *Registry) rebuild(id SubID) []Delta {
 			w.Anchor.MsgID = next.AnchorMsgID
 			s.window = w
 		}
-		for _, d := range DiffChat(s.chat, next) {
-			out = append(out, Delta{Sub: id, Chat: &d})
+		for _, d := range DiffHistory(s.chat, next) {
+			out = append(out, Delta{Sub: id, History: &d})
 		}
 		s.chat = next
 	}

@@ -8,7 +8,7 @@ package project
 type SubID int
 
 // Window is what a subscription looks at. The implementations are
-// ChatListWindow and ChatWindow.
+// ChatListWindow and HistoryWindow.
 type Window interface{ isWindow() }
 
 // ChatListWindow is a slice of the ordered, folder-filtered chat list. Folder 0
@@ -41,15 +41,15 @@ type Anchor struct {
 	MsgID int
 }
 
-// ChatWindow is a range of one chat's history around an anchor. Before and
+// HistoryWindow is a range of one history around an anchor. Before and
 // After rather than a single limit, because the anchor is not always at an edge.
 // They count messages either side of the anchor, which is always carried on top
 // of them: a window is at most Before+After+1 messages.
-type ChatWindow struct {
+type HistoryWindow struct {
 	ChatID int64
 	Anchor Anchor
 	Before int
 	After  int
 }
 
-func (ChatWindow) isWindow() {}
+func (HistoryWindow) isWindow() {}

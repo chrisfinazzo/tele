@@ -16,7 +16,7 @@ import (
 // in silence (#248). The set on screen is already the one Telegram sent, so
 // there is nothing to roll back: a warning, not an error.
 func TestReactConfirmed_NotKeptRaisesAWarning(t *testing.T) {
-	o, m := openTestChat(t, project.ChatContents{
+	o, m := openTestChat(t, project.HistoryContents{
 		Messages: []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}},
 	})
 	o.reactionNotKept = true
@@ -36,7 +36,7 @@ func TestReactConfirmed_NotKeptRaisesAWarning(t *testing.T) {
 }
 
 func TestReactConfirmed_KeptSaysNothing(t *testing.T) {
-	_, m := openTestChat(t, project.ChatContents{
+	_, m := openTestChat(t, project.HistoryContents{
 		Messages: []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}},
 	})
 	m.reactionTargetID = 5

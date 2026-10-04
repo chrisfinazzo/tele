@@ -17,8 +17,8 @@ func (m RootModel) handleDelta(d project.Delta) (RootModel, tea.Cmd) {
 	switch {
 	case d.ChatList != nil && d.Sub == m.chatListSub:
 		return m.handleChatListDelta(d.ChatList)
-	case d.Chat != nil && d.Sub == m.chatSub:
-		return m.handleChatDelta(d.Chat)
+	case d.History != nil && d.Sub == m.chatSub:
+		return m.handleChatDelta(d.History)
 	}
 	// A delta for a subscription this model no longer holds: the window was
 	// replaced (a chat switch) and the reply raced the unsubscribe. Dropping it
