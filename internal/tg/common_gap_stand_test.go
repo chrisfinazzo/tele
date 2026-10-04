@@ -187,7 +187,7 @@ func streamWithAGap(t *testing.T, manager *updates.Manager) {
 }
 
 func storedText(st store.Store) string {
-	msgs := st.Messages(standChatID)
+	msgs := st.Messages(domain.HistoryKey{ChatID: standChatID})
 	if len(msgs) == 0 {
 		return ""
 	}
@@ -207,7 +207,7 @@ func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
 
 	assert.Contains(t, api.askedFrom(), standStartTS+1,
 		"the text must come from the catch-up the gap asked for, not the one at startup")
-	assert.False(t, st.Messages(standChatID)[0].ShowsEdited(),
+	assert.False(t, st.Messages(domain.HistoryKey{ChatID: standChatID})[0].ShowsEdited(),
 		"and a bot's rewrite still carries no edited label")
 }
 

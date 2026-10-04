@@ -54,7 +54,7 @@ func TestOwner_ChannelGapRepairsTheFocusedChatAtOnce(t *testing.T) {
 	o.handleEvent(store.Event{Kind: store.EventChannelGap, ChatID: 7})
 
 	require.Eventually(t, gapClosed(s), time.Second, time.Millisecond)
-	assert.Len(t, s.Store().Messages(7), 9, "the reader sees the missed range without reopening")
+	assert.Len(t, s.Store().Messages(domain.HistoryKey{ChatID: 7}), 9, "the reader sees the missed range without reopening")
 }
 
 func TestOwner_ChannelGapOnAnUnfocusedChatOnlyRecordsIt(t *testing.T) {

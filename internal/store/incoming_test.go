@@ -18,7 +18,7 @@ func TestApplyIncomingMessage_AppendsAndCounts(t *testing.T) {
 	assert.True(t, isNew)
 	assert.True(t, counted)
 
-	msgs := s.Messages(1)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 5, msgs[0].ID)
 	c, _ := s.GetChat(1)
@@ -33,7 +33,7 @@ func TestApplyIncomingMessage_OutgoingAppendsWithoutCounting(t *testing.T) {
 	assert.True(t, isNew)
 	assert.False(t, counted)
 
-	require.Len(t, s.Messages(1), 1)
+	require.Len(t, s.Messages(domain.HistoryKey{ChatID: 1}), 1)
 	c, _ := s.GetChat(1)
 	assert.Equal(t, 0, c.UnreadCount)
 }
@@ -60,7 +60,7 @@ func TestApplyIncomingMessage_ReadElsewhereAppendsAndReportsNoChange(t *testing.
 	assert.True(t, isNew, "it still belongs in history")
 	assert.False(t, counted)
 
-	require.Len(t, s.Messages(1), 1)
+	require.Len(t, s.Messages(domain.HistoryKey{ChatID: 1}), 1)
 	c, _ := s.GetChat(1)
 	assert.Equal(t, 0, c.UnreadCount)
 }

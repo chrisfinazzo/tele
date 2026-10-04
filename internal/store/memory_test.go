@@ -16,7 +16,7 @@ func TestMemory_AppendMessage_ReportsWhetherItWasNew(t *testing.T) {
 
 	assert.True(t, s.AppendMessage(msg), "the first copy is new")
 	assert.False(t, s.AppendMessage(msg), "the second is the same message again")
-	assert.Len(t, s.Messages(5), 1)
+	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 5}), 1)
 }
 
 // A pending bubble has no id yet, so two of them are two different sends rather
@@ -25,7 +25,7 @@ func TestMemory_AppendMessage_UnnumberedIsAlwaysNew(t *testing.T) {
 	s := store.NewMemory()
 	assert.True(t, s.AppendMessage(domain.Message{ChatID: 5, Text: "one"}))
 	assert.True(t, s.AppendMessage(domain.Message{ChatID: 5, Text: "two"}))
-	assert.Len(t, s.Messages(5), 2)
+	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 5}), 2)
 }
 
 func TestMemory_AdvanceAppliedPosition(t *testing.T) {
@@ -36,7 +36,7 @@ func TestMemory_AdvanceAppliedPosition(t *testing.T) {
 	assert.False(t, s.AdvanceAppliedPosition(5, 1, 20), "that one has been applied")
 	assert.False(t, s.AdvanceAppliedPosition(5, 1, 19), "and so has a later one")
 	assert.True(t, s.AdvanceAppliedPosition(5, 1, 21))
-	assert.Equal(t, 21, s.Messages(5)[0].AppliedPosition)
+	assert.Equal(t, 21, s.Messages(domain.HistoryKey{ChatID: 5})[0].AppliedPosition)
 }
 
 // A change from a source with no position cannot be ordered against anything,
@@ -47,7 +47,7 @@ func TestMemory_AdvanceAppliedPosition_ZeroPasses(t *testing.T) {
 	require.True(t, s.AdvanceAppliedPosition(5, 1, 20))
 
 	assert.True(t, s.AdvanceAppliedPosition(5, 1, 0))
-	assert.Equal(t, 20, s.Messages(5)[0].AppliedPosition, "and leaves the position where it was")
+	assert.Equal(t, 20, s.Messages(domain.HistoryKey{ChatID: 5})[0].AppliedPosition, "and leaves the position where it was")
 }
 
 func TestMemory_AdvanceAppliedPosition_UnknownMessagePasses(t *testing.T) {
@@ -63,7 +63,7 @@ func TestMemory_UpdateMessageMedia(t *testing.T) {
 	})
 	fresh := &domain.PhotoRef{ID: 1, FileReference: []byte("new")}
 	s.UpdateMessageMedia(7, 100, fresh, nil)
-	got := s.Messages(7)
+	got := s.Messages(domain.HistoryKey{ChatID: 7})
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].Photo)
 	assert.Equal(t, []byte("new"), got[0].Photo.FileReference)
@@ -99,15 +99,15 @@ func TestMemory_SetGetMessages(t *testing.T) {
 		{ID: 2, ChatID: 10, Text: "world", Date: now},
 	}
 	s.SetMessages(10, msgs)
-	assert.Len(t, s.Messages(10), 2)
-	assert.Empty(t, s.Messages(999))
+	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 10}), 2)
+	assert.Empty(t, s.Messages(domain.HistoryKey{ChatID: 999}))
 }
 
 func TestMemory_AppendMessage(t *testing.T) {
 	s := store.NewMemory()
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "a"})
 	s.AppendMessage(domain.Message{ID: 2, ChatID: 5, Text: "b"})
-	assert.Len(t, s.Messages(5), 2)
+	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 5}), 2)
 }
 
 func TestMemory_AppendMessage_UpdatesLastMessage(t *testing.T) {
@@ -141,7 +141,7 @@ func TestMemory_UpdateMessageText(t *testing.T) {
 	s := store.NewMemory()
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "original"})
 	s.UpdateMessageText(5, 1, "edited", nil)
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "edited", msgs[0].Text)
 	assert.Nil(t, msgs[0].EditDate, "writing text decides nothing about the label")
@@ -153,7 +153,7 @@ func TestMemory_MarkMessageEdited(t *testing.T) {
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "original"})
 
 	s.MarkMessageEdited(5, 1, now, false)
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	require.NotNil(t, msgs[0].EditDate)
 	assert.True(t, msgs[0].ShowsEdited())
@@ -161,7 +161,7 @@ func TestMemory_MarkMessageEdited(t *testing.T) {
 	// The same message, edited again with the label hidden: the time stays
 	// recorded and the mark goes away.
 	s.MarkMessageEdited(5, 1, now.Add(time.Minute), true)
-	msgs = s.Messages(5)
+	msgs = s.Messages(domain.HistoryKey{ChatID: 5})
 	require.NotNil(t, msgs[0].EditDate)
 	assert.False(t, msgs[0].ShowsEdited())
 }
@@ -173,7 +173,7 @@ func TestMemory_UpdateMessageText_ReplacesEntities(t *testing.T) {
 		Entities: []domain.MessageEntity{{Type: "url", Offset: 7, Length: 19}},
 	})
 	s.UpdateMessageText(5, 1, "привет", nil)
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "привет", msgs[0].Text)
 	// Stale entities must not survive a text change: their offsets addressed the
@@ -186,7 +186,7 @@ func TestMemory_UpdateMessageText_SetsNewEntities(t *testing.T) {
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "old"})
 	ents := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 5}}
 	s.UpdateMessageText(5, 1, "новый", ents)
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, ents, msgs[0].Entities)
 }
@@ -197,7 +197,7 @@ func TestMemory_UpdateMessageText_NoopWhenMissing(t *testing.T) {
 	assert.NotPanics(t, func() {
 		s.UpdateMessageText(5, 999, "x", nil)
 	})
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	assert.Equal(t, "msg", msgs[0].Text)
 }
 
@@ -206,7 +206,7 @@ func TestMemory_RemoveMessage(t *testing.T) {
 	s.AppendMessage(domain.Message{ID: -1, ChatID: 5, Text: "sentinel"})
 	s.AppendMessage(domain.Message{ID: 2, ChatID: 5, Text: "other"})
 	s.RemoveMessage(5, -1)
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 2, msgs[0].ID)
 }
@@ -217,7 +217,7 @@ func TestMemory_RemoveMessage_NoopWhenMissing(t *testing.T) {
 	assert.NotPanics(t, func() {
 		s.RemoveMessage(5, 999)
 	})
-	assert.Len(t, s.Messages(5), 1)
+	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 5}), 1)
 }
 
 func TestMemory_RemoveMessages_RemovesMatchingIDs(t *testing.T) {
@@ -229,7 +229,7 @@ func TestMemory_RemoveMessages_RemovesMatchingIDs(t *testing.T) {
 		{ID: 3, ChatID: 10, Text: "c", Date: now},
 	})
 	s.RemoveMessages(10, []int{1, 3})
-	msgs := s.Messages(10)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 10})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 2, msgs[0].ID)
 }
@@ -237,7 +237,7 @@ func TestMemory_RemoveMessages_RemovesMatchingIDs(t *testing.T) {
 func TestMemory_RemoveMessages_NoopWhenEmpty(t *testing.T) {
 	s := store.NewMemory()
 	s.RemoveMessages(99, []int{1, 2, 3})
-	assert.Empty(t, s.Messages(99))
+	assert.Empty(t, s.Messages(domain.HistoryKey{ChatID: 99}))
 }
 
 func TestMemory_UpdateMessageReactions_SetsReactions(t *testing.T) {
@@ -248,7 +248,7 @@ func TestMemory_UpdateMessageReactions_SetsReactions(t *testing.T) {
 		{Emoji: "👍", Count: 1, IsChosen: false},
 	}
 	s.UpdateMessageReactions(5, 1, reactions, "reactions update")
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, reactions, msgs[0].Reactions)
 }
@@ -259,7 +259,7 @@ func TestMemory_UpdateMessageReactions_NoopWhenMissing(t *testing.T) {
 	assert.NotPanics(t, func() {
 		s.UpdateMessageReactions(5, 999, []domain.Reaction{{Emoji: "👍", Count: 1}}, "reactions update")
 	})
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	assert.Empty(t, msgs[0].Reactions)
 }
 
@@ -328,7 +328,7 @@ func TestMemory_UpdateMessageReactions_ReplacesExisting(t *testing.T) {
 		Reactions: []domain.Reaction{{Emoji: "👍", Count: 2}},
 	})
 	s.UpdateMessageReactions(5, 1, []domain.Reaction{{Emoji: "❤️", Count: 1}}, "reactions update")
-	msgs := s.Messages(5)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 5})
 	require.Len(t, msgs[0].Reactions, 1)
 	assert.Equal(t, "❤️", msgs[0].Reactions[0].Emoji)
 }

@@ -7,7 +7,7 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 type Reader interface {
 	Chats() []domain.Chat
 	GetChat(id int64) (domain.Chat, bool)
-	Messages(chatID int64) []domain.Message
+	Messages(h domain.HistoryKey) []domain.Message
 	FolderFilters() []domain.FolderFilter
 	// Outbox returns a chat's queued sends in submission order. It is not on
 	// store.Store because the queue is not part of the account cache: the

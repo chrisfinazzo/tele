@@ -32,8 +32,8 @@ func TestSQLite_Messages_PersistAndReloadAfterReopen(t *testing.T) {
 
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(7)
-	got := s2.Messages(7)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 7})
+	got := s2.Messages(domain.HistoryKey{ChatID: 7})
 
 	require.Len(t, got, 2)
 	assert.Equal(t, "hello", got[0].Text)
@@ -50,8 +50,8 @@ func TestSQLite_AppendMessage_PersistsSurvivesReopen(t *testing.T) {
 
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(9)
-	got := s2.Messages(9)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 9})
+	got := s2.Messages(domain.HistoryKey{ChatID: 9})
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "appended", got[0].Text)
@@ -72,8 +72,8 @@ func TestSQLite_CapTrim_DeletesOldestOnDisk(t *testing.T) {
 
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(3)
-	got := s2.Messages(3)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 3})
+	got := s2.Messages(domain.HistoryKey{ChatID: 3})
 
 	require.Len(t, got, store.MaxMessagesPerChat)
 	assert.Equal(t, 2, got[0].ID, "oldest (id 1) should be trimmed and absent on disk")
@@ -92,7 +92,7 @@ func TestSQLite_MessageEdit_PersistsSurvivesReopen(t *testing.T) {
 	// edit it — this only persists if the edit ops mark the message dirty.
 	s2 := openStore(t, path)
 	s2.SetChat(domain.Chat{ID: 4, Peer: domain.Peer{ID: 4, Type: domain.PeerUser}})
-	s2.LoadMessages(4)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 4})
 	s2.UpdateMessageText(4, 1, "after", nil)
 	s2.MarkMessageEdited(4, 1, time.Unix(20, 0), true)
 	s2.UpdateMessageReactions(4, 1, []domain.Reaction{{Emoji: "👍", Count: 2}}, "reactions update")
@@ -100,8 +100,8 @@ func TestSQLite_MessageEdit_PersistsSurvivesReopen(t *testing.T) {
 
 	s3 := openStore(t, path)
 	defer func() { _ = s3.Close() }()
-	s3.LoadMessages(4)
-	got := s3.Messages(4)
+	s3.LoadMessages(domain.HistoryKey{ChatID: 4})
+	got := s3.Messages(domain.HistoryKey{ChatID: 4})
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "after", got[0].Text)
@@ -126,14 +126,14 @@ func TestSQLite_RemoveMessage_DeletesOnDisk(t *testing.T) {
 	// Reopen so both are disk-loaded and clean, then remove one.
 	s2 := openStore(t, path)
 	s2.SetChat(domain.Chat{ID: 8, Peer: domain.Peer{ID: 8, Type: domain.PeerUser}})
-	s2.LoadMessages(8)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 8})
 	s2.RemoveMessage(8, 2)
 	require.NoError(t, s2.Close())
 
 	s3 := openStore(t, path)
 	defer func() { _ = s3.Close() }()
-	s3.LoadMessages(8)
-	got := s3.Messages(8)
+	s3.LoadMessages(domain.HistoryKey{ChatID: 8})
+	got := s3.Messages(domain.HistoryKey{ChatID: 8})
 
 	require.Len(t, got, 1)
 	assert.Equal(t, 1, got[0].ID)
@@ -154,9 +154,9 @@ func TestSQLite_RemoveMessagesByID_SurvivesReopen(t *testing.T) {
 
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(9)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 9})
 
-	got := s2.Messages(9)
+	got := s2.Messages(domain.HistoryKey{ChatID: 9})
 	require.Len(t, got, 1, "the deleted message must not come back from disk")
 	assert.Equal(t, 5, got[0].ID)
 }
@@ -183,9 +183,9 @@ func TestSQLite_RemoveMessagesByID_ChatNeverOpened(t *testing.T) {
 
 	s3 := openStore(t, path)
 	defer func() { _ = s3.Close() }()
-	s3.LoadMessages(9)
+	s3.LoadMessages(domain.HistoryKey{ChatID: 9})
 
-	got := s3.Messages(9)
+	got := s3.Messages(domain.HistoryKey{ChatID: 9})
 	require.Len(t, got, 1, "the deleted message must not come back from disk")
 	assert.Equal(t, 5, got[0].ID)
 }
@@ -206,9 +206,9 @@ func TestSQLite_RemoveMessagesByID_ThenOpenBeforeFlush(t *testing.T) {
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
 	s2.RemoveMessagesByID([]int{6})
-	s2.LoadMessages(9)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 9})
 
-	got := s2.Messages(9)
+	got := s2.Messages(domain.HistoryKey{ChatID: 9})
 	require.Len(t, got, 1, "the pending delete must win over the row still on disk")
 	assert.Equal(t, 5, got[0].ID)
 }
@@ -232,9 +232,9 @@ func TestSQLite_RemoveMessages_ChannelNeverOpened(t *testing.T) {
 
 	s3 := openStore(t, path)
 	defer func() { _ = s3.Close() }()
-	s3.LoadMessages(50)
+	s3.LoadMessages(domain.HistoryKey{ChatID: 50})
 
-	got := s3.Messages(50)
+	got := s3.Messages(domain.HistoryKey{ChatID: 50})
 	require.Len(t, got, 1, "the deleted message must not come back from disk")
 	assert.Equal(t, 1, got[0].ID)
 }
@@ -256,8 +256,8 @@ func TestSQLite_RemoveMessagesByID_LeavesChannelsAlone(t *testing.T) {
 
 	s3 := openStore(t, path)
 	defer func() { _ = s3.Close() }()
-	s3.LoadMessages(50)
-	assert.Len(t, s3.Messages(50), 1, "the channel message must survive")
+	s3.LoadMessages(domain.HistoryKey{ChatID: 50})
+	assert.Len(t, s3.Messages(domain.HistoryKey{ChatID: 50}), 1, "the channel message must survive")
 }
 
 // The same for a message this client sent: it was stored under an optimistic
@@ -273,9 +273,9 @@ func TestSQLite_RemoveOfARenumberedMessage_SurvivesReopen(t *testing.T) {
 
 	s2 := openStore(t, path)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(9)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 9})
 
-	assert.Empty(t, s2.Messages(9), "the deleted message must not come back from disk")
+	assert.Empty(t, s2.Messages(domain.HistoryKey{ChatID: 9}), "the deleted message must not come back from disk")
 }
 
 // The same message can arrive twice: once from the reply to the RPC that created
@@ -289,7 +289,7 @@ func TestSQLite_AppendMessage_SameIDTwiceDoesNotDuplicate(t *testing.T) {
 	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "forwarded", Date: time.Unix(1, 0)})
 	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "forwarded", Date: time.Unix(1, 0)})
 
-	got := s.Messages(9)
+	got := s.Messages(domain.HistoryKey{ChatID: 9})
 	require.Len(t, got, 1, "the second copy must not add a row")
 	assert.Equal(t, "forwarded", got[0].Text)
 }
@@ -304,7 +304,7 @@ func TestSQLite_AppendMessage_SameIDAdoptsTheNewerCopy(t *testing.T) {
 	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "hi", Date: time.Unix(1, 0)})
 	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "hi", SenderName: "Ada", Date: time.Unix(1, 0)})
 
-	got := s.Messages(9)
+	got := s.Messages(domain.HistoryKey{ChatID: 9})
 	require.Len(t, got, 1)
 	assert.Equal(t, "Ada", got[0].SenderName)
 }

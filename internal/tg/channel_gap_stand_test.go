@@ -170,7 +170,7 @@ func subscribeThenGap(t *testing.T, manager *updates.Manager, api *chanStandAPI)
 }
 
 func holdsMessage(st store.Store, id int) bool {
-	for _, m := range st.Messages(chanStandID) {
+	for _, m := range st.Messages(domain.HistoryKey{ChatID: chanStandID}) {
 		if m.ID == id {
 			return true
 		}

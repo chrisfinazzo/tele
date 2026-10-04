@@ -56,7 +56,7 @@ func TestSQLite_ReactionTrace_WholeMessageWrites(t *testing.T) {
 
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5})
 	s.ReplaceMessage(5, domain.Message{ID: 1, ChatID: 5, Reactions: liked})
-	s.MergeMessages(5, []domain.Message{{ID: 1, ChatID: 5}, {ID: 2, ChatID: 5}})
+	s.MergeMessages(domain.HistoryKey{ChatID: 5}, []domain.Message{{ID: 1, ChatID: 5}, {ID: 2, ChatID: 5}})
 	s.SetMessages(5, []domain.Message{{ID: 1, ChatID: 5, Reactions: liked}})
 
 	var vias []string

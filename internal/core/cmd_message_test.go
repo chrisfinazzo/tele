@@ -24,7 +24,7 @@ func TestEditMessage_ShowsTheNewTextBeforeTheServerAnswers(t *testing.T) {
 
 	require.NoError(t, o.EditMessage(context.Background(), 1, 5, "after", nil))
 
-	got := st.Messages(1)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, got, 1)
 	assert.Equal(t, "after", got[0].Text)
 	assert.Equal(t, "after", c.editedTo)
@@ -40,7 +40,7 @@ func TestEditMessage_RestoresTheOldTextOnFailure(t *testing.T) {
 	err := o.EditMessage(context.Background(), 1, 5, "after", nil)
 
 	require.Error(t, err)
-	got := st.Messages(1)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, got, 1)
 	assert.Equal(t, "before", got[0].Text)
 	assert.Nil(t, got[0].EditDate, "a refused edit must not leave an edited marker")
@@ -69,7 +69,7 @@ func TestDeleteMessages_RemovesBeforeTheServerAnswers(t *testing.T) {
 
 	require.NoError(t, o.DeleteMessages(context.Background(), 1, []int{6}, true))
 
-	require.Len(t, st.Messages(1), 1)
+	require.Len(t, st.Messages(domain.HistoryKey{ChatID: 1}), 1)
 	assert.Equal(t, []int{6}, c.deletedIDs)
 	assert.True(t, c.revoked)
 }
@@ -85,7 +85,7 @@ func TestDeleteMessages_PutsTheMessageBackOnFailure(t *testing.T) {
 	err := o.DeleteMessages(context.Background(), 1, []int{6}, true)
 
 	require.Error(t, err)
-	got := st.Messages(1)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, got, 2, "a refused delete must restore the message")
 	assert.Equal(t, 6, got[1].ID)
 	assert.Equal(t, "drop", got[1].Text)
@@ -119,7 +119,7 @@ func TestSendReaction_ShowsTheReactionBeforeTheServerAnswers(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, kept, "a reply that states no set is not judged")
 
-	got := st.Messages(1)[0].Reactions
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions
 	require.Len(t, got, 1)
 	assert.Equal(t, "👍", got[0].Emoji)
 	assert.True(t, got[0].IsChosen)
@@ -141,7 +141,7 @@ func TestSendReaction_SecondTimeRetracts(t *testing.T) {
 
 	require.True(t, c.reactionSent)
 	assert.Empty(t, c.reactedWith, "retracting sends an empty reaction")
-	assert.Empty(t, st.Messages(1)[0].Reactions)
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions)
 }
 
 func TestSendReaction_RestoresThePreviousReactionsOnFailure(t *testing.T) {
@@ -155,7 +155,7 @@ func TestSendReaction_RestoresThePreviousReactionsOnFailure(t *testing.T) {
 	_, err := o.SendReaction(context.Background(), 1, 5, "👍")
 
 	require.Error(t, err)
-	got := st.Messages(1)[0].Reactions
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions
 	require.Len(t, got, 1)
 	assert.Equal(t, "🔥", got[0].Emoji)
 	assert.Equal(t, 2, got[0].Count)

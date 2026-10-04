@@ -37,9 +37,11 @@ func (s *SQLiteStore) heldReactionsLocked(chatID int64) map[int][]domain.Reactio
 	if !s.traceReactions() {
 		return nil
 	}
-	held := make(map[int][]domain.Reaction, len(s.messages[chatID]))
-	for _, m := range s.messages[chatID] {
-		held[m.ID] = m.Reactions
+	held := make(map[int][]domain.Reaction)
+	for _, h := range s.chatHistoriesLocked(chatID) {
+		for _, m := range s.messages[h] {
+			held[m.ID] = m.Reactions
+		}
 	}
 	return held
 }
@@ -51,9 +53,11 @@ func (s *SQLiteStore) traceHeldReactionsLocked(chatID int64, via string, held ma
 	if held == nil {
 		return
 	}
-	for _, m := range s.messages[chatID] {
-		if was, ok := held[m.ID]; ok {
-			s.traceReactionChangeLocked(chatID, m.ID, via, was, m.Reactions)
+	for _, h := range s.chatHistoriesLocked(chatID) {
+		for _, m := range s.messages[h] {
+			if was, ok := held[m.ID]; ok {
+				s.traceReactionChangeLocked(chatID, m.ID, via, was, m.Reactions)
+			}
 		}
 	}
 }

@@ -36,7 +36,7 @@ func TestOwner_DeleteFromAnotherDevice_LeavesTheWindow(t *testing.T) {
 	require.NotNil(t, d.History)
 	assert.Equal(t, project.HistoryRemove, d.History.Kind)
 	assert.Equal(t, []int{11}, d.History.MsgIDs)
-	assert.Len(t, st.Messages(1), 1, "and the store must no longer hold it")
+	assert.Len(t, st.Messages(domain.HistoryKey{ChatID: 1}), 1, "and the store must no longer hold it")
 }
 
 // The same, for a message this client sent. It reaches the store the way the
@@ -60,5 +60,5 @@ func TestOwner_DeleteOfAMessageWeSent_LeavesTheWindow(t *testing.T) {
 	require.True(t, ok, "deleting a message we sent must reach the open chat")
 	require.NotNil(t, d.History)
 	assert.Equal(t, project.HistoryRemove, d.History.Kind)
-	assert.Empty(t, st.Messages(1))
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}))
 }

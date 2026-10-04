@@ -21,7 +21,7 @@ func (s *SQLiteStore) recomputeUnreadLocked(c *domain.Chat) {
 // A chat never opened this session holds nothing, and a tail that starts above
 // prev hides part of the range — counting either would understate what was read.
 func (s *SQLiteStore) countBaselineReadLocked(chatID int64, prev, maxID int) (int, bool) {
-	msgs := s.messages[chatID]
+	msgs := s.messages[domain.HistoryKey{ChatID: chatID}]
 	if len(msgs) == 0 || msgs[0].ID > prev {
 		return 0, false
 	}

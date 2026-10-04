@@ -182,5 +182,5 @@ func TestTailMessageID_ReadsDiskWithoutLoadingTheChat(t *testing.T) {
 	defer func() { _ = s2.Close() }()
 
 	assert.Equal(t, 9, s2.TailMessageID(7))
-	assert.Empty(t, s2.Messages(7), "the chat must still be unloaded")
+	assert.Empty(t, s2.Messages(domain.HistoryKey{ChatID: 7}), "the chat must still be unloaded")
 }

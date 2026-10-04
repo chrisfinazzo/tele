@@ -252,6 +252,31 @@ type FolderFilter struct {
 	ExcludeArchived bool
 }
 
+// GeneralTopicID is the id of the topic every forum has from the start, where
+// messages that name no topic land.
+const GeneralTopicID = 1
+
+// HistoryKey names one history: a run of messages stored, repaired and extended
+// as one. An ordinary chat has one, with TopicID 0; a forum has one per topic
+// and none of its own (#275).
+type HistoryKey struct {
+	ChatID  int64
+	TopicID int
+}
+
+// HistoryOf names the history a message of this chat belongs to. Outside a
+// forum that is the chat's one history whatever the message says; inside one,
+// a message that names no topic is in General.
+func (c Chat) HistoryOf(m Message) HistoryKey {
+	if !c.IsForum {
+		return HistoryKey{ChatID: c.ID}
+	}
+	if m.TopicID == 0 {
+		return HistoryKey{ChatID: c.ID, TopicID: GeneralTopicID}
+	}
+	return HistoryKey{ChatID: c.ID, TopicID: m.TopicID}
+}
+
 type Message struct {
 	ID         int
 	ChatID     int64

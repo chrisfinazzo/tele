@@ -53,7 +53,7 @@ func TestOwner_ForwardFillClosesAGapWhenTheChatOpens(t *testing.T) {
 	openWindow(o)
 
 	require.Eventually(t, gapClosed(s), time.Second, time.Millisecond)
-	assert.Len(t, s.Store().Messages(7), 7, "the missed range is in the chat")
+	assert.Len(t, s.Store().Messages(domain.HistoryKey{ChatID: 7}), 7, "the missed range is in the chat")
 }
 
 // A hole wider than one page is closed a page at a time, each one joining the
@@ -65,7 +65,7 @@ func TestOwner_ForwardFillPagesUntilItCatchesUp(t *testing.T) {
 	openWindow(o)
 
 	require.Eventually(t, gapClosed(s), time.Second, time.Millisecond)
-	assert.Len(t, s.Store().Messages(7), 45)
+	assert.Len(t, s.Store().Messages(domain.HistoryKey{ChatID: 7}), 45)
 	assert.Equal(t, int32(2), c.fwdCalls.Load(), "forty messages at a limit of twenty")
 }
 
@@ -80,7 +80,7 @@ func TestOwner_ForwardFillClosesAGapWithNothingBehindIt(t *testing.T) {
 
 	require.Eventually(t, gapClosed(s), time.Second, time.Millisecond)
 	assert.Equal(t, int32(1), c.fwdCalls.Load())
-	assert.Len(t, s.Store().Messages(7), 5)
+	assert.Len(t, s.Store().Messages(domain.HistoryKey{ChatID: 7}), 5)
 }
 
 // Nobody asked for the repair, so a failure is not reported and not retried on
@@ -108,7 +108,7 @@ func TestOwner_ForwardFillReloadsTheTailWhenTheGapIsTooWide(t *testing.T) {
 	openWindow(o)
 
 	require.Eventually(t, gapClosed(s), 5*time.Second, time.Millisecond)
-	held := s.Store().Messages(7)
+	held := s.Store().Messages(domain.HistoryKey{ChatID: 7})
 	require.Len(t, held, 20, "the fresh page replaced the history it could not join")
 	assert.Equal(t, server[len(server)-1].ID, held[len(held)-1].ID)
 }

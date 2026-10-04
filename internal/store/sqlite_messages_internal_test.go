@@ -56,15 +56,15 @@ func TestLoadMessages_IgnoresDeletesInFlight(t *testing.T) {
 	// Take the snapshot the flusher takes, then open the chat before the
 	// transaction lands.
 	s2.mu.Lock()
-	upserts, deletes := s2.snapshotMessageWritesLocked()
+	writes := s2.snapshotMessageWritesLocked()
 	s2.mu.Unlock()
 
-	s2.LoadMessages(3)
-	got := s2.Messages(3)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 3})
+	got := s2.Messages(domain.HistoryKey{ChatID: 3})
 	require.Len(t, got, 1, "a delete in flight must still hide the row on disk")
 	assert.Equal(t, 1, got[0].ID)
 
-	s2.flushMessageRows(upserts, deletes)
+	s2.flushMessageRows(writes)
 }
 
 func TestLoadMessages_DoesNotQueueWrites(t *testing.T) {
@@ -79,7 +79,7 @@ func TestLoadMessages_DoesNotQueueWrites(t *testing.T) {
 	s2, err := NewSQLite(path, zap.NewNop())
 	require.NoError(t, err)
 	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(2)
+	s2.LoadMessages(domain.HistoryKey{ChatID: 2})
 
 	s2.mu.Lock()
 	dirty := len(s2.dirtyMsgs[2])

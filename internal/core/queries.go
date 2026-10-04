@@ -175,7 +175,7 @@ func (o *Owner) userAddress(userID int64) (internaltg.UserAddress, error) {
 func (o *Owner) findMessageFrom(userID int64) (domain.Peer, domain.Message, bool) {
 	st := o.state.Store()
 	for _, chat := range st.Chats() {
-		msgs := st.Messages(chat.ID)
+		msgs := st.Messages(domain.HistoryKey{ChatID: chat.ID})
 		for i := len(msgs) - 1; i >= 0; i-- {
 			if msgs[i].SenderID == userID && msgs[i].ID != 0 {
 				return chat.Peer, msgs[i], true

@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS chats (
 	unread_mark        INTEGER NOT NULL DEFAULT 0,
 	is_archived        INTEGER NOT NULL DEFAULT 0,
 	unread_reactions_count INTEGER NOT NULL DEFAULT 0,
-	unread_mentions_count INTEGER NOT NULL DEFAULT 0
+	unread_mentions_count INTEGER NOT NULL DEFAULT 0,
+	is_forum           INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS update_state (
 	user_id INTEGER PRIMARY KEY,
@@ -60,10 +61,11 @@ CREATE TABLE IF NOT EXISTS folder_filters (
 	data TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS messages (
-	chat_id INTEGER NOT NULL,
-	msg_id  INTEGER NOT NULL,
-	date    INTEGER NOT NULL DEFAULT 0,
-	data    TEXT    NOT NULL,
+	chat_id  INTEGER NOT NULL,
+	msg_id   INTEGER NOT NULL,
+	topic_id INTEGER NOT NULL DEFAULT 0,
+	date     INTEGER NOT NULL DEFAULT 0,
+	data     TEXT    NOT NULL,
 	PRIMARY KEY (chat_id, msg_id)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_chat_date ON messages(chat_id, date);
@@ -91,9 +93,14 @@ const persistFlushInterval = 2 * time.Second
 // Reads are served from an in-memory map; every chat write also persists to disk.
 // domain.Message operations are in-memory only.
 type SQLiteStore struct {
-	mu       sync.RWMutex
-	chats    map[int64]domain.Chat
-	messages map[int64][]domain.Message
+	mu    sync.RWMutex
+	chats map[int64]domain.Chat
+	// messages holds each history's recent tail. A history is a chat's own, or
+	// one topic of a forum; the forum itself holds none (#275).
+	messages map[domain.HistoryKey][]domain.Message
+	// histories lists, per chat, the topics whose history is held in memory, so
+	// a message addressed by chat and id can be found without knowing its topic.
+	histories map[int64]map[int]struct{}
 	// unreadReactionMsgs tracks, per chat, the message IDs observed this session
 	// to carry unread reactions. Keeps ApplyUnreadReaction idempotent so repeated
 	// updates for one message do not double-count. Session-only: the dialog list
@@ -128,9 +135,9 @@ type SQLiteStore struct {
 	// ID space and are deleted with an explicit ChatID. See issue #72.
 	msgChat map[int]int64
 
-	// msgFloor is how many messages a chat was last filled with outright, so the
-	// per-chat cap does not trim a scrollback the user deliberately loaded.
-	msgFloor map[int64]int
+	// msgFloor is how many messages a history was last filled with outright, so
+	// the per-history cap does not trim a scrollback the user deliberately loaded.
+	msgFloor map[domain.HistoryKey]int
 
 	// dirtyPersist holds chat IDs whose row changed via a high-frequency
 	// write-behind mutation (read state, last message) and awaits a coalesced
@@ -141,10 +148,10 @@ type SQLiteStore struct {
 	flushDone    chan struct{}
 	closeOnce    sync.Once
 
-	// loaded marks chats whose persisted message tail has been read from disk
-	// into memory, so LoadMessages runs at most once per chat and distinguishes
+	// loaded marks histories whose persisted tail has been read from disk into
+	// memory, so LoadMessages runs at most once per history and distinguishes
 	// "empty in DB" from "not yet loaded". See issue #139.
-	loaded map[int64]bool
+	loaded map[domain.HistoryKey]bool
 	// dirtyMsgs / deletedMsgs queue per-chat message upserts and deletes for the
 	// next write-behind flush, mirroring dirtyPersist for chat rows. See #139.
 	dirtyMsgs   map[int64]map[int]struct{}
@@ -154,6 +161,13 @@ type SQLiteStore struct {
 	// that stretch the row is still on disk while nothing marks it deleted — a
 	// chat opened right then would read the message back.
 	deletingMsgs map[int64]map[int]struct{}
+	// purgeMsgs queues chats whose every stored message is to be dropped from
+	// disk, and purgingMsgs holds those handed to a flush that has not committed
+	// yet. They mirror deletedMsgs and deletingMsgs for the one case that
+	// discards a chat's rows without knowing which they are: a chat whose shape
+	// changed under them (#275).
+	purgeMsgs   map[int64]struct{}
+	purgingMsgs map[int64]struct{}
 }
 
 // sharedPtsBox reports whether a peer's messages live in the account's common
@@ -196,9 +210,15 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureMessageHistory(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	s := &SQLiteStore{
 		chats:              make(map[int64]domain.Chat),
-		messages:           make(map[int64][]domain.Message),
+		messages:           make(map[domain.HistoryKey][]domain.Message),
+		histories:          make(map[int64]map[int]struct{}),
+		msgFloor:           make(map[domain.HistoryKey]int),
 		unreadReactionMsgs: make(map[int64]map[int]struct{}),
 		unreadMentionMsgs:  make(map[int64]map[int]struct{}),
 		baselineUnread:     make(map[int64]int),
@@ -207,10 +227,12 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		dirtyPersist:       make(map[int64]struct{}),
 		flushStop:          make(chan struct{}),
 		flushDone:          make(chan struct{}),
-		loaded:             make(map[int64]bool),
+		loaded:             make(map[domain.HistoryKey]bool),
 		dirtyMsgs:          make(map[int64]map[int]struct{}),
 		deletedMsgs:        make(map[int64]map[int]struct{}),
 		deletingMsgs:       make(map[int64]map[int]struct{}),
+		purgeMsgs:          make(map[int64]struct{}),
+		purgingMsgs:        make(map[int64]struct{}),
 		db:                 db,
 		log:                log,
 		orderDirty:         true, // build the sorted view lazily on first Chats() call
@@ -250,14 +272,14 @@ func (s *SQLiteStore) Flush() {
 		}
 	}
 	s.dirtyPersist = make(map[int64]struct{})
-	upserts, deletes := s.snapshotMessageWritesLocked()
+	writes := s.snapshotMessageWritesLocked()
 	s.mu.Unlock()
 
 	for _, c := range pending {
 		s.persistChat(c)
 	}
-	s.flushMessageRows(upserts, deletes)
-	s.clearDeletesInFlight(deletes)
+	s.flushMessageRows(writes)
+	s.clearDeletesInFlight(writes)
 }
 
 // markDirtyLocked queues a chat for the next write-behind flush. Caller holds the lock.
@@ -279,6 +301,47 @@ func (s *SQLiteStore) Close() error {
 		err = s.db.Close()
 	})
 	return err
+}
+
+// ensureMessageHistory gives a database written before forums were told apart
+// the topic a message's history is keyed by. Every row it finds has no topic,
+// which is what an ordinary chat's one history is, so nothing already stored
+// reads back any differently (#275). The index is created here rather than in
+// the schema because on such a database the column does not exist until now.
+func ensureMessageHistory(db *sql.DB) error {
+	cols, err := tableColumns(db, "messages")
+	if err != nil {
+		return err
+	}
+	if _, ok := cols["topic_id"]; !ok {
+		if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_history ON messages(chat_id, topic_id, date)`)
+	return err
+}
+
+// tableColumns returns the names of a table's columns.
+func tableColumns(db *sql.DB, table string) (map[string]struct{}, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		existing[name] = struct{}{}
+	}
+	return existing, rows.Err()
 }
 
 // ensureChatColumns adds chat columns introduced after the original
@@ -312,6 +375,7 @@ func ensureChatColumns(db *sql.DB) error {
 		{"is_archived", `ALTER TABLE chats ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0`},
 		{"unread_reactions_count", `ALTER TABLE chats ADD COLUMN unread_reactions_count INTEGER NOT NULL DEFAULT 0`},
 		{"unread_mentions_count", `ALTER TABLE chats ADD COLUMN unread_mentions_count INTEGER NOT NULL DEFAULT 0`},
+		{"is_forum", `ALTER TABLE chats ADD COLUMN is_forum INTEGER NOT NULL DEFAULT 0`},
 	}
 	for _, m := range migrations {
 		if _, ok := existing[m.col]; ok {

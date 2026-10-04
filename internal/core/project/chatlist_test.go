@@ -31,7 +31,7 @@ func (f *fakeReader) GetChat(id int64) (domain.Chat, bool) {
 	return domain.Chat{}, false
 }
 
-func (f *fakeReader) Messages(chatID int64) []domain.Message { return f.msgs[chatID] }
+func (f *fakeReader) Messages(h domain.HistoryKey) []domain.Message { return f.msgs[h.ChatID] }
 
 func (f *fakeReader) FolderFilters() []domain.FolderFilter { return f.filters }
 

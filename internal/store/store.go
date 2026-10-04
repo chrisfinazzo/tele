@@ -10,16 +10,24 @@ type Store interface {
 	GetChat(id int64) (domain.Chat, bool)
 	SetChat(chat domain.Chat)
 	Chats() []domain.Chat
-	Messages(chatID int64) []domain.Message
+	// Messages returns one history's held tail, oldest first. An ordinary chat's
+	// history is keyed by the chat alone; a forum has one per topic (#275).
+	Messages(h domain.HistoryKey) []domain.Message
+	// Message returns one held message by the chat and id Telegram addresses
+	// it by, whichever of the chat's histories holds it.
+	Message(chatID int64, msgID int) (domain.Message, bool)
+	// SetMessages replaces everything a chat holds with a page, laid out among
+	// its histories: in a forum, every topic at once.
 	SetMessages(chatID int64, msgs []domain.Message)
-	// MergeMessages merges a fetched page into a chat's stored history under a
-	// single hold of the store's lock and reports how many messages it added.
-	// It is how a page fetched from Telegram is applied: SetMessages after a
-	// read outside the lock would drop anything that arrived in between.
-	MergeMessages(chatID int64, msgs []domain.Message) int
-	// RepairMessages merges a page the way MergeMessages does but leaves the
-	// chat no deeper than it found it: a page nobody asked for must not raise
-	// what the chat costs to hold.
+	// MergeMessages merges a fetched page into one history under a single hold
+	// of the store's lock and reports how many messages it added. It is how a
+	// page fetched from Telegram is applied: SetMessages after a read outside
+	// the lock would drop anything that arrived in between.
+	MergeMessages(h domain.HistoryKey, msgs []domain.Message) int
+	// RepairMessages merges a page the way MergeMessages does, laid out among
+	// the chat's histories, but leaves each no deeper than it found it: a page
+	// nobody asked for must not raise what the chat costs to hold. It takes a
+	// chat rather than a history because a gap is the chat's.
 	RepairMessages(chatID int64, msgs []domain.Message) int
 	// Gap reports the message a chat's missing range opens after, if it has
 	// one. A gap is recorded when it opens rather than noticed later: once
@@ -42,9 +50,9 @@ type Store interface {
 	// TailMessageID is the id of the newest message held for a chat, answered
 	// without loading the chat's history into memory.
 	TailMessageID(chatID int64) int
-	// LoadMessages loads a chat's persisted message tail into memory on first
-	// open (idempotent per chat). See issue #139.
-	LoadMessages(chatID int64)
+	// LoadMessages loads a history's persisted tail into memory on first open
+	// (idempotent per history). See issue #139.
+	LoadMessages(h domain.HistoryKey)
 	// AppendMessage stores an arriving message, replacing the stored copy when
 	// the same id is already held. It reports whether the message was new, which
 	// is how a second delivery of one arrival is told from a first.

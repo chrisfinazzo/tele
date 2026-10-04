@@ -63,7 +63,7 @@ func TestRoot_SubmissionRefused_SurfacesError(t *testing.T) {
 
 	_, isErr := cmd().(ui.StatusErrMsg)
 	assert.True(t, isErr, "a refused submission should surface a StatusErrMsg")
-	assert.Empty(t, st.Messages(1), "nothing is written to the store on the send path any more")
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}), "nothing is written to the store on the send path any more")
 	assert.Empty(t, owner.sent)
 }
 
@@ -351,7 +351,7 @@ func TestSendMedia_HandsTheStagedFilesToTheQueue(t *testing.T) {
 	assert.Equal(t, "hi", req.Caption)
 	assert.Equal(t, 7, req.ReplyToMsgID)
 
-	assert.Empty(t, st.Messages(1),
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}),
 		"nothing is written locally: the queue's own entry is what appears on screen")
 	assert.Zero(t, m.PendingAttachmentCount(), "the staged queue is handed over, not kept")
 }
@@ -760,7 +760,7 @@ func TestRoot_Send_SubmitsToTheQueueAndTouchesNoStore(t *testing.T) {
 	assert.Equal(t, "hello", owner.sent[0].Text)
 	assert.Equal(t, int64(1), owner.sent[0].ChatID)
 	assert.NotEmpty(t, owner.sent[0].Ref, "the client owns the idempotency key")
-	assert.Empty(t, st.Messages(1), "no optimistic message is inserted any more")
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}), "no optimistic message is inserted any more")
 }
 
 func TestRootModel_PhotoDownloadDispatchedOnHistory(t *testing.T) {
@@ -1023,7 +1023,7 @@ func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 	newM, _ := applyHistory(t, m, st, 1)
 	m = newM.(ui.RootModel)
 
-	require.Len(t, st.Messages(1), 1)
+	require.Len(t, st.Messages(domain.HistoryKey{ChatID: 1}), 1)
 
 	// Deleting is the owner's command now, so the removal lands when it runs.
 	newM, cmd := m.Update(components.DeleteMsgRequest{MsgID: 10, Revoke: false})
@@ -1031,7 +1031,7 @@ func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 	require.NotNil(t, cmd, "the request must produce an owner command")
 	drainMsgs(cmd())
 
-	assert.Empty(t, st.Messages(1), "message removed from store")
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}), "message removed from store")
 }
 
 func TestRoot_ContextMenu_QuitKeyDoesNotQuit(t *testing.T) {
@@ -1262,7 +1262,7 @@ func TestRoot_EventDeleteMessages_Channel_RemovesFromCurrentChat(t *testing.T) {
 	newM, _ = applyEvent(t, m, st, evt)
 	_ = newM.(ui.RootModel)
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 11, msgs[0].ID)
 }
@@ -1283,8 +1283,8 @@ func TestRoot_EventDeleteMessages_NonChannel_TargetsOwningChat(t *testing.T) {
 	newM, _ := applyEvent(t, m, st, evt)
 	_ = newM.(ui.RootModel)
 
-	assert.Empty(t, st.Messages(1))   // owning chat lost the message
-	require.Len(t, st.Messages(2), 1) // unrelated chat untouched
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}))   // owning chat lost the message
+	require.Len(t, st.Messages(domain.HistoryKey{ChatID: 2}), 1) // unrelated chat untouched
 }
 
 func TestRoot_ContextMenu_PhotoMessage_ShowsAllThreeActions(t *testing.T) {
@@ -1424,7 +1424,7 @@ func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
 	})
 	_ = newM.(ui.RootModel)
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "edited", msgs[0].Text)
 	require.NotNil(t, msgs[0].EditDate)
@@ -1824,7 +1824,7 @@ func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 	})
 	_ = newM.(ui.RootModel)
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.False(t, msgs[0].ShowsEdited(), "hidden edit must not set the edited marker")
 }
@@ -1845,7 +1845,7 @@ func TestRoot_EventEditMessage_HiddenEdit_UpdatesTheText(t *testing.T) {
 	})
 	_ = newM.(ui.RootModel)
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "the whole answer", msgs[0].Text)
 	assert.False(t, msgs[0].ShowsEdited())
@@ -1872,7 +1872,7 @@ func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
 	})
 	_ = newM.(ui.RootModel)
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.False(t, msgs[0].ShowsEdited(), "hidden edit must not set the edited marker")
 	require.Len(t, msgs[0].Reactions, 1, "reactions from the hidden edit must be applied")

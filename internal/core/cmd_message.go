@@ -16,10 +16,8 @@ import (
 // pre-change value for a rollback or resolve media on it. It is a function
 // rather than a method because the media fetcher needs it without an Owner.
 func messageByID(s *state.State, chatID int64, msgID int) (domain.Message, error) {
-	for _, m := range s.Store().Messages(chatID) {
-		if m.ID == msgID {
-			return m, nil
-		}
+	if m, ok := s.Store().Message(chatID, msgID); ok {
+		return m, nil
 	}
 	return domain.Message{}, &telerr.Error{Kind: telerr.NotFound}
 }
@@ -72,7 +70,7 @@ func (o *Owner) Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs 
 	o.bumpForwardTarget(fromChatID, toChatID, msgIDs)
 	o.log.Debug("forward: done, target bumped",
 		zap.Int64("to_chat", toChatID),
-		zap.Int("held_in_store", len(o.state.Store().Messages(toChatID))))
+		zap.Int("held_in_store", len(o.state.Store().Messages(domain.HistoryKey{ChatID: toChatID}))))
 	return nil
 }
 

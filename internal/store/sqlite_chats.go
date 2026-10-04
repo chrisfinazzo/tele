@@ -13,7 +13,7 @@ func (s *SQLiteStore) loadChats() error {
 	rows, err := s.db.Query(`SELECT id, title, peer_type, peer_access_hash, pinned,
 		unread_count, read_inbox_max_id, read_outbox_max_id, last_message,
 		is_contact, is_bot, is_muted, online, unread_mark, is_archived,
-		unread_reactions_count, unread_mentions_count FROM chats`)
+		unread_reactions_count, unread_mentions_count, is_forum FROM chats`)
 	if err != nil {
 		return err
 	}
@@ -21,12 +21,13 @@ func (s *SQLiteStore) loadChats() error {
 	for rows.Next() {
 		var c domain.Chat
 		var lastMsgJSON []byte
-		var pinned, isContact, isBot, isMuted, online, unreadMark, isArchived int
+		var pinned, isContact, isBot, isMuted, online, unreadMark, isArchived, isForum int
 		err := rows.Scan(
 			&c.ID, &c.Title, &c.Peer.Type, &c.Peer.AccessHash,
 			&pinned, &c.UnreadCount, &c.ReadInboxMaxID, &c.ReadOutboxMaxID,
 			&lastMsgJSON, &isContact, &isBot, &isMuted, &online,
 			&unreadMark, &isArchived, &c.UnreadReactionsCount, &c.UnreadMentionsCount,
+			&isForum,
 		)
 		if err != nil {
 			return err
@@ -39,6 +40,7 @@ func (s *SQLiteStore) loadChats() error {
 		c.Online = online == 1
 		c.UnreadMark = unreadMark == 1
 		c.IsArchived = isArchived == 1
+		c.IsForum = isForum == 1
 		if len(lastMsgJSON) > 0 {
 			var m domain.Message
 			if err := json.Unmarshal(lastMsgJSON, &m); err == nil {
@@ -72,13 +74,14 @@ func (s *SQLiteStore) persistChat(c domain.Chat) {
 		(id, title, peer_type, peer_access_hash, pinned, unread_count,
 		 read_inbox_max_id, read_outbox_max_id, last_message,
 		 is_contact, is_bot, is_muted, online, unread_mark, is_archived,
-		 unread_reactions_count, unread_mentions_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 unread_reactions_count, unread_mentions_count, is_forum)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, c.Title, c.Peer.Type, c.Peer.AccessHash,
 		boolInt(c.Pinned), c.UnreadCount, c.ReadInboxMaxID, c.ReadOutboxMaxID,
 		lastMsgJSON,
 		boolInt(c.IsContact), boolInt(c.IsBot), boolInt(c.IsMuted), boolInt(c.Online),
 		boolInt(c.UnreadMark), boolInt(c.IsArchived), c.UnreadReactionsCount, c.UnreadMentionsCount,
+		boolInt(c.IsForum),
 	)
 	if err != nil {
 		s.log.Error("persist chat failed", zap.Int64("chat_id", c.ID), zap.Error(err))
@@ -137,8 +140,16 @@ func (s *SQLiteStore) GetChat(id int64) (domain.Chat, bool) {
 	return c, ok
 }
 
+// SetChat stores a chat as Telegram states it. A chat whose forum flag changed
+// has a different shape of history than what is stored for it, so what is
+// stored is discarded, its gap with it (#275).
 func (s *SQLiteStore) SetChat(chat domain.Chat) {
 	s.mu.Lock()
+	prev, known := s.chats[chat.ID]
+	reshaped := known && prev.IsForum != chat.IsForum
+	if reshaped {
+		s.discardChatLocked(chat.ID)
+	}
 	s.chats[chat.ID] = chat
 	s.baselineUnread[chat.ID] = chat.UnreadCount // dialog-list count is authoritative
 	delete(s.unreadMsgs, chat.ID)                // its messages are already inside that count
@@ -147,6 +158,9 @@ func (s *SQLiteStore) SetChat(chat domain.Chat) {
 	s.orderDirty = true                          // title/pin/last-message may change ordering
 	s.mu.Unlock()
 	s.persistChat(chat)
+	if reshaped {
+		s.ClearGap(chat.ID)
+	}
 }
 
 func (s *SQLiteStore) Chats() []domain.Chat {

@@ -414,7 +414,7 @@ func (o *testOwner) EditMessage(_ context.Context, chatID int64, msgID int, text
 // messageByID mirrors the owner's helper for the commands that need the
 // pre-change value.
 func (o *testOwner) messageByID(chatID int64, msgID int) (domain.Message, bool) {
-	for _, m := range o.state.Store().Messages(chatID) {
+	for _, m := range o.state.Store().Messages(domain.HistoryKey{ChatID: chatID}) {
 		if m.ID == msgID {
 			return m, true
 		}
@@ -575,6 +575,6 @@ func applyHistory(t testing.TB, m ui.RootModel, st store.Store, chatID int64) (t
 	if !ok {
 		return m, nil
 	}
-	o.state.ApplyHistory(chatID, st.Messages(chatID))
+	o.state.ApplyHistory(chatID, st.Messages(domain.HistoryKey{ChatID: chatID}))
 	return o.drain(m)
 }

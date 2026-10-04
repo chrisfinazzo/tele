@@ -172,8 +172,8 @@ func TestSQLite_RemoveMessagesByID_TargetsOwningChat(t *testing.T) {
 	affected := s.RemoveMessagesByID([]int{5})
 
 	assert.Equal(t, []int64{1}, affected)
-	assert.Empty(t, s.Messages(1))   // owning chat lost the message
-	require.Len(t, s.Messages(2), 1) // unrelated chat untouched
+	assert.Empty(t, s.Messages(domain.HistoryKey{ChatID: 1}))   // owning chat lost the message
+	require.Len(t, s.Messages(domain.HistoryKey{ChatID: 2}), 1) // unrelated chat untouched
 }
 
 func TestSQLite_RemoveMessagesByID_IgnoresChannelMessages(t *testing.T) {
@@ -186,7 +186,7 @@ func TestSQLite_RemoveMessagesByID_IgnoresChannelMessages(t *testing.T) {
 	affected := s.RemoveMessagesByID([]int{5})
 
 	assert.Empty(t, affected)
-	require.Len(t, s.Messages(1), 1) // untouched — not addressable without ChatID
+	require.Len(t, s.Messages(domain.HistoryKey{ChatID: 1}), 1) // untouched — not addressable without ChatID
 }
 
 func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
@@ -196,7 +196,7 @@ func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 	for i := 1; i <= total; i++ {
 		s.AppendMessage(domain.Message{ID: i, ChatID: 1})
 	}
-	msgs := s.Messages(1)
+	msgs := s.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, store.MaxMessagesPerChat)
 	// Oldest trimmed from the front, newest retained at the back.
 	assert.Equal(t, total-store.MaxMessagesPerChat+1, msgs[0].ID)
@@ -218,7 +218,7 @@ func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
 
 	s.SetMessages(1, msgs)
 
-	got := s.Messages(1)
+	got := s.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, got, total)
 	assert.Equal(t, 1, got[0].ID)
 	assert.Equal(t, total, got[len(got)-1].ID)
@@ -236,7 +236,7 @@ func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 
 	s.AppendMessage(domain.Message{ID: total + 1, ChatID: 1})
 
-	got := s.Messages(1)
+	got := s.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, got, total+1)
 	assert.Equal(t, 1, got[0].ID, "the oldest loaded message is still there")
 }
@@ -405,6 +405,38 @@ func TestSQLite_MigratesMissingChatColumns(t *testing.T) {
 	assert.False(t, c.UnreadMark)
 	assert.False(t, c.IsArchived)
 	assert.Equal(t, 0, c.UnreadReactionsCount)
+}
+
+// A database written before forums were told apart holds every chat's
+// messages with no topic. They must read back as that chat's one history,
+// exactly as they did before (#275).
+func TestSQLite_LegacyMessagesReadAsTheChatsHistory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tele.db")
+
+	db, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE messages (
+		chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL,
+		date INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL,
+		PRIMARY KEY (chat_id, msg_id))`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO messages (chat_id, msg_id, date, data) VALUES
+		(7, 1, 100, '{"ID":1,"ChatID":7,"Text":"old"}'),
+		(7, 2, 200, '{"ID":2,"ChatID":7,"Text":"older build"}')`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s.Close() }()
+	s.SetChat(domain.Chat{ID: 7, Title: "Legacy", Peer: domain.Peer{ID: 7, Type: domain.PeerSuperGroup}})
+	h := domain.HistoryKey{ChatID: 7}
+	s.LoadMessages(h)
+	got := s.Messages(h)
+	require.Len(t, got, 2)
+	assert.Equal(t, "old", got[0].Text)
+	assert.Equal(t, 2, s.TailMessageID(7))
 }
 
 func TestSQLite_UnreadReactionsCount_Persist(t *testing.T) {

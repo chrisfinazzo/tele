@@ -160,19 +160,19 @@ func (s *State) ApplyHistory(chatID int64, msgs []domain.Message) (Change, bool)
 	return c, true
 }
 
-// MergeHistory joins a fetched page to a chat's stored history and publishes one
-// change, so the chat:<id> projection rebuilds through the same path as every
+// MergeHistory joins a fetched page to one stored history and publishes one
+// change, so the projections over it rebuild through the same path as every
 // other change. The merge itself happens inside the store, under its lock,
 // which is what keeps a message arriving mid-fetch from being overwritten.
 //
 // A page that added nothing publishes nothing: it means the fetch reached
 // history the store already had, and rebuilding every window to say so would
 // cost a frame for no news.
-func (s *State) MergeHistory(chatID int64, msgs []domain.Message) (Change, bool) {
-	if s.st.MergeMessages(chatID, msgs) == 0 {
+func (s *State) MergeHistory(h domain.HistoryKey, msgs []domain.Message) (Change, bool) {
+	if s.st.MergeMessages(h, msgs) == 0 {
 		return Change{}, false
 	}
-	c := Change{Kind: ChangeHistory, ChatID: chatID}
+	c := Change{Kind: ChangeHistory, ChatID: h.ChatID}
 	s.commit(c)
 	return c, true
 }

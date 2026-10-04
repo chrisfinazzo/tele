@@ -336,7 +336,7 @@ func (o *ownerStub) SendReaction(_ context.Context, chatID int64, msgID int, emo
 func (o *ownerStub) DeleteMessages(_ context.Context, chatID int64, msgIDs []int, _ bool) error {
 	o.calls = append(o.calls, cmdCall{name: "DeleteMessages", chatID: chatID})
 	removed := make([]domain.Message, 0, len(msgIDs))
-	for _, m := range o.state.Store().Messages(chatID) {
+	for _, m := range o.state.Store().Messages(domain.HistoryKey{ChatID: chatID}) {
 		for _, id := range msgIDs {
 			if m.ID == id {
 				removed = append(removed, m)
@@ -357,7 +357,7 @@ func (o *ownerStub) EditMessage(_ context.Context, chatID int64, msgID int, text
 	o.calls = append(o.calls, cmdCall{name: "EditMessage", chatID: chatID})
 	var prev domain.Message
 	found := false
-	for _, m := range o.state.Store().Messages(chatID) {
+	for _, m := range o.state.Store().Messages(domain.HistoryKey{ChatID: chatID}) {
 		if m.ID == msgID {
 			prev, found = m, true
 			break

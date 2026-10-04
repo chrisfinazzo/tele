@@ -81,12 +81,12 @@ func TestWorker_AppliesTheRefreshedMessagesAndDropsTheEntry(t *testing.T) {
 		},
 	}))
 
-	waitFor(t, "the album never reached the store", func() bool { return len(st.Messages(1)) == 2 })
+	waitFor(t, "the album never reached the store", func() bool { return len(st.Messages(domain.HistoryKey{ChatID: 1})) == 2 })
 	waitFor(t, "the entry outlived its messages", func() bool {
 		_, still := q.Get("r1#0")
 		return !still
 	})
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	assert.Equal(t, int64(42), msgs[0].GroupedID,
 		"the refresh is what carries grouped_id; without it the parts never collapse")
 }

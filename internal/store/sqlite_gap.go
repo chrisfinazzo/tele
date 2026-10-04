@@ -114,15 +114,30 @@ func (s *SQLiteStore) ClearGap(chatID int64) {
 // one is the newest either way. Only a chat this session has not touched at all
 // falls through to disk, which is what keeps a gap opening on a quiet chat from
 // loading five hundred messages to read one number.
+//
+// A forum is asked across all its topics, since its gap lies across all of
+// them. Memory alone cannot answer for it: a topic nobody opened this session
+// is held only on disk, and its newest message may be the forum's newest, so
+// the two are compared (#275).
 func (s *SQLiteStore) TailMessageID(chatID int64) int {
 	s.mu.RLock()
-	if msgs := s.messages[chatID]; len(msgs) > 0 {
-		id := msgs[len(msgs)-1].ID
-		s.mu.RUnlock()
-		return id
+	forum := s.chats[chatID].IsForum
+	purging := s.purgePendingLocked(chatID)
+	held := 0
+	for _, h := range s.chatHistoriesLocked(chatID) {
+		if msgs := s.messages[h]; len(msgs) > 0 && msgs[len(msgs)-1].ID > held {
+			held = msgs[len(msgs)-1].ID
+		}
 	}
 	s.mu.RUnlock()
+	if (held > 0 && !forum) || purging {
+		return held
+	}
+	return max(held, s.diskTailMessageID(chatID))
+}
 
+// diskTailMessageID is the newest message id persisted for a chat.
+func (s *SQLiteStore) diskTailMessageID(chatID int64) int {
 	var newest sql.NullInt64
 	if err := s.db.QueryRow(`SELECT MAX(msg_id) FROM messages WHERE chat_id = ?`, chatID).Scan(&newest); err != nil {
 		s.log.Error("read tail message id failed", zap.Int64("chat_id", chatID), zap.Error(err))

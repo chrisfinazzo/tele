@@ -208,9 +208,9 @@ func TestOwner_BackfillKeepsAMessageThatArrivedWhileItWasFetching(t *testing.T) 
 	s.Store().AppendMessage(domain.Message{ID: 6, ChatID: 7, Date: time.Unix(6, 0)})
 	close(c.release)
 
-	require.Eventually(t, func() bool { return len(s.Store().Messages(7)) == 4 }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return len(s.Store().Messages(domain.HistoryKey{ChatID: 7})) == 4 }, time.Second, time.Millisecond)
 	ids := make([]int, 0, 4)
-	for _, m := range s.Store().Messages(7) {
+	for _, m := range s.Store().Messages(domain.HistoryKey{ChatID: 7}) {
 		ids = append(ids, m.ID)
 	}
 	assert.Equal(t, []int{1, 2, 5, 6}, ids)

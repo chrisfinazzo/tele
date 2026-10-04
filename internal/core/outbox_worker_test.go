@@ -257,7 +257,7 @@ func TestWorker_RecordsTheSentMessageAndDropsTheEntry(t *testing.T) {
 	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "hi"}))
 
 	waitFor(t, "the sent message never reached the store", func() bool {
-		for _, m := range st.Messages(1) {
+		for _, m := range st.Messages(domain.HistoryKey{ChatID: 1}) {
 			if m.ID == 77 {
 				return true
 			}
@@ -269,7 +269,7 @@ func TestWorker_RecordsTheSentMessageAndDropsTheEntry(t *testing.T) {
 		return !still
 	})
 
-	msgs := st.Messages(1)
+	msgs := st.Messages(domain.HistoryKey{ChatID: 1})
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "hi", msgs[0].Text)
 	assert.True(t, msgs[0].IsOut)

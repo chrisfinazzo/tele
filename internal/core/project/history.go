@@ -59,7 +59,7 @@ func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
 	// still hold a queued send, and that is the only thing it has to show.
 	out.Outbox = r.Outbox(w.ChatID)
 
-	all := r.Messages(w.ChatID)
+	all := r.Messages(domain.HistoryKey{ChatID: w.ChatID})
 	if len(all) == 0 {
 		return out
 	}
