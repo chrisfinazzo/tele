@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.10] - 2026-10-04
+
 ### Added
 
 - Forum topics. A group with topics opens into its topic list in the chat list
