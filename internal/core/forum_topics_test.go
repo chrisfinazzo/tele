@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -27,23 +28,40 @@ type topicConn struct {
 	asked []int64
 	byIDs [][]int
 	gate  chan struct{}
+	// topicPages is what getReplies answers for each topic.
+	topicPages map[int][]domain.Message
+	replies    []repliesCall
+	// nextPages is what a page past the first answers; offsets what was asked.
+	nextPages map[int64]internaltg.ForumTopicsPage
+	offsets   []internaltg.TopicsOffset
 }
 
 func newTopicConn() *topicConn {
 	return &topicConn{
-		stubConn: &stubConn{},
-		pages:    make(map[int64]internaltg.ForumTopicsPage),
-		byID:     make(map[int64]internaltg.ForumTopicsPage),
+		stubConn:  &stubConn{},
+		pages:     make(map[int64]internaltg.ForumTopicsPage),
+		nextPages: make(map[int64]internaltg.ForumTopicsPage),
+		byID:      make(map[int64]internaltg.ForumTopicsPage),
 	}
 }
 
 func (c *topicConn) GetArchivedDialogs(context.Context) ([]domain.Chat, error) { return nil, nil }
 
-func (c *topicConn) GetForumTopics(_ context.Context, peer domain.Peer, _ int) (internaltg.ForumTopicsPage, error) {
+func (c *topicConn) GetForumTopics(_ context.Context, peer domain.Peer, after internaltg.TopicsOffset, _ int) (internaltg.ForumTopicsPage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if after != (internaltg.TopicsOffset{}) {
+		c.offsets = append(c.offsets, after)
+		return c.nextPages[peer.ID], nil
+	}
 	c.asked = append(c.asked, peer.ID)
 	return c.pages[peer.ID], nil
+}
+
+func (c *topicConn) offsetsAsked() []internaltg.TopicsOffset {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]internaltg.TopicsOffset(nil), c.offsets...)
 }
 
 func (c *topicConn) GetForumTopicsByID(_ context.Context, peer domain.Peer, ids []int) (internaltg.ForumTopicsPage, error) {
@@ -54,6 +72,24 @@ func (c *topicConn) GetForumTopicsByID(_ context.Context, peer domain.Peer, ids 
 	defer c.mu.Unlock()
 	c.byIDs = append(c.byIDs, append([]int(nil), ids...))
 	return c.byID[peer.ID], nil
+}
+
+// repliesCall records one getReplies request.
+type repliesCall struct {
+	topic, offsetID int
+}
+
+func (c *topicConn) GetReplies(_ context.Context, _ domain.Peer, topicID, offsetID, _ int) ([]domain.Message, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.replies = append(c.replies, repliesCall{topic: topicID, offsetID: offsetID})
+	return c.topicPages[topicID], nil
+}
+
+func (c *topicConn) repliesCalls() []repliesCall {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]repliesCall(nil), c.replies...)
 }
 
 func (c *topicConn) askedFor() []int64 {
@@ -172,6 +208,101 @@ func TestOwner_TopicReadsAskedForMeanwhileGoOutTogether(t *testing.T) {
 
 	require.Eventually(t, func() bool { return len(c.byIDCalls()) == 2 }, time.Second, 5*time.Millisecond)
 	assert.Equal(t, [][]int{{30}, {31, 32}}, c.byIDCalls())
+}
+
+func topicHistory(topic int, ids ...int) []domain.Message {
+	out := make([]domain.Message, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, domain.Message{ID: id, ChatID: forumChat, TopicID: topic, Date: time.Unix(int64(id), 0)})
+	}
+	return out
+}
+
+// A topic's scrollback is the topic's own: it is fetched with getReplies from
+// the oldest message the topic holds, never with the forum's history, which
+// would bring every other topic's messages instead.
+func TestOwner_ScrollingATopicFetchesThatTopicsHistory(t *testing.T) {
+	c := newTopicConn()
+	c.topicPages = map[int][]domain.Message{12: topicHistory(12, 3, 5, 8)}
+	o, s := forumOwner(t, c)
+	s.Store().SetTopicsPage(forumChat, []domain.Topic{{ChatID: forumChat, ID: 12, Title: "Releases"}})
+	s.Store().AppendMessage(topicHistory(12, 20)[0])
+	h := domain.HistoryKey{ChatID: forumChat, TopicID: 12}
+
+	o.Subscribe(project.HistoryWindow{ChatID: forumChat, TopicID: 12, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10})
+
+	require.Eventually(t, func() bool { return len(s.Store().Messages(h)) == 4 }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, []repliesCall{{topic: 12, offsetID: 20}}, c.repliesCalls())
+	assert.Zero(t, c.calls.Load(), "the forum's own history is never asked for")
+}
+
+func TestOwner_GeneralIsFetchedAsATopicToo(t *testing.T) {
+	c := newTopicConn()
+	c.topicPages = map[int][]domain.Message{domain.GeneralTopicID: topicHistory(0, 3)}
+	o, s := forumOwner(t, c)
+	h := domain.HistoryKey{ChatID: forumChat, TopicID: domain.GeneralTopicID}
+
+	o.Subscribe(project.HistoryWindow{ChatID: forumChat, TopicID: domain.GeneralTopicID, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10})
+
+	require.Eventually(t, func() bool { return len(s.Store().Messages(h)) == 1 }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, []repliesCall{{topic: domain.GeneralTopicID, offsetID: 0}}, c.repliesCalls())
+}
+
+// A forum's gap lies across every topic, and is closed by the forum's own
+// history laid out among them: opening one topic repairs all of them.
+func TestOwner_ClosingAForumsGapRepairsEveryTopic(t *testing.T) {
+	c := newTopicConn()
+	c.server = append(append(topicHistory(12, 1, 2), topicHistory(30, 3)...), append(topicHistory(30, 4), topicHistory(12, 5)...)...)
+	o, s := forumOwner(t, c)
+	chat := forumDialog()
+	chat.TopMessageID = 5
+	s.Store().SetChat(chat)
+	s.Store().SetMessages(forumChat, append(topicHistory(12, 1, 2), topicHistory(30, 3)...))
+	s.Store().MarkGap(forumChat, 3)
+
+	o.Subscribe(project.HistoryWindow{ChatID: forumChat, TopicID: 12, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 1})
+
+	require.Eventually(t, func() bool {
+		_, open := s.Store().Gap(forumChat)
+		return !open
+	}, time.Second, 5*time.Millisecond)
+	assert.Equal(t, []int{1, 2, 5}, msgIDs(s.Store().Messages(domain.HistoryKey{ChatID: forumChat, TopicID: 12})))
+	assert.Equal(t, []int{3, 4}, msgIDs(s.Store().Messages(domain.HistoryKey{ChatID: forumChat, TopicID: 30})),
+		"the topic nobody opened was repaired with it")
+}
+
+func msgIDs(ms []domain.Message) []int {
+	out := make([]int, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.ID)
+	}
+	return out
+}
+
+func activeTopic(id int, sec int64) domain.Topic {
+	return domain.Topic{ChatID: forumChat, ID: id, Title: "t", TopMessageID: id * 10,
+		LastMessage: &domain.Message{ID: id * 10, ChatID: forumChat, Date: time.Unix(sec, 0)}}
+}
+
+// A topic list scrolled past what the first page brought asks for the next
+// page, after the last topic it has; one that has all of them asks nothing.
+func TestOwner_ScrollingTheTopicListLoadsTheNextPage(t *testing.T) {
+	c := newTopicConn()
+	c.dialogs = []domain.Chat{forumDialog()}
+	c.pages[forumChat] = internaltg.ForumTopicsPage{Total: 3, Topics: []domain.Topic{activeTopic(12, 300), activeTopic(30, 200)}}
+	c.nextPages[forumChat] = internaltg.ForumTopicsPage{Total: 3, Topics: []domain.Topic{activeTopic(31, 100)}}
+	o, s := newOwnerWithClient(t, c)
+	require.NoError(t, o.Bootstrap(context.Background()))
+	require.Eventually(t, func() bool { return len(s.Store().Topics(forumChat)) == 2 }, time.Second, 5*time.Millisecond)
+
+	id := o.Subscribe(project.TopicListWindow{ChatID: forumChat, Limit: 10})
+
+	require.Eventually(t, func() bool { return len(s.Store().Topics(forumChat)) == 3 }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, []internaltg.TopicsOffset{{Date: time.Unix(200, 0), MsgID: 300, TopicID: 30}}, c.offsetsAsked())
+
+	o.MoveWindow(id, project.TopicListWindow{ChatID: forumChat, Limit: 20})
+	time.Sleep(30 * time.Millisecond)
+	assert.Len(t, c.offsetsAsked(), 1, "every topic is held, so there is nothing more to ask for")
 }
 
 func TestOwner_BootstrapLoadsEachForumsTopics(t *testing.T) {

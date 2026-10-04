@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -10,19 +11,34 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// GetForumTopics fetches the first page of a forum's topics, newest activity
-// first, the order the official clients list them in.
-func (c *GotdClient) GetForumTopics(ctx context.Context, peer domain.Peer, limit int) (ForumTopicsPage, error) {
+// TopicsOffset is where a page of topics continues from: the last topic of the
+// page before it and its newest message. The zero value asks for the first
+// page.
+type TopicsOffset struct {
+	Date    time.Time
+	MsgID   int
+	TopicID int
+}
+
+// GetForumTopics fetches a page of a forum's topics, newest activity first, the
+// order the official clients list them in.
+func (c *GotdClient) GetForumTopics(ctx context.Context, peer domain.Peer, after TopicsOffset, limit int) (ForumTopicsPage, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return ForumTopicsPage{}, err
 	}
+	req := &tg.MessagesGetForumTopicsRequest{
+		Peer:        peerToInput(peer),
+		OffsetID:    after.MsgID,
+		OffsetTopic: after.TopicID,
+		Limit:       limit,
+	}
+	if !after.Date.IsZero() {
+		req.OffsetDate = int(after.Date.Unix())
+	}
 	var page ForumTopicsPage
 	err = WithRetry(ctx, func() error {
-		res, err := api.MessagesGetForumTopics(ctx, &tg.MessagesGetForumTopicsRequest{
-			Peer:  peerToInput(peer),
-			Limit: limit,
-		})
+		res, err := api.MessagesGetForumTopics(ctx, req)
 		if err != nil {
 			c.log.Error("MessagesGetForumTopics failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 			return err
@@ -31,6 +47,35 @@ func (c *GotdClient) GetForumTopics(ctx context.Context, peer domain.Peer, limit
 		return nil
 	})
 	return page, err
+}
+
+// GetReplies fetches a page of one topic's history, older than offsetID, or
+// the newest when offsetID is zero. A topic's history is its replies thread:
+// General's is thread 1, as the official clients read it.
+func (c *GotdClient) GetReplies(ctx context.Context, peer domain.Peer, topicID, offsetID, limit int) ([]domain.Message, error) {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
+	}
+	var msgs []domain.Message
+	err = WithRetry(ctx, func() error {
+		res, err := api.MessagesGetReplies(ctx, &tg.MessagesGetRepliesRequest{
+			Peer:     peerToInput(peer),
+			MsgID:    topicID,
+			OffsetID: offsetID,
+			Limit:    limit,
+		})
+		if err != nil {
+			c.log.Error("MessagesGetReplies failed", zap.Int64("peer_id", peer.ID), zap.Int("topic", topicID), zap.Error(err))
+			return err
+		}
+		msgs = parseHistory(res, peer.ID)
+		for _, m := range msgs {
+			c.senderNames.put(m.SenderID, m.SenderName)
+		}
+		return nil
+	})
+	return msgs, err
 }
 
 // GetForumTopicsByID fetches named topics of a forum: the authoritative state
@@ -87,6 +132,9 @@ func topicServiceEvent(raw tg.MessageClass) (store.Event, bool) {
 type ForumTopicsPage struct {
 	Topics  []domain.Topic
 	Deleted []int
+	// Total is how many topics the forum has in all, which is how a reader of
+	// one page knows whether there is another.
+	Total int
 }
 
 // parseForumTopics converts a getForumTopics or getForumTopicsByID answer. The
@@ -95,7 +143,7 @@ type ForumTopicsPage struct {
 func parseForumTopics(res *tg.MessagesForumTopics, chatID int64) ForumTopicsPage {
 	msgs := parseHistory(&tg.MessagesMessages{Messages: res.Messages, Users: res.Users, Chats: res.Chats}, chatID)
 
-	var page ForumTopicsPage
+	page := ForumTopicsPage{Total: res.Count}
 	for _, raw := range res.Topics {
 		switch t := raw.(type) {
 		case *tg.ForumTopic:

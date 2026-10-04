@@ -24,8 +24,12 @@ type Client interface {
 	// it. A page whose newest message is not past afterID means there is
 	// nothing newer to fetch.
 	GetHistoryAfter(ctx context.Context, peer domain.Peer, afterID int, limit int) ([]domain.Message, error)
-	// GetForumTopics fetches the first page of a forum's topics (#275).
-	GetForumTopics(ctx context.Context, peer domain.Peer, limit int) (ForumTopicsPage, error)
+	// GetForumTopics fetches a page of a forum's topics, the first for a zero
+	// offset (#275).
+	GetForumTopics(ctx context.Context, peer domain.Peer, after TopicsOffset, limit int) (ForumTopicsPage, error)
+	// GetReplies fetches a page of one forum topic's history older than
+	// offsetID, or the newest when offsetID is zero.
+	GetReplies(ctx context.Context, peer domain.Peer, topicID, offsetID, limit int) ([]domain.Message, error)
 	// GetForumTopicsByID fetches the current state of named topics of a forum.
 	GetForumTopicsByID(ctx context.Context, peer domain.Peer, ids []int) (ForumTopicsPage, error)
 	// RefreshMessage re-fetches a single message to obtain fresh media file

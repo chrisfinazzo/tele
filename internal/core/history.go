@@ -49,7 +49,16 @@ func (o *Owner) backfill(ctx context.Context, w project.HistoryWindow) {
 	}
 	// Read here rather than kept in a field: a changed history limit applies to
 	// the next backfill, which is this one.
-	fetched, err := o.client.GetHistory(ctx, chat.Peer, offsetID, o.Config().UI.HistoryLimit)
+	limit := o.Config().UI.HistoryLimit
+	var fetched []domain.Message
+	var err error
+	if w.TopicID != 0 {
+		// A topic's scrollback is its own thread. The forum's history would
+		// bring every other topic's messages in its place.
+		fetched, err = o.client.GetReplies(ctx, chat.Peer, w.TopicID, offsetID, limit)
+	} else {
+		fetched, err = o.client.GetHistory(ctx, chat.Peer, offsetID, limit)
+	}
 	if err != nil {
 		o.log.Warn("history backfill failed", zap.Int64("chat", w.ChatID), zap.Error(err))
 		// The client asked for a window it cannot fill itself, so it has to be

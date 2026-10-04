@@ -9,6 +9,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 // Start connects to Telegram and runs until ctx is cancelled. The caller runs it
@@ -134,12 +135,12 @@ func (o *Owner) loadForumTopics(ctx context.Context, chats []domain.Chat) {
 		if !chat.IsForum {
 			continue
 		}
-		page, err := o.client.GetForumTopics(ctx, chat.Peer, forumTopicsPage)
+		page, err := o.client.GetForumTopics(ctx, chat.Peer, internaltg.TopicsOffset{}, forumTopicsPage)
 		if err != nil {
 			o.log.Warn("forum topics load failed", zap.Int64("chat", chat.ID), zap.Error(err))
 			continue
 		}
-		o.state.ApplyTopicsPage(chat.ID, page.Topics, page.Deleted)
+		o.applyFirstTopicsPage(chat.ID, page)
 	}
 }
 

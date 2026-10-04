@@ -10,6 +10,7 @@ import (
 
 func TestParseForumTopics(t *testing.T) {
 	res := &tg.MessagesForumTopics{
+		Count: 140,
 		Topics: []tg.ForumTopicClass{
 			&tg.ForumTopic{
 				ID: 12, Title: "Releases", Pinned: true, TopMessage: 40,
@@ -55,4 +56,5 @@ func TestParseForumTopics(t *testing.T) {
 	assert.Equal(t, "hello", gen.LastMessage.Text)
 
 	assert.Equal(t, []int{30}, page.Deleted)
+	assert.Equal(t, 140, page.Total, "how many topics the forum has, beyond this page")
 }

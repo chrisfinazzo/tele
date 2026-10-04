@@ -51,8 +51,15 @@ func (o *Owner) Refresh() { o.registry.Refresh() }
 // reasons: the chat has a recorded gap, which is a hole somebody has to close,
 // and the window came back short, which is history nobody has fetched yet.
 func (o *Owner) maybeFetch(id project.SubID, w project.Window) {
+	if o.client == nil {
+		return
+	}
+	if tw, ok := w.(project.TopicListWindow); ok {
+		o.maybeFetchTopics(tw)
+		return
+	}
 	cw, ok := w.(project.HistoryWindow)
-	if !ok || o.client == nil {
+	if !ok {
 		return
 	}
 	_, hasGap := o.state.Store().Gap(cw.ChatID)

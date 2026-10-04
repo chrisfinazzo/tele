@@ -39,8 +39,12 @@ func (m *mockClient) GetHistory(_ context.Context, _ domain.Peer, _ int, _ int) 
 	return m.history, nil
 }
 
-func (m *mockClient) GetForumTopics(_ context.Context, _ domain.Peer, _ int) (internaltg.ForumTopicsPage, error) {
+func (m *mockClient) GetForumTopics(_ context.Context, _ domain.Peer, _ internaltg.TopicsOffset, _ int) (internaltg.ForumTopicsPage, error) {
 	return internaltg.ForumTopicsPage{}, nil
+}
+
+func (m *mockClient) GetReplies(_ context.Context, _ domain.Peer, _, _, _ int) ([]domain.Message, error) {
+	return m.history, nil
 }
 
 func (m *mockClient) GetForumTopicsByID(_ context.Context, _ domain.Peer, _ []int) (internaltg.ForumTopicsPage, error) {
