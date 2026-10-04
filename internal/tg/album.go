@@ -96,6 +96,8 @@ type SendAlbumParams struct {
 	Peer         domain.Peer
 	Items        []AlbumItem
 	ReplyToMsgID int
+	// TopicID is the forum topic the send lands in, 0 outside a forum (#275).
+	TopicID int
 	// RandomIDs is one deduplication key per item, in item order. They belong to
 	// the caller and must stay the same across every retry of one logical send:
 	// Telegram deduplicates on them, so fresh ones per attempt are how a retried
@@ -103,7 +105,7 @@ type SendAlbumParams struct {
 	RandomIDs []int64
 }
 
-func buildSendMultiMediaRequest(inputPeer tg.InputPeerClass, items []AlbumItem, randomIDs []int64, replyToMsgID int) *tg.MessagesSendMultiMediaRequest {
+func buildSendMultiMediaRequest(inputPeer tg.InputPeerClass, items []AlbumItem, randomIDs []int64, replyToMsgID, topicID int) *tg.MessagesSendMultiMediaRequest {
 	multi := make([]tg.InputSingleMedia, 0, len(items))
 	for i, it := range items {
 		single := tg.InputSingleMedia{
@@ -120,8 +122,8 @@ func buildSendMultiMediaRequest(inputPeer tg.InputPeerClass, items []AlbumItem, 
 		Peer:       inputPeer,
 		MultiMedia: multi,
 	}
-	if replyToMsgID != 0 {
-		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	if r := replyHeader(replyToMsgID, topicID); r != nil {
+		req.ReplyTo = r
 	}
 	return req
 }
@@ -153,7 +155,7 @@ func (c *GotdClient) SendAlbum(ctx context.Context, p SendAlbumParams) ([]int, e
 		// used to be regenerated here, on the belief that a retried batch must
 		// not reuse the failed attempt's IDs — which is backwards: reusing them
 		// is exactly what stops Telegram from accepting the batch twice (#193).
-		updates, err := api.MessagesSendMultiMedia(ctx, buildSendMultiMediaRequest(inputPeer, p.Items, p.RandomIDs, p.ReplyToMsgID))
+		updates, err := api.MessagesSendMultiMedia(ctx, buildSendMultiMediaRequest(inputPeer, p.Items, p.RandomIDs, p.ReplyToMsgID, p.TopicID))
 		if err != nil {
 			c.log.Error("MessagesSendMultiMedia failed", zap.Error(err))
 			return err

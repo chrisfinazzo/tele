@@ -55,7 +55,7 @@ func (f *fakeReader) Messages(h domain.HistoryKey) []domain.Message {
 
 func (f *fakeReader) FolderFilters() []domain.FolderFilter { return f.filters }
 
-func (f *fakeReader) Outbox(chatID int64) []domain.OutboxEntry { return f.outbox[chatID] }
+func (f *fakeReader) Outbox(h domain.HistoryKey) []domain.OutboxEntry { return f.outbox[h.ChatID] }
 
 func chats(n int) []domain.Chat {
 	out := make([]domain.Chat, 0, n)

@@ -294,13 +294,21 @@ type HistoryKey struct {
 // forum that is the chat's one history whatever the message says; inside one,
 // a message that names no topic is in General.
 func (c Chat) HistoryOf(m Message) HistoryKey {
+	return c.History(m.TopicID)
+}
+
+// History names the history Telegram means by a topic id of this chat. Outside
+// a forum every topic id means the chat's one history; inside one, no topic
+// means General, which is how Telegram names General in a message, a draft or
+// a typing update.
+func (c Chat) History(topicID int) HistoryKey {
 	if !c.IsForum {
 		return HistoryKey{ChatID: c.ID}
 	}
-	if m.TopicID == 0 {
+	if topicID == 0 {
 		return HistoryKey{ChatID: c.ID, TopicID: GeneralTopicID}
 	}
-	return HistoryKey{ChatID: c.ID, TopicID: m.TopicID}
+	return HistoryKey{ChatID: c.ID, TopicID: topicID}
 }
 
 type Message struct {

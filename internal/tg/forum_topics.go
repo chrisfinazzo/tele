@@ -101,6 +101,36 @@ func (c *GotdClient) GetForumTopicsByID(ctx context.Context, peer domain.Peer, i
 	return page, err
 }
 
+// replyHeader says where a message goes in its chat: what it replies to, and in
+// a forum which topic it lands in. A plain message in a topic names the topic
+// as what it replies to; a reply inside the topic names the message it
+// answers and carries the topic as its top. General takes messages that name
+// no topic, so sending there is sending an ordinary message (#275).
+func replyHeader(replyToMsgID, topicID int) tg.InputReplyToClass {
+	if topicID == domain.GeneralTopicID {
+		topicID = 0
+	}
+	switch {
+	case replyToMsgID != 0 && topicID != 0:
+		return &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID, TopMsgID: topicID}
+	case replyToMsgID != 0:
+		return &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	case topicID != 0:
+		return &tg.InputReplyToMessage{ReplyToMsgID: topicID}
+	}
+	return nil
+}
+
+// buildSetTypingRequest reports typing in a chat, or in one topic of a forum;
+// in General it is reported as in any ordinary chat.
+func buildSetTypingRequest(inputPeer tg.InputPeerClass, action tg.SendMessageActionClass, topicID int) *tg.MessagesSetTypingRequest {
+	req := &tg.MessagesSetTypingRequest{Peer: inputPeer, Action: action}
+	if topicID != 0 && topicID != domain.GeneralTopicID {
+		req.TopMsgID = topicID
+	}
+	return req
+}
+
 // topicServiceEvent recognises the service message that opens or edits a
 // forum topic. It names the topic to read again: the one the message opened,
 // or the one it was posted in.

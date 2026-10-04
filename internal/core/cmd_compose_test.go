@@ -11,13 +11,15 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
-func (s *stubClient) SetTyping(_ context.Context, _ domain.Peer, _ domain.TypingAction) error {
+func (s *stubClient) SetTyping(_ context.Context, _ domain.Peer, topic int, _ domain.TypingAction) error {
 	s.typingCalls++
+	s.typingTopic = topic
 	return s.err
 }
 
-func (s *stubClient) SaveDraft(_ context.Context, _ domain.Peer, text string) error {
+func (s *stubClient) SaveDraft(_ context.Context, _ domain.Peer, topic int, text string) error {
 	s.draftText = text
+	s.draftTopic = topic
 	return s.err
 }
 
@@ -25,7 +27,7 @@ func TestSaveDraft_StoresTheDraftOnSuccess(t *testing.T) {
 	c := &stubClient{}
 	o, st := newCmdOwner(t, c)
 
-	require.NoError(t, o.SaveDraft(context.Background(), 1, "unsent"))
+	require.NoError(t, o.SaveDraft(context.Background(), domain.HistoryKey{ChatID: 1}, "unsent"))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, "unsent", chat.Draft)
@@ -38,7 +40,7 @@ func TestSaveDraft_KeepsTheLocalDraftWhenTheSyncFails(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.Network}}
 	o, st := newCmdOwner(t, c)
 
-	require.Error(t, o.SaveDraft(context.Background(), 1, "unsent"))
+	require.Error(t, o.SaveDraft(context.Background(), domain.HistoryKey{ChatID: 1}, "unsent"))
 
 	chat, _ := st.GetChat(1)
 	assert.Equal(t, "unsent", chat.Draft)
@@ -48,7 +50,7 @@ func TestSetTyping_ReturnsTheErrorWithoutTouchingState(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.Network}}
 	o, _ := newCmdOwner(t, c)
 
-	assert.Error(t, o.SetTyping(context.Background(), 1, domain.TypingActionTyping))
+	assert.Error(t, o.SetTyping(context.Background(), domain.HistoryKey{ChatID: 1}, domain.TypingActionTyping))
 	assert.Equal(t, 1, c.typingCalls)
 }
 
@@ -56,7 +58,7 @@ func TestSetTyping_UnknownChatIsPeerNotFound(t *testing.T) {
 	c := &stubClient{}
 	o, _ := newCmdOwner(t, c)
 
-	err := o.SetTyping(context.Background(), 404, domain.TypingActionTyping)
+	err := o.SetTyping(context.Background(), domain.HistoryKey{ChatID: 404}, domain.TypingActionTyping)
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 	assert.Equal(t, 0, c.typingCalls, "an unknown chat never reaches Telegram")

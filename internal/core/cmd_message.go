@@ -30,8 +30,11 @@ func (o *Owner) messageByID(chatID int64, msgID int) (domain.Message, error) {
 //
 // Both ends are chat IDs like every other command. A target the account has no
 // dialog with, such as a search hit, resolves through the address search left
-// behind (#278).
-func (o *Owner) Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error {
+// behind (#278). The target is a history rather than a chat: forwarding into a
+// forum is forwarding into one of its topics, and the comment goes there too
+// (#275).
+func (o *Owner) Forward(ctx context.Context, fromChatID int64, target domain.HistoryKey, msgIDs []int, comment string) error {
+	toChatID := target.ChatID
 	// Forwarding crosses four layers (client -> owner -> tg -> update stream)
 	// and shows nothing until the last one delivers, so each step says what it
 	// did: "forward:" in the log is the whole path (#198).
@@ -57,13 +60,13 @@ func (o *Owner) Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs 
 		// ApplyIncoming that used to sit here existed only because echo
 		// suppression hid the comment and no optimistic bubble would ever show
 		// it; with suppression gone for text it arrives the ordinary way (#193).
-		if err := o.Send(ctx, SendRequest{Ref: NewRef(), ChatID: toChatID, Text: comment}); err != nil {
+		if err := o.Send(ctx, SendRequest{Ref: NewRef(), ChatID: toChatID, TopicID: target.TopicID, Text: comment}); err != nil {
 			o.log.Debug("forward: comment could not be queued", zap.Error(err))
 			return err
 		}
 		o.log.Debug("forward: comment queued", zap.Int64("to_chat", toChatID))
 	}
-	if err := o.client.ForwardMessages(ctx, from, to, msgIDs); err != nil {
+	if err := o.client.ForwardMessages(ctx, from, to, target.TopicID, msgIDs); err != nil {
 		o.log.Debug("forward: telegram refused", zap.Error(err))
 		return err
 	}

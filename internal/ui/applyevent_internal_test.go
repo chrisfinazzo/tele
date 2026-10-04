@@ -105,7 +105,7 @@ type cmdCall struct {
 // empty one reads the same.
 type storeReader struct{ store.Store }
 
-func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
+func (storeReader) Outbox(domain.HistoryKey) []domain.OutboxEntry { return nil }
 
 func newOwnerStub(st store.Store) *ownerStub {
 	o := &ownerStub{state: state.New(st), mediaPaths: make(map[mediaKey]string)}
@@ -272,14 +272,15 @@ func (o *ownerStub) InvalidateAvatar(userID, avatarID int64) {
 	o.avatarsInvalidated = append(o.avatarsInvalidated, avatarKey{userID, avatarID})
 }
 
-func (o *ownerStub) SetTyping(_ context.Context, chatID int64, _ domain.TypingAction) error {
-	o.calls = append(o.calls, cmdCall{name: "SetTyping", chatID: chatID})
+func (o *ownerStub) SetTyping(_ context.Context, h domain.HistoryKey, _ domain.TypingAction) error {
+	o.calls = append(o.calls, cmdCall{name: "SetTyping", chatID: h.ChatID})
 	return o.err
 }
 
-func (o *ownerStub) SaveDraft(_ context.Context, chatID int64, text string) error {
+func (o *ownerStub) SaveDraft(_ context.Context, h domain.HistoryKey, text string) error {
+	chatID := h.ChatID
 	o.calls = append(o.calls, cmdCall{name: "SaveDraft", chatID: chatID})
-	o.state.ApplyDraft(chatID, text)
+	o.state.ApplyDraft(chatID, h.TopicID, text)
 	return o.err
 }
 
@@ -313,7 +314,8 @@ func (o *ownerStub) DiscardOutbox(ref string) error {
 	return o.err
 }
 
-func (o *ownerStub) Forward(_ context.Context, fromChatID, toChatID int64, _ []int, _ string) error {
+func (o *ownerStub) Forward(_ context.Context, fromChatID int64, target domain.HistoryKey, _ []int, _ string) error {
+	toChatID := target.ChatID
 	o.calls = append(o.calls, cmdCall{name: "Forward", chatID: fromChatID})
 	if o.err != nil {
 		return o.err

@@ -83,7 +83,7 @@ func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
 	out.Draft = read.draft
 	// Read before the empty-history return below: a chat with nothing stored can
 	// still hold a queued send, and that is the only thing it has to show.
-	out.Outbox = r.Outbox(w.ChatID)
+	out.Outbox = r.Outbox(w.History())
 
 	all := r.Messages(w.History())
 	if len(all) == 0 {

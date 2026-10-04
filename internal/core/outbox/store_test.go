@@ -99,6 +99,51 @@ func TestReopen_KeepsEntriesAndResetsSending(t *testing.T) {
 	assert.True(t, got.NextAttemptAt.IsZero())
 }
 
+// A send composed in a forum topic goes to that topic, however long it waits
+// and whether or not the process that queued it is still running (#275).
+func TestReopen_KeepsTheTopicASendWasComposedIn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	e := textEntry("a", 50, "one")
+	e.TopicID = 12
+	_, _, err = s.Add(e)
+	require.NoError(t, err)
+
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	got, ok := reopened.Get("a")
+	require.True(t, ok)
+	assert.Equal(t, 12, got.TopicID)
+	assert.Len(t, reopened.ForHistory(domain.HistoryKey{ChatID: 50, TopicID: 12}), 1)
+	assert.Empty(t, reopened.ForHistory(domain.HistoryKey{ChatID: 50}))
+}
+
+// A queue written before topics were told apart has no topic column; its
+// sends are each chat's own, as they always were.
+func TestNewStore_ReadsAQueueFromBeforeTopics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	db := openDB(t, path)
+	_, err := db.Exec(`CREATE TABLE outbox (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL UNIQUE,
+		chat_id INTEGER NOT NULL, random_id INTEGER NOT NULL, kind TEXT NOT NULL,
+		payload TEXT NOT NULL, state TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+		next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+		err_kind TEXT NOT NULL DEFAULT '', err_detail TEXT NOT NULL DEFAULT '')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO outbox (ref, chat_id, random_id, kind, payload, state, created_at)
+		VALUES ('a', 10, 1, 'text', '{"text":"old"}', 'queued', 1)`)
+	require.NoError(t, err)
+
+	s, err := NewStore(db)
+	require.NoError(t, err)
+
+	got := s.ForHistory(domain.HistoryKey{ChatID: 10})
+	require.Len(t, got, 1)
+	assert.Zero(t, got[0].TopicID)
+}
+
 func TestForChat_ReturnsOnlyItsOwnInSubmissionOrder(t *testing.T) {
 	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
 	require.NoError(t, err)

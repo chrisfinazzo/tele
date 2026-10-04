@@ -180,6 +180,19 @@ func (s *SQLiteStore) forgetTopicCountsLocked(h domain.HistoryKey) {
 	delete(s.topicMentions, h)
 }
 
+// SetTopicDraft records a topic's unsent draft. A topic nothing is known about
+// yet is held by its id, as an arriving message would hold it.
+func (s *SQLiteStore) SetTopicDraft(chatID int64, topicID int, text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.topics[chatID][topicID]
+	if !ok {
+		t = domain.Topic{ChatID: chatID, ID: topicID}
+	}
+	t.Draft = text
+	s.putTopicLocked(t)
+}
+
 // RemoveTopics forgets topics Telegram reported deleted.
 func (s *SQLiteStore) RemoveTopics(chatID int64, ids []int) {
 	s.mu.Lock()

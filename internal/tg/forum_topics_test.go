@@ -8,6 +8,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// A message lands in a topic by naming it as what it replies to; a reply inside
+// the topic names the topic as its top instead. General is where a message that
+// names no topic lands, so it is sent as an ordinary message.
+func TestReplyHeader(t *testing.T) {
+	cases := []struct {
+		name           string
+		replyTo, topic int
+		want           tg.InputReplyToClass
+	}{
+		{"nothing", 0, 0, nil},
+		{"a reply outside a forum", 40, 0, &tg.InputReplyToMessage{ReplyToMsgID: 40}},
+		{"a message in a topic", 0, 12, &tg.InputReplyToMessage{ReplyToMsgID: 12}},
+		{"a reply in a topic", 40, 12, &tg.InputReplyToMessage{ReplyToMsgID: 40, TopMsgID: 12}},
+		{"a message in General", 0, 1, nil},
+		{"a reply in General", 40, 1, &tg.InputReplyToMessage{ReplyToMsgID: 40}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := replyHeader(tc.replyTo, tc.topic)
+			if tc.want == nil {
+				assert.Nil(t, got)
+				return
+			}
+			want := tc.want.(*tg.InputReplyToMessage)
+			gotMsg, ok := got.(*tg.InputReplyToMessage)
+			require.True(t, ok)
+			assert.Equal(t, want.ReplyToMsgID, gotMsg.ReplyToMsgID)
+			assert.Equal(t, want.TopMsgID, gotMsg.TopMsgID)
+		})
+	}
+}
+
 func TestParseForumTopics(t *testing.T) {
 	res := &tg.MessagesForumTopics{
 		Count: 140,

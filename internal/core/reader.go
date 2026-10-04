@@ -26,11 +26,11 @@ func (o *Owner) reader() projectionReader {
 	return projectionReader{Store: o.state.Store(), owner: o}
 }
 
-// Outbox returns a chat's queued sends, or nothing while no queue is set —
+// Outbox returns a history's queued sends, or nothing while no queue is set —
 // the case for an owner built without one, as tests do.
-func (r projectionReader) Outbox(chatID int64) []domain.OutboxEntry {
+func (r projectionReader) Outbox(h domain.HistoryKey) []domain.OutboxEntry {
 	if r.owner == nil || r.owner.outbox == nil {
 		return nil
 	}
-	return r.owner.outbox.ForChat(chatID)
+	return r.owner.outbox.ForHistory(h)
 }

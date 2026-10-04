@@ -41,7 +41,9 @@ const OpSend = "send"
 // The client shows it and lets it expire.
 type Typing struct {
 	ChatID int64
-	Label  string
+	// TopicID is the forum topic the typing is in, 0 outside a forum (#275).
+	TopicID int
+	Label   string
 }
 
 // Incoming is the event stream a client renders alongside its projections.

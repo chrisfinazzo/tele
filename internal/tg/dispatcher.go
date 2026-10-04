@@ -310,7 +310,7 @@ func setupDispatcher(
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateChannelUserTyping) error {
 		action := convertTypingAction(upd.Action)
 		select {
-		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.ChannelID, TypingAction: action}:
+		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.ChannelID, TopicID: upd.TopMsgID, TypingAction: action}:
 		default:
 			logDrop("channel_typing")
 		}
@@ -353,9 +353,10 @@ func setupDispatcher(
 		}
 		select {
 		case mustDeliver <- store.Event{
-			Kind:   store.EventDraftMessage,
-			ChatID: chatID,
-			Draft:  draftText(upd.Draft),
+			Kind:    store.EventDraftMessage,
+			ChatID:  chatID,
+			Draft:   draftText(upd.Draft),
+			TopicID: upd.TopMsgID,
 		}:
 		case <-ctx.Done():
 		}

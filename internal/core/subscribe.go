@@ -83,7 +83,7 @@ func needsBackfill(c project.HistoryContents, w project.HistoryWindow) bool {
 // if it were held as one.
 func (o *Owner) publishChange(chg state.Change) {
 	if chg.Kind == state.ChangeTyping {
-		o.publishTyping(Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
+		o.publishTyping(Typing{ChatID: chg.ChatID, TopicID: chg.TopicID, Label: chg.Typing.Label()})
 		return
 	}
 	// A message arriving may be one this owner queued. Dropping the entry here,

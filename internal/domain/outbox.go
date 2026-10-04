@@ -78,6 +78,10 @@ type OutboxEntry struct {
 	// ordering by this.
 	Seq    int64
 	ChatID int64
+	// TopicID is the forum topic the send was composed in, 0 outside a forum.
+	// The chat and the topic together name the history the send is queued in,
+	// and FIFO holds within a history rather than a whole forum (#275).
+	TopicID int
 	// RandomID is Telegram's deduplication key, derived from Ref so that a
 	// resubmission in the window before anything was persisted still produces
 	// the same value.

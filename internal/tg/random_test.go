@@ -20,7 +20,7 @@ func TestNewRandomID_IsNonZeroAndVaries(t *testing.T) {
 // sendMessageFunc is the shape SendMessage has to keep: a trailing random_id
 // the caller owns. Named so the assertion below states a contract rather than
 // restating an inferable type.
-type sendMessageFunc func(context.Context, domain.Peer, string, int, []domain.MessageEntity, int64) (domain.Message, error)
+type sendMessageFunc func(context.Context, domain.Peer, string, int, int, []domain.MessageEntity, int64) (domain.Message, error)
 
 // The send methods must take random_id from the caller. Generating it inside
 // the WithRetry closure meant every retry carried a fresh one, which Telegram

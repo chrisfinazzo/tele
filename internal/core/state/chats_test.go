@@ -115,7 +115,7 @@ func TestApplyDraft_StoresAndReportsChange(t *testing.T) {
 	s, st := newState(t)
 	st.SetChat(domain.Chat{ID: 1})
 
-	chg, ok := s.ApplyDraft(1, "hello")
+	chg, ok := s.ApplyDraft(1, 0, "hello")
 
 	require.True(t, ok)
 	assert.Equal(t, state.ChangeDraft, chg.Kind)
@@ -128,7 +128,7 @@ func TestApplyDraft_StoresAndReportsChange(t *testing.T) {
 func TestApplyTyping_IsEphemeralPassThrough(t *testing.T) {
 	s, _ := newState(t)
 
-	chg, ok := s.ApplyTyping(1, domain.TypingActionTyping)
+	chg, ok := s.ApplyTyping(1, 0, domain.TypingActionTyping)
 
 	require.True(t, ok)
 	assert.Equal(t, state.ChangeTyping, chg.Kind)

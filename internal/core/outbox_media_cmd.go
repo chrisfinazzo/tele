@@ -35,6 +35,9 @@ type MediaSendRequest struct {
 	Caption      string
 	Entities     []domain.MessageEntity
 	ReplyToMsgID int
+	// TopicID is the forum topic the message was composed in, 0 outside a
+	// forum (#275).
+	TopicID int
 }
 
 // SendMedia puts local files on the durable queue and returns once they are on
@@ -83,6 +86,7 @@ func (o *Owner) SendMedia(_ context.Context, req MediaSendRequest) error {
 		added, isNew, err := o.outbox.Add(domain.OutboxEntry{
 			Ref:       ref,
 			ChatID:    req.ChatID,
+			TopicID:   req.TopicID,
 			RandomID:  outbox.RandomIDFor(ref),
 			Kind:      domain.OutboxMedia,
 			State:     domain.OutboxQueued,

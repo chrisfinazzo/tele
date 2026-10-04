@@ -51,7 +51,7 @@ func TestBuildSendMultiMediaRequest_CaptionOnFirstItemOnly(t *testing.T) {
 		{Media: &tg.InputMediaPhoto{}, Caption: "hello"},
 		{Media: &tg.InputMediaPhoto{}},
 	}
-	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1, 2}, 0)
+	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1, 2}, 0, 0)
 
 	require.Len(t, req.MultiMedia, 2)
 	assert.Equal(t, "hello", req.MultiMedia[0].Message)
@@ -62,7 +62,7 @@ func TestBuildSendMultiMediaRequest_CaptionOnFirstItemOnly(t *testing.T) {
 
 func TestBuildSendMultiMediaRequest_WithReply(t *testing.T) {
 	items := []AlbumItem{{Media: &tg.InputMediaPhoto{}}}
-	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 42)
+	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 42, 0)
 
 	reply, ok := req.ReplyTo.(*tg.InputReplyToMessage)
 	require.True(t, ok, "got %T, want *tg.InputReplyToMessage", req.ReplyTo)
@@ -71,7 +71,7 @@ func TestBuildSendMultiMediaRequest_WithReply(t *testing.T) {
 
 func TestBuildSendMultiMediaRequest_WithoutReply(t *testing.T) {
 	items := []AlbumItem{{Media: &tg.InputMediaPhoto{}}}
-	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 0)
+	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 0, 0)
 	assert.Nil(t, req.ReplyTo)
 }
 
@@ -81,7 +81,7 @@ func TestBuildSendMultiMediaRequest_Entities(t *testing.T) {
 		Caption:  "bold",
 		Entities: []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 4}},
 	}}
-	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 0)
+	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 0, 0)
 	require.Len(t, req.MultiMedia[0].Entities, 1)
 	assert.IsType(t, &tg.MessageEntityBold{}, req.MultiMedia[0].Entities[0])
 }

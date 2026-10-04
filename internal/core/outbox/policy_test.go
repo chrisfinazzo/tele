@@ -44,6 +44,25 @@ func TestNext_SkipsAnEntryStillInBackoff(t *testing.T) {
 	assert.Equal(t, int64(2), got.Seq, "a chat in backoff must not delay a different chat")
 }
 
+func inTopic(e domain.OutboxEntry, topic int) domain.OutboxEntry { e.TopicID = topic; return e }
+
+// The order a queue keeps is the order of one conversation, and each topic of a
+// forum is a conversation of its own: a send waiting in one holds nothing back
+// in another, and within one the order still holds (#275).
+func TestNext_KeepsOrderPerTopicNotPerForum(t *testing.T) {
+	now := time.Unix(1000, 0)
+	entries := []domain.OutboxEntry{
+		inTopic(entry(1, 50, domain.OutboxQueued, now.Add(time.Minute)), 12),
+		inTopic(entry(2, 50, domain.OutboxQueued, time.Time{}), 12),
+		inTopic(entry(3, 50, domain.OutboxQueued, time.Time{}), 30),
+	}
+
+	got, ok := Next(entries, now)
+
+	require.True(t, ok)
+	assert.Equal(t, int64(3), got.Seq, "the other topic goes; the second send in topic 12 waits its turn")
+}
+
 func TestNext_KeepsFIFOWithinOneChat(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{

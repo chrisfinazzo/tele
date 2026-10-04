@@ -253,15 +253,16 @@ func TestOptimisticReactions(t *testing.T) {
 
 var bob = domain.Peer{ID: 2, Type: domain.PeerUser}
 
-func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain.Peer, ids []int) error {
-	s.forwardedTo, s.forwardedPeer, s.forwardedIDs = to.ID, to, ids
+func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain.Peer, toTopic int, ids []int) error {
+	s.forwardedTo, s.forwardedPeer, s.forwardedIDs, s.forwardedTopic = to.ID, to, ids, toTopic
 	return s.err
 }
 
-func (s *stubClient) SendMessage(_ context.Context, peer domain.Peer, text string, replyTo int, ents []domain.MessageEntity, randomID int64) (domain.Message, error) {
+func (s *stubClient) SendMessage(_ context.Context, peer domain.Peer, text string, replyTo, topic int, ents []domain.MessageEntity, randomID int64) (domain.Message, error) {
 	s.sendMu.Lock()
 	s.sendCount++
 	s.sentText = text
+	s.sentTopic = topic
 	s.sentRandomID = randomID
 	s.sentPeer = peer
 	block := s.sendBlock
@@ -288,7 +289,7 @@ func (s *stubClient) SendMessage(_ context.Context, peer domain.Peer, text strin
 	// same, since that is what the caller records (#193).
 	return domain.Message{
 		ID: sentID, ChatID: peer.ID, Text: text, Entities: ents,
-		ReplyToMsgID: replyTo, IsOut: true, Date: time.Unix(1700000000, 0),
+		ReplyToMsgID: replyTo, TopicID: topic, IsOut: true, Date: time.Unix(1700000000, 0),
 	}, nil
 }
 
@@ -316,7 +317,7 @@ func TestForward_SendsToTheGivenTarget(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
+	require.NoError(t, o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, ""))
 
 	assert.Equal(t, int64(2), c.forwardedTo)
 	assert.Equal(t, []int{5}, c.forwardedIDs)
@@ -330,7 +331,7 @@ func TestForward_UnknownTargetIsPeerNotFound(t *testing.T) {
 	o, st := newCmdOwner(t, c)
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
 
-	err := o.Forward(context.Background(), 1, 99, []int{5}, "")
+	err := o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: 99}, []int{5}, "")
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 	assert.Empty(t, c.forwardedIDs)
@@ -339,7 +340,7 @@ func TestForward_UnknownTargetIsPeerNotFound(t *testing.T) {
 func TestForward_UnknownSourceIsPeerNotFound(t *testing.T) {
 	o, _ := newCmdOwner(t, &stubClient{})
 
-	err := o.Forward(context.Background(), 404, bob.ID, []int{5}, "")
+	err := o.Forward(context.Background(), 404, domain.HistoryKey{ChatID: bob.ID}, []int{5}, "")
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 }
@@ -352,7 +353,7 @@ func TestForward_SendsTheCommentFirst(t *testing.T) {
 	o.SetOutbox(newOutboxStore(t))
 	ctx := runWorker(t, o)
 
-	require.NoError(t, o.Forward(ctx, 1, bob.ID, []int{5}, "look"))
+	require.NoError(t, o.Forward(ctx, 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, "look"))
 
 	waitFor(t, "the comment was never sent", func() bool { return c.sendCalls() == 1 })
 	assert.Equal(t, "look", c.sentText)
@@ -366,7 +367,7 @@ func TestForward_BumpsTheTargetChat(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
+	require.NoError(t, o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, ""))
 
 	target, _ := st.GetChat(2)
 	require.NotNil(t, target.LastMessage)
@@ -380,7 +381,7 @@ func TestForward_DoesNotBumpWhenTheForwardFails(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.Error(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
+	require.Error(t, o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, ""))
 
 	target, _ := st.GetChat(2)
 	assert.Nil(t, target.LastMessage, "a refused forward must not surface the target")
@@ -397,7 +398,7 @@ func TestForward_QueuesTheCommentForTheTargetChat(t *testing.T) {
 	q := newOutboxStore(t)
 	o.SetOutbox(q)
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, "look"))
+	require.NoError(t, o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, "look"))
 
 	queued := q.ForChat(2)
 	require.Len(t, queued, 1, "the comment must be queued for the target, not the source")
@@ -413,7 +414,7 @@ func TestForward_StopsWhenTheCommentCannotBeQueued(t *testing.T) {
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
 	o.SetOutbox(newOutboxStore(t))
 
-	err := o.Forward(context.Background(), 1, bob.ID, []int{5}, "look")
+	err := o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: bob.ID}, []int{5}, "look")
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 	assert.Empty(t, c.forwardedIDs, "nothing may be copied when the comment could not be queued")

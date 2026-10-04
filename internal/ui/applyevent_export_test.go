@@ -95,7 +95,7 @@ type avatarPathKey struct {
 // empty one reads the same.
 type storeReader struct{ store.Store }
 
-func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
+func (storeReader) Outbox(domain.HistoryKey) []domain.OutboxEntry { return nil }
 
 func newTestOwner(st store.Store) *testOwner {
 	o := &testOwner{
@@ -288,8 +288,8 @@ func (o *testOwner) InvalidateAvatar(userID, avatarID int64) {
 	o.avatarsInvalidated = append(o.avatarsInvalidated, avatarPathKey{userID, avatarID})
 }
 
-func (o *testOwner) SetTyping(_ context.Context, chatID int64, action domain.TypingAction) error {
-	o.typingSent = append(o.typingSent, ownerTyping{chatID: chatID, action: action})
+func (o *testOwner) SetTyping(_ context.Context, h domain.HistoryKey, action domain.TypingAction) error {
+	o.typingSent = append(o.typingSent, ownerTyping{chatID: h.ChatID, action: action})
 	return o.cmdErr
 }
 
@@ -299,9 +299,10 @@ type ownerTyping struct {
 	action domain.TypingAction
 }
 
-func (o *testOwner) SaveDraft(_ context.Context, chatID int64, text string) error {
+func (o *testOwner) SaveDraft(_ context.Context, h domain.HistoryKey, text string) error {
+	chatID := h.ChatID
 	o.savedDrafts = append(o.savedDrafts, ownerDraft{chatID: chatID, text: text})
-	o.state.ApplyDraft(chatID, text)
+	o.state.ApplyDraft(chatID, h.TopicID, text)
 	return o.cmdErr
 }
 
@@ -345,7 +346,8 @@ type ownerDraft struct {
 	text   string
 }
 
-func (o *testOwner) Forward(_ context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error {
+func (o *testOwner) Forward(_ context.Context, fromChatID int64, target domain.HistoryKey, msgIDs []int, comment string) error {
+	toChatID := target.ChatID
 	o.forwardFrom, o.forwardTo, o.forwardIDs, o.forwardComment = fromChatID, toChatID, msgIDs, comment
 	if o.cmdErr != nil {
 		return o.cmdErr

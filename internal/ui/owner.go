@@ -37,9 +37,9 @@ type Owner interface {
 	// SendReaction answers kept=false when Telegram accepted the request but
 	// did not keep the reaction; the set it did keep is already on its way.
 	SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) (kept bool, err error)
-	Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error
-	SetTyping(ctx context.Context, chatID int64, action domain.TypingAction) error
-	SaveDraft(ctx context.Context, chatID int64, text string) error
+	Forward(ctx context.Context, fromChatID int64, target domain.HistoryKey, msgIDs []int, comment string) error
+	SetTyping(ctx context.Context, h domain.HistoryKey, action domain.TypingAction) error
+	SaveDraft(ctx context.Context, h domain.HistoryKey, text string) error
 
 	// The durable send queue. Send returns once the entry is on disk, not once
 	// Telegram answered: ordering, backoff and surviving a restart are the

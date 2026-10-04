@@ -33,14 +33,14 @@ func TestConvertToTGEntitiesNameMention(t *testing.T) {
 
 func TestBuildSendRequestSetsEntities(t *testing.T) {
 	es := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 3, UserID: 1, AccessHash: 2}}
-	req := buildSendRequest(&tg.InputPeerEmpty{}, "abc", 7, 0, es)
+	req := buildSendRequest(&tg.InputPeerEmpty{}, "abc", 7, 0, 0, es)
 	if len(req.Entities) != 1 {
 		t.Fatalf("want 1 entity in request, got %d", len(req.Entities))
 	}
 }
 
 func TestBuildSendRequestNoEntities(t *testing.T) {
-	req := buildSendRequest(&tg.InputPeerEmpty{}, "hi", 7, 0, nil)
+	req := buildSendRequest(&tg.InputPeerEmpty{}, "hi", 7, 0, 0, nil)
 	if len(req.Entities) != 0 {
 		t.Fatalf("want 0 entities, got %d", len(req.Entities))
 	}
@@ -85,13 +85,13 @@ func TestConvertToTGEntitiesSkipsServerDetectedTypes(t *testing.T) {
 
 func TestBuildSendMediaRequestSetsEntities(t *testing.T) {
 	es := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 3}}
-	req := buildSendMediaRequest(&tg.InputPeerEmpty{}, &tg.InputMediaEmpty{}, "abc", 7, 0, es)
+	req := buildSendMediaRequest(&tg.InputPeerEmpty{}, &tg.InputMediaEmpty{}, "abc", 7, 0, 0, es)
 	require.Len(t, req.Entities, 1)
 	assert.IsType(t, &tg.MessageEntityBold{}, req.Entities[0])
 }
 
 func TestBuildSendMediaRequestNoEntities(t *testing.T) {
-	req := buildSendMediaRequest(&tg.InputPeerEmpty{}, &tg.InputMediaEmpty{}, "hi", 7, 0, nil)
+	req := buildSendMediaRequest(&tg.InputPeerEmpty{}, &tg.InputMediaEmpty{}, "hi", 7, 0, 0, nil)
 	assert.Empty(t, req.Entities)
 }
 

@@ -66,4 +66,7 @@ type Event struct {
 	// TopicsPage asks for a forum's first page of topics to be read again, for
 	// EventTopicsChanged.
 	TopicsPage bool
+	// TopicID names the forum topic a draft or typing event is about, 0 when it
+	// is about the chat itself (#275).
+	TopicID int
 }

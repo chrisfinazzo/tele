@@ -134,6 +134,7 @@ func (o *Owner) sendGroup(ctx context.Context, e domain.OutboxEntry, peer domain
 			Peer: peer, Media: uploaded[0],
 			Caption: e.Media.Caption, Entities: e.Media.Entities,
 			ReplyToMsgID: e.Media.ReplyToMsgID,
+			TopicID:      e.TopicID,
 			RandomID:     mediaRandomID(e.Ref, 0),
 		})
 		if err != nil {
@@ -157,6 +158,7 @@ func (o *Owner) sendGroup(ctx context.Context, e domain.OutboxEntry, peer domain
 	return o.client.SendAlbum(ctx, internaltg.SendAlbumParams{
 		Peer: peer, Items: items,
 		ReplyToMsgID: e.Media.ReplyToMsgID,
+		TopicID:      e.TopicID,
 		RandomIDs:    randomIDs,
 	})
 }

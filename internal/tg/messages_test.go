@@ -112,7 +112,7 @@ func TestPeerToInput_AllTypes(t *testing.T) {
 
 func TestBuildSaveDraftRequest(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 7, AccessHash: 3}
-	req := buildSaveDraftRequest(peer, "draft text")
+	req := buildSaveDraftRequest(peer, "draft text", 0)
 	assert.Equal(t, peer, req.Peer)
 	assert.Equal(t, "draft text", req.Message)
 }
@@ -285,7 +285,7 @@ func TestBuildForwardRequest_MapsPeersAndIDs(t *testing.T) {
 	ids := []int{100, 101}
 	randomIDs := []int64{7, 8}
 
-	req := buildForwardRequest(from, to, ids, randomIDs)
+	req := buildForwardRequest(from, to, ids, randomIDs, 0)
 
 	assert.Equal(t, from, req.FromPeer)
 	assert.Equal(t, to, req.ToPeer)
@@ -304,7 +304,7 @@ func TestForwardMessages_RestrictedIsForbidden(t *testing.T) {
 
 func TestBuildSendRequest_WithReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
-	req := buildSendRequest(peer, "hello", 123, 42, nil)
+	req := buildSendRequest(peer, "hello", 123, 42, 0, nil)
 	require.NotNil(t, req.ReplyTo)
 	replyTo, ok := req.ReplyTo.(*tg.InputReplyToMessage)
 	require.True(t, ok)
@@ -313,7 +313,7 @@ func TestBuildSendRequest_WithReply(t *testing.T) {
 
 func TestBuildSendRequest_WithoutReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10}
-	req := buildSendRequest(peer, "hello", 123, 0, nil)
+	req := buildSendRequest(peer, "hello", 123, 0, 0, nil)
 	assert.Nil(t, req.ReplyTo)
 }
 
@@ -323,8 +323,8 @@ func TestBuildSendRequest_WithoutReply(t *testing.T) {
 func TestBuildSendRequest_CarriesTheCallerRandomIDUnchanged(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10}
 
-	first := buildSendRequest(peer, "hello", 4242, 0, nil)
-	second := buildSendRequest(peer, "hello", 4242, 0, nil)
+	first := buildSendRequest(peer, "hello", 4242, 0, 0, nil)
+	second := buildSendRequest(peer, "hello", 4242, 0, 0, nil)
 
 	assert.Equal(t, int64(4242), first.RandomID)
 	assert.Equal(t, first.RandomID, second.RandomID)
@@ -716,7 +716,7 @@ func TestBuildInputMediaUploadedPhoto(t *testing.T) {
 func TestBuildSendMediaRequest_WithReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
 	media := &tg.InputMediaUploadedPhoto{}
-	req := buildSendMediaRequest(peer, media, "cap", 123, 42, nil)
+	req := buildSendMediaRequest(peer, media, "cap", 123, 42, 0, nil)
 	assert.Equal(t, "cap", req.Message)
 	assert.Equal(t, int64(123), req.RandomID)
 	assert.Equal(t, media, req.Media)
@@ -728,7 +728,7 @@ func TestBuildSendMediaRequest_WithReply(t *testing.T) {
 
 func TestBuildSendMediaRequest_WithoutReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10}
-	req := buildSendMediaRequest(peer, &tg.InputMediaUploadedPhoto{}, "", 123, 0, nil)
+	req := buildSendMediaRequest(peer, &tg.InputMediaUploadedPhoto{}, "", 123, 0, 0, nil)
 	assert.Nil(t, req.ReplyTo)
 	assert.Equal(t, "", req.Message)
 }
@@ -845,7 +845,7 @@ func TestSentMessage_FromShortSentReply(t *testing.T) {
 	ents := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 2}}
 	reply := &tg.UpdateShortSentMessage{ID: 777, Date: 1700000000}
 
-	got := sentMessage(reply, 123, peer, "hi", 10, ents)
+	got := sentMessage(reply, 123, peer, "hi", 10, 0, ents)
 
 	assert.Equal(t, 777, got.ID)
 	assert.Equal(t, int64(42), got.ChatID)
@@ -871,7 +871,7 @@ func TestSentMessage_PrefersTheServerMessageWhenTheReplyCarriesOne(t *testing.T)
 		}},
 	}}
 
-	got := sentMessage(reply, 123, peer, "asked text", 0, nil)
+	got := sentMessage(reply, 123, peer, "asked text", 0, 0, nil)
 
 	assert.Equal(t, 555, got.ID)
 	assert.Equal(t, "server text", got.Text)
@@ -879,7 +879,7 @@ func TestSentMessage_PrefersTheServerMessageWhenTheReplyCarriesOne(t *testing.T)
 }
 
 func TestSentMessage_NoIDWhenTheReplyNamesNone(t *testing.T) {
-	got := sentMessage(&tg.Updates{}, 123, domain.Peer{ID: 42}, "hi", 0, nil)
+	got := sentMessage(&tg.Updates{}, 123, domain.Peer{ID: 42}, "hi", 0, 0, nil)
 
 	assert.Zero(t, got.ID)
 }

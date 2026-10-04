@@ -12,8 +12,8 @@ type Reader interface {
 	// Topics and Topic answer for a forum's topics (#275).
 	Topics(chatID int64) []domain.Topic
 	Topic(chatID int64, topicID int) (domain.Topic, bool)
-	// Outbox returns a chat's queued sends in submission order. It is not on
+	// Outbox returns a history's queued sends in submission order. It is not on
 	// store.Store because the queue is not part of the account cache: the
 	// composite reader in internal/core supplies it (#193).
-	Outbox(chatID int64) []domain.OutboxEntry
+	Outbox(h domain.HistoryKey) []domain.OutboxEntry
 }

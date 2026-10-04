@@ -55,6 +55,14 @@ type stubClient struct {
 	sentRandomID int64
 	sentPeer     domain.Peer
 	sentID       int
+	// sentTopic, mediaTopic and albumTopic are the forum topic each kind of
+	// send was addressed to; forwardedTopic the topic a forward went into.
+	sentTopic      int
+	mediaTopic     int
+	albumTopic     int
+	forwardedTopic int
+	draftTopic     int
+	typingTopic    int
 	// sendBlock, when set, holds SendMessage open so a test can catch an entry
 	// mid-flight and drop the owner under it.
 	sendBlock chan struct{}
@@ -145,6 +153,7 @@ func (s *stubClient) SendMedia(_ context.Context, p internaltg.SendMediaParams) 
 	defer s.sendMu.Unlock()
 	s.sentMediaN++
 	s.sentRandomID = p.RandomID
+	s.mediaTopic = p.TopicID
 	if s.sendMediaErr != nil {
 		return 0, s.sendMediaErr
 	}
@@ -155,6 +164,7 @@ func (s *stubClient) SendAlbum(_ context.Context, p internaltg.SendAlbumParams) 
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 	s.albumItems = len(p.Items)
+	s.albumTopic = p.TopicID
 	s.albumRandomIDs = append([]int64(nil), p.RandomIDs...)
 	if s.sendMediaErr != nil {
 		return nil, s.sendMediaErr

@@ -90,7 +90,7 @@ func (o *Owner) attempt(ctx context.Context, e domain.OutboxEntry) {
 	o.log.Debug("outbox: sending",
 		zap.String("ref", e.Ref), zap.Int64("chat_id", e.ChatID), zap.Int("attempt", e.Attempts))
 
-	sent, err := o.client.SendMessage(ctx, peer, e.Message.Text, e.Message.ReplyToMsgID, e.Message.Entities, e.RandomID)
+	sent, err := o.client.SendMessage(ctx, peer, e.Message.Text, e.Message.ReplyToMsgID, e.TopicID, e.Message.Entities, e.RandomID)
 	if ctx.Err() != nil {
 		// The owner is going away. The row stays in "sending" on purpose: the
 		// next process resets it and resends with the same random_id.

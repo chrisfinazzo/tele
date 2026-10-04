@@ -74,6 +74,9 @@ type Change struct {
 	// count actually moved as a result.
 	ReactionsUnread       bool
 	UnreadReactionChanged bool
+	// TopicID names the forum topic a draft or typing change is about, 0 when
+	// it is about a chat that is no forum.
+	TopicID int
 	// UnknownTopic names the forum topic a new message landed in when nothing
 	// about that topic was known yet, so the owner can ask Telegram (#275).
 	UnknownTopic int

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS outbox (
 	id              INTEGER PRIMARY KEY AUTOINCREMENT,
 	ref             TEXT    NOT NULL UNIQUE,
 	chat_id         INTEGER NOT NULL,
+	topic_id        INTEGER NOT NULL DEFAULT 0,
 	random_id       INTEGER NOT NULL,
 	kind            TEXT    NOT NULL,
 	payload         TEXT    NOT NULL,
@@ -46,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(next_attempt_at, id);
 // and reading back the table definition to decide costs more than the retry.
 var migrations = []string{
 	`ALTER TABLE outbox ADD COLUMN err_reason TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE outbox ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 0`,
 }
 
 // Store is the durable queue. Reads are served from memory and every write goes
@@ -89,7 +91,7 @@ func RandomIDFor(ref string) int64 {
 }
 
 func (s *Store) load() error {
-	rows, err := s.db.Query(`SELECT id, ref, chat_id, random_id, kind, payload, state,
+	rows, err := s.db.Query(`SELECT id, ref, chat_id, topic_id, random_id, kind, payload, state,
 		attempts, next_attempt_at, created_at, err_kind, err_detail, err_reason FROM outbox`)
 	if err != nil {
 		return err
@@ -102,7 +104,7 @@ func (s *Store) load() error {
 			kind, state, errKind, errReason string
 			nextAttempt, created            int64
 		)
-		if err := rows.Scan(&e.Seq, &e.Ref, &e.ChatID, &e.RandomID, &kind, &payload,
+		if err := rows.Scan(&e.Seq, &e.Ref, &e.ChatID, &e.TopicID, &e.RandomID, &kind, &payload,
 			&state, &e.Attempts, &nextAttempt, &created, &errKind, &e.ErrDetail, &errReason); err != nil {
 			return err
 		}
@@ -184,10 +186,10 @@ func (s *Store) insert(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 		return domain.OutboxEntry{}, false, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO outbox (ref, chat_id, random_id, kind, payload, state, attempts,
+		`INSERT INTO outbox (ref, chat_id, topic_id, random_id, kind, payload, state, attempts,
 			next_attempt_at, created_at, err_kind, err_detail, err_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '')`,
-		e.Ref, e.ChatID, e.RandomID, string(e.Kind), string(payload), string(e.State),
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '')`,
+		e.Ref, e.ChatID, e.TopicID, e.RandomID, string(e.Kind), string(payload), string(e.State),
 		e.Attempts, millis(e.NextAttemptAt), millis(e.CreatedAt))
 	if err != nil {
 		return domain.OutboxEntry{}, false, err
@@ -287,6 +289,21 @@ func (s *Store) All() []domain.OutboxEntry {
 	out := make([]domain.OutboxEntry, 0, len(s.entries))
 	for _, e := range s.entries {
 		out = append(out, e)
+	}
+	sortBySeq(out)
+	return out
+}
+
+// ForHistory returns one history's entries in submission order: a chat's, or
+// one topic's of a forum.
+func (s *Store) ForHistory(h domain.HistoryKey) []domain.OutboxEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []domain.OutboxEntry
+	for _, e := range s.entries {
+		if e.ChatID == h.ChatID && e.TopicID == h.TopicID {
+			out = append(out, e)
+		}
 	}
 	sortBySeq(out)
 	return out

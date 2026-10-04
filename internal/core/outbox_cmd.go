@@ -22,6 +22,9 @@ type SendRequest struct {
 	Text         string
 	Entities     []domain.MessageEntity
 	ReplyToMsgID int
+	// TopicID is the forum topic the message was composed in, 0 outside a
+	// forum (#275).
+	TopicID int
 }
 
 // NewRef returns a fresh idempotency key. Callers generate one per composed
@@ -53,6 +56,7 @@ func (o *Owner) Send(ctx context.Context, req SendRequest) error {
 	entry := domain.OutboxEntry{
 		Ref:       req.Ref,
 		ChatID:    req.ChatID,
+		TopicID:   req.TopicID,
 		RandomID:  outbox.RandomIDFor(req.Ref),
 		Kind:      domain.OutboxText,
 		State:     domain.OutboxQueued,

@@ -87,7 +87,7 @@ func TestForward_ToAPersonFoundBySearch(t *testing.T) {
 	_, err := o.SearchContacts(context.Background(), "ada", 10)
 	require.NoError(t, err)
 
-	require.NoError(t, o.Forward(context.Background(), 1, ada.ID, []int{5}, ""))
+	require.NoError(t, o.Forward(context.Background(), 1, domain.HistoryKey{ChatID: ada.ID}, []int{5}, ""))
 
 	assert.Equal(t, ada, c.forwardedPeer)
 }

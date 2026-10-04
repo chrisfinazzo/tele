@@ -63,7 +63,7 @@ func (m *mockClient) RefreshMessages(_ context.Context, _ domain.Peer, _ []int) 
 	return nil, nil
 }
 
-func (m *mockClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, _ int64) (domain.Message, error) {
+func (m *mockClient) SendMessage(_ context.Context, _ domain.Peer, text string, _, _ int, _ []domain.MessageEntity, _ int64) (domain.Message, error) {
 	m.sent = append(m.sent, text)
 	return domain.Message{}, nil
 }
@@ -131,7 +131,7 @@ func (m *mockClient) EditMessage(_ context.Context, _ domain.Peer, _ int, _ stri
 	return nil
 }
 
-func (m *mockClient) ForwardMessages(_ context.Context, _ domain.Peer, _ domain.Peer, _ []int) error {
+func (m *mockClient) ForwardMessages(_ context.Context, _ domain.Peer, _ domain.Peer, _ int, _ []int) error {
 	return nil
 }
 
@@ -139,11 +139,11 @@ func (m *mockClient) SendReaction(_ context.Context, _ domain.Peer, _ int, _ str
 	return nil, nil
 }
 
-func (m *mockClient) SetTyping(_ context.Context, _ domain.Peer, _ domain.TypingAction) error {
+func (m *mockClient) SetTyping(_ context.Context, _ domain.Peer, _ int, _ domain.TypingAction) error {
 	return nil
 }
 
-func (m *mockClient) SaveDraft(_ context.Context, _ domain.Peer, _ string) error {
+func (m *mockClient) SaveDraft(_ context.Context, _ domain.Peer, _ int, _ string) error {
 	return nil
 }
 

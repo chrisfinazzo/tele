@@ -276,7 +276,7 @@ func (m RootModel) saveDraftCmd(chatID int64, text string) tea.Cmd {
 		defer cancel()
 		// A failed draft sync is not worth interrupting for: the text is kept
 		// locally and the next flush retries.
-		_ = owner.SaveDraft(ctx, chatID, text)
+		_ = owner.SaveDraft(ctx, domain.HistoryKey{ChatID: chatID}, text)
 		return nil
 	}
 }
@@ -293,7 +293,7 @@ func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea
 		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 		defer cancel()
 		// Typing notices are best-effort; a toast per failure would be noise.
-		_ = owner.SetTyping(ctx, chatID, action)
+		_ = owner.SetTyping(ctx, domain.HistoryKey{ChatID: chatID}, action)
 		return nil
 	}
 }
@@ -459,7 +459,7 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 		zap.Int64("from_chat", from), zap.Int64("to_chat", to),
 		zap.Ints("msg_ids", ids), zap.Bool("with_comment", comment != ""))
 	return m, func() tea.Msg {
-		err := owner.Forward(ctx, from, to, ids, comment)
+		err := owner.Forward(ctx, from, domain.HistoryKey{ChatID: to}, ids, comment)
 		return forwardDoneMsg{toTitle: toTitle, err: err}
 	}
 }

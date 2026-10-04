@@ -159,7 +159,7 @@ func (c *GotdClient) GetHistoryAfter(ctx context.Context, peer domain.Peer, afte
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID, topicID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return domain.Message{}, err
@@ -169,7 +169,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text str
 	inputPeer := peerToInput(peer)
 	var sent domain.Message
 	err = WithRetry(ctx, func() error {
-		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID, entities))
+		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID, topicID, entities))
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Error(err))
 			return err
@@ -184,7 +184,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text str
 		// a reply that does carry the message (groups, channels) is applied by id,
 		// so the pipeline delivering it a second time is a no-op. Media keeps
 		// suppressing until #195.
-		sent = sentMessage(updates, randomID, peer, text, replyToMsgID, entities)
+		sent = sentMessage(updates, randomID, peer, text, replyToMsgID, topicID, entities)
 		c.traceLog.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", sent.ID))
 		return nil
 	})
@@ -198,7 +198,9 @@ type SendMediaParams struct {
 	Media        tg.InputMediaClass
 	Caption      string
 	ReplyToMsgID int
-	Entities     []domain.MessageEntity
+	// TopicID is the forum topic the send lands in, 0 outside a forum (#275).
+	TopicID  int
+	Entities []domain.MessageEntity
 	// RandomID is the caller's deduplication key. It must stay the same across
 	// every retry of one logical send, or Telegram cannot tell a retry from a
 	// second message (#193).
@@ -215,7 +217,7 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 	inputPeer := peerToInput(p.Peer)
 	var realID int
 	err = WithRetry(ctx, func() error {
-		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, p.RandomID, p.ReplyToMsgID, p.Entities))
+		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, p.RandomID, p.ReplyToMsgID, p.TopicID, p.Entities))
 		if err != nil {
 			c.log.Error("MessagesSendMedia failed", zap.Error(err))
 			return err
@@ -235,7 +237,7 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 // ForwardMessages forwards messages by ID from one peer to another via
 // messages.forwardMessages. No optimistic insert is performed: when the target
 // is the open chat, the message arrives through the normal live-update path.
-func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, ids []int) error {
+func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, toTopicID int, ids []int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -250,7 +252,7 @@ func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to d
 			}
 			randomIDs[i] = int64(binary.LittleEndian.Uint64(buf[:]))
 		}
-		updates, err := api.MessagesForwardMessages(ctx, buildForwardRequest(peerToInput(from), peerToInput(to), ids, randomIDs))
+		updates, err := api.MessagesForwardMessages(ctx, buildForwardRequest(peerToInput(from), peerToInput(to), ids, randomIDs, toTopicID))
 		if err != nil {
 			c.log.Error("MessagesForwardMessages failed", zap.Error(err))
 			return err
@@ -302,23 +304,29 @@ func messageID(m tg.MessageClass) int {
 	}
 }
 
-func buildForwardRequest(fromPeer, toPeer tg.InputPeerClass, ids []int, randomIDs []int64) *tg.MessagesForwardMessagesRequest {
-	return &tg.MessagesForwardMessagesRequest{
+// buildForwardRequest forwards ids into toPeer, and into toTopicID there when
+// the target is a forum topic other than General (#275).
+func buildForwardRequest(fromPeer, toPeer tg.InputPeerClass, ids []int, randomIDs []int64, toTopicID int) *tg.MessagesForwardMessagesRequest {
+	req := &tg.MessagesForwardMessagesRequest{
 		FromPeer: fromPeer,
 		ToPeer:   toPeer,
 		ID:       ids,
 		RandomID: randomIDs,
 	}
+	if toTopicID != 0 && toTopicID != domain.GeneralTopicID {
+		req.TopMsgID = toTopicID
+	}
+	return req
 }
 
-func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int, entities []domain.MessageEntity) *tg.MessagesSendMessageRequest {
+func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID, topicID int, entities []domain.MessageEntity) *tg.MessagesSendMessageRequest {
 	req := &tg.MessagesSendMessageRequest{
 		Peer:     inputPeer,
 		Message:  text,
 		RandomID: randomID,
 	}
-	if replyToMsgID != 0 {
-		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	if r := replyHeader(replyToMsgID, topicID); r != nil {
+		req.ReplyTo = r
 	}
 	if ent := convertToTGEntities(entities); len(ent) > 0 {
 		req.Entities = ent
@@ -362,15 +370,15 @@ func convertToTGEntities(es []domain.MessageEntity) []tg.MessageEntityClass {
 	return out
 }
 
-func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int, entities []domain.MessageEntity) *tg.MessagesSendMediaRequest {
+func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID, topicID int, entities []domain.MessageEntity) *tg.MessagesSendMediaRequest {
 	req := &tg.MessagesSendMediaRequest{
 		Peer:     inputPeer,
 		Media:    media,
 		Message:  caption,
 		RandomID: randomID,
 	}
-	if replyToMsgID != 0 {
-		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	if r := replyHeader(replyToMsgID, topicID); r != nil {
+		req.ReplyTo = r
 	}
 	if ent := convertToTGEntities(entities); len(ent) > 0 {
 		req.Entities = ent
@@ -534,14 +542,14 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer domain.Peer, msgID in
 // SaveDraft persists (or clears, when text is empty) the message draft for a
 // peer via messages.saveDraft (#62). Telegram broadcasts the change to the
 // account's other clients as updateDraftMessage.
-func (c *GotdClient) SaveDraft(ctx context.Context, peer domain.Peer, text string) error {
+func (c *GotdClient) SaveDraft(ctx context.Context, peer domain.Peer, topicID int, text string) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
 	}
 	c.traceLog.Debug("SaveDraft", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	return WithRetry(ctx, func() error {
-		_, err := api.MessagesSaveDraft(ctx, buildSaveDraftRequest(peerToInput(peer), text))
+		_, err := api.MessagesSaveDraft(ctx, buildSaveDraftRequest(peerToInput(peer), text, topicID))
 		if err != nil {
 			c.log.Error("MessagesSaveDraft failed", zap.Error(err))
 		}
@@ -549,11 +557,17 @@ func (c *GotdClient) SaveDraft(ctx context.Context, peer domain.Peer, text strin
 	})
 }
 
-func buildSaveDraftRequest(inputPeer tg.InputPeerClass, text string) *tg.MessagesSaveDraftRequest {
-	return &tg.MessagesSaveDraftRequest{
+// buildSaveDraftRequest saves a draft for a chat, or for one topic of a forum:
+// a draft is kept where the message would be sent (#275).
+func buildSaveDraftRequest(inputPeer tg.InputPeerClass, text string, topicID int) *tg.MessagesSaveDraftRequest {
+	req := &tg.MessagesSaveDraftRequest{
 		Peer:    inputPeer,
 		Message: text,
 	}
+	if r := replyHeader(0, topicID); r != nil {
+		req.ReplyTo = r
+	}
+	return req
 }
 
 func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) ([]domain.Reaction, error) {
@@ -688,12 +702,13 @@ func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
 //
 // A group or channel does answer with the whole message; that one is preferred,
 // since it carries what the server decided rather than what was asked for.
-func sentMessage(updates tg.UpdatesClass, randomID int64, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) domain.Message {
+func sentMessage(updates tg.UpdatesClass, randomID int64, peer domain.Peer, text string, replyToMsgID, topicID int, entities []domain.MessageEntity) domain.Message {
 	msg := domain.Message{
 		ChatID:       peer.ID,
 		Text:         text,
 		Entities:     entities,
 		ReplyToMsgID: replyToMsgID,
+		TopicID:      topicID,
 		IsOut:        true,
 		Date:         time.Now(),
 	}
@@ -758,15 +773,12 @@ func typingActionToTG(a domain.TypingAction) tg.SendMessageActionClass {
 	}
 }
 
-func (c *GotdClient) SetTyping(ctx context.Context, peer domain.Peer, action domain.TypingAction) error {
+func (c *GotdClient) SetTyping(ctx context.Context, peer domain.Peer, topicID int, action domain.TypingAction) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil // typing is best-effort; ignore when not connected
 	}
-	_, err = api.MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
-		Peer:   peerToInput(peer),
-		Action: typingActionToTG(action),
-	})
+	_, err = api.MessagesSetTyping(ctx, buildSetTypingRequest(peerToInput(peer), typingActionToTG(action), topicID))
 	if err != nil {
 		c.traceLog.Debug("SetTyping failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 	}

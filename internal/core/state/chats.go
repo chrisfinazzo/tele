@@ -169,17 +169,34 @@ func toggleChatID(ids []int64, id int64, add bool) []int64 {
 
 // ApplyDraft records a draft changed on another device, or cleared server-side
 // on send (#62).
-func (s *State) ApplyDraft(chatID int64, text string) (Change, bool) {
-	s.st.SetChatDraft(chatID, text)
-	c := Change{Kind: ChangeDraft, ChatID: chatID, Draft: text}
+func (s *State) ApplyDraft(chatID int64, topicID int, text string) (Change, bool) {
+	h := s.historyFor(chatID, topicID)
+	if h.TopicID != 0 {
+		// In a forum a draft is the topic's: the forum has no composer.
+		s.st.SetTopicDraft(h.ChatID, h.TopicID, text)
+	} else {
+		s.st.SetChatDraft(chatID, text)
+	}
+	c := Change{Kind: ChangeDraft, ChatID: chatID, TopicID: h.TopicID, Draft: text}
 	s.commit(c)
 	return c, true
 }
 
 // ApplyTyping publishes a typing indicator. It has no persisted state: the
 // typing label is ephemeral and belongs to the chat view, not to the account.
-func (s *State) ApplyTyping(chatID int64, action domain.TypingAction) (Change, bool) {
-	c := Change{Kind: ChangeTyping, ChatID: chatID, Typing: action}
+func (s *State) ApplyTyping(chatID int64, topicID int, action domain.TypingAction) (Change, bool) {
+	h := s.historyFor(chatID, topicID)
+	c := Change{Kind: ChangeTyping, ChatID: chatID, TopicID: h.TopicID, Typing: action}
 	s.commit(c)
 	return c, true
+}
+
+// historyFor names the history Telegram means by a topic id of a chat. A chat
+// the store does not know is treated as no forum.
+func (s *State) historyFor(chatID int64, topicID int) domain.HistoryKey {
+	chat, ok := s.st.GetChat(chatID)
+	if !ok {
+		return domain.HistoryKey{ChatID: chatID}
+	}
+	return chat.History(topicID)
 }

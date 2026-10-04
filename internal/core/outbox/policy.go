@@ -42,7 +42,7 @@ const maxBackoff = 5 * time.Minute
 //
 // entries need not be sorted.
 func Next(entries []domain.OutboxEntry, now time.Time) (domain.OutboxEntry, bool) {
-	heads := chatHeads(entries)
+	heads := historyHeads(entries)
 
 	var best domain.OutboxEntry
 	found := false
@@ -62,7 +62,7 @@ func Next(entries []domain.OutboxEntry, now time.Time) (domain.OutboxEntry, bool
 // is waiting on a clock — either there is nothing to do, or something is due
 // now and Next will hand it over.
 func EarliestDue(entries []domain.OutboxEntry, now time.Time) (time.Time, bool) {
-	heads := chatHeads(entries)
+	heads := historyHeads(entries)
 
 	var at time.Time
 	found := false
@@ -80,27 +80,35 @@ func EarliestDue(entries []domain.OutboxEntry, now time.Time) (time.Time, bool) 
 	return at, found
 }
 
-// chatHeads maps each chat to the lowest Seq it holds that is still going to
-// happen. Only a head is ever eligible, which is what keeps a chat in order.
+// historyHeads maps each history - a chat, or a forum topic - to the lowest Seq
+// it holds that is still going to happen. Only a head is ever eligible, which is
+// what keeps a history in order.
 //
-// Failed entries are skipped, so a chat whose oldest entry failed is headed by
-// the next one instead. A chat holding nothing else has no entry in the map at
-// all, which is why the caller must not read a missing key as Seq 0 — see
-// eligible.
-func chatHeads(entries []domain.OutboxEntry) map[int64]int64 {
-	heads := make(map[int64]int64, len(entries))
+// Failed entries are skipped, so a history whose oldest entry failed is headed
+// by the next one instead. A history holding nothing else has no entry in the
+// map at all, which is why the caller must not read a missing key as Seq 0 —
+// see eligible.
+func historyHeads(entries []domain.OutboxEntry) map[domain.HistoryKey]int64 {
+	heads := make(map[domain.HistoryKey]int64, len(entries))
 	for _, e := range entries {
 		if e.State == domain.OutboxFailed {
 			continue
 		}
-		if seq, ok := heads[e.ChatID]; !ok || e.Seq < seq {
-			heads[e.ChatID] = e.Seq
+		h := historyOf(e)
+		if seq, ok := heads[h]; !ok || e.Seq < seq {
+			heads[h] = e.Seq
 		}
 	}
 	return heads
 }
 
-func eligible(e domain.OutboxEntry, heads map[int64]int64, now time.Time) bool {
+// historyOf names the queue an entry waits in: its chat's, or in a forum its
+// topic's, since the order kept is the order of one conversation (#275).
+func historyOf(e domain.OutboxEntry) domain.HistoryKey {
+	return domain.HistoryKey{ChatID: e.ChatID, TopicID: e.TopicID}
+}
+
+func eligible(e domain.OutboxEntry, heads map[domain.HistoryKey]int64, now time.Time) bool {
 	return e.State == domain.OutboxQueued &&
 		isHead(e, heads) &&
 		!e.NextAttemptAt.After(now)
@@ -109,8 +117,8 @@ func eligible(e domain.OutboxEntry, heads map[int64]int64, now time.Time) bool {
 // isHead answers against the map rather than by indexing it: a chat with no
 // head has no key, and a bare lookup would return 0 and match an entry whose Seq
 // happened to be 0.
-func isHead(e domain.OutboxEntry, heads map[int64]int64) bool {
-	seq, ok := heads[e.ChatID]
+func isHead(e domain.OutboxEntry, heads map[domain.HistoryKey]int64) bool {
+	seq, ok := heads[historyOf(e)]
 	return ok && seq == e.Seq
 }
 

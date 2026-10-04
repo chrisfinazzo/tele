@@ -27,9 +27,9 @@ func Apply(s *State, evt store.Event) (Change, bool) {
 	case store.EventMuteUpdate:
 		return s.ApplyMute(evt.ChatID, evt.Muted)
 	case store.EventDraftMessage:
-		return s.ApplyDraft(evt.ChatID, evt.Draft)
+		return s.ApplyDraft(evt.ChatID, evt.TopicID, evt.Draft)
 	case store.EventTyping:
-		return s.ApplyTyping(evt.ChatID, evt.TypingAction)
+		return s.ApplyTyping(evt.ChatID, evt.TopicID, evt.TypingAction)
 	}
 	return Change{}, false
 }

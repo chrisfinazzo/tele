@@ -47,7 +47,7 @@ type Client interface {
 	// randomID is the caller's deduplication key: Telegram deduplicates on it,
 	// so it must stay the same across every retry of one logical send. That is
 	// what makes an at-least-once outbox safe.
-	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error)
+	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID, topicID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error)
 	// GetParticipants returns mention candidates for a group/channel peer.
 	GetParticipants(ctx context.Context, peer domain.Peer) ([]domain.ChatMember, error)
 	// GetUser fetches a user's full profile. The address carries how the person
@@ -113,15 +113,15 @@ type Client interface {
 	// ForwardMessages forwards messages by ID from one peer to another via
 	// messages.forwardMessages. Returns ErrForwardRestricted when the source
 	// chat forbids forwarding (content protection).
-	ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, ids []int) error
+	ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, toTopicID int, ids []int) error
 	// SendReaction sets our reaction (emoji == "" retracts it) and returns the
 	// set Telegram's reply states for the message, or nil when the reply states
 	// none that says which reaction is ours.
 	SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) ([]domain.Reaction, error)
-	SetTyping(ctx context.Context, peer domain.Peer, action domain.TypingAction) error
+	SetTyping(ctx context.Context, peer domain.Peer, topicID int, action domain.TypingAction) error
 	// SaveDraft persists (text != "") or clears (text == "") the message draft
 	// for a peer, synced with Telegram's other clients (#62).
-	SaveDraft(ctx context.Context, peer domain.Peer, text string) error
+	SaveDraft(ctx context.Context, peer domain.Peer, topicID int, text string) error
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }
