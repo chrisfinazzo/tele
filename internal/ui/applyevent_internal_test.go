@@ -31,7 +31,10 @@ type ownerStub struct {
 
 	// focus records what the client told the owner it is showing, so a test can
 	// assert that leaving a chat is reported as well as entering one (#192).
-	focus []int64
+	focus     []int64
+	focusKeys []domain.HistoryKey
+	// forwardTargets records where each forward was asked to go.
+	forwardTargets []domain.HistoryKey
 
 	// calls records the commands the UI issued, so a test can assert on what
 	// was asked for rather than on how the result was rendered. err is what
@@ -78,7 +81,10 @@ type ownerStub struct {
 	discarded []string
 }
 
-func (o *ownerStub) SetFocus(h domain.HistoryKey) { o.focus = append(o.focus, h.ChatID) }
+func (o *ownerStub) SetFocus(h domain.HistoryKey) {
+	o.focus = append(o.focus, h.ChatID)
+	o.focusKeys = append(o.focusKeys, h)
+}
 
 // mediaKey identifies one piece of media the way a client names it.
 type mediaKey struct {
@@ -98,6 +104,7 @@ type cmdCall struct {
 	name   string
 	chatID int64
 	flag   bool
+	topic  int
 }
 
 // storeReader lends a bare store the projection's fifth method. The real owner
@@ -137,7 +144,7 @@ func (o *ownerStub) Refresh() { o.reg.Refresh() }
 // publishes a delta) and answers with o.err.
 func (o *ownerStub) SetMuted(_ context.Context, h domain.HistoryKey, muted bool) error {
 	chatID := h.ChatID
-	o.calls = append(o.calls, cmdCall{name: "SetMuted", chatID: chatID, flag: muted})
+	o.calls = append(o.calls, cmdCall{name: "SetMuted", chatID: chatID, flag: muted, topic: h.TopicID})
 	if o.err != nil {
 		return o.err
 	}
@@ -169,6 +176,10 @@ func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]projec
 
 // Chats, Chat and FolderFilters answer from the stub's store, as the real
 // owner answers from its own.
+func (o *ownerStub) Topics(_ context.Context, chatID int64) ([]project.TopicRow, error) {
+	return project.TopicRows(storeReader{o.state.Store()}, chatID), o.err
+}
+
 func (o *ownerStub) Chats(_ context.Context) ([]project.ChatRow, error) {
 	var rows []project.ChatRow
 	for _, c := range o.state.Store().Chats() {
@@ -318,6 +329,7 @@ func (o *ownerStub) DiscardOutbox(ref string) error {
 func (o *ownerStub) Forward(_ context.Context, fromChatID int64, target domain.HistoryKey, _ []int, _ string) error {
 	toChatID := target.ChatID
 	o.calls = append(o.calls, cmdCall{name: "Forward", chatID: fromChatID})
+	o.forwardTargets = append(o.forwardTargets, target)
 	if o.err != nil {
 		return o.err
 	}
@@ -403,7 +415,7 @@ func (o *ownerStub) ReadMentions(_ context.Context, h domain.HistoryKey) error {
 
 func (o *ownerStub) MarkRead(_ context.Context, h domain.HistoryKey, maxID int) error {
 	chatID := h.ChatID
-	o.calls = append(o.calls, cmdCall{name: "MarkRead", chatID: chatID})
+	o.calls = append(o.calls, cmdCall{name: "MarkRead", chatID: chatID, topic: h.TopicID})
 	if o.err != nil {
 		return o.err
 	}

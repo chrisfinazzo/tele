@@ -85,6 +85,7 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+u": ActionScrollHalfUp,
 			"space":  ActionOpenContextMenu,
 			"P":      ActionShowProfile,
+			"esc":    ActionCancel,
 		},
 		// ContextChat is the live source for chat-pane keys, resolved through
 		// the Matcher. "g g" is a chord (space-separated key tokens).

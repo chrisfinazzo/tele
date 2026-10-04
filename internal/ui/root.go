@@ -84,9 +84,23 @@ type RootModel struct {
 	// window move can repeat it. 0 is All Chats.
 	activeFolder  int
 	currentChatID int64
-	historyLimit  int
-	verbose       bool
-	log           *zap.Logger
+	// currentTopicID is the forum topic open in the chat pane, 0 for an
+	// ordinary chat. With currentChatID it names the history every command
+	// from the pane goes to (#275).
+	currentTopicID int
+	// forum is the forum whose topic list fills the middle pane in place of
+	// the chat list, nil while the chat list shows; topicSub is its
+	// subscription. lastTopic remembers, per forum and for this run, the topic
+	// last opened there, which is where the cursor lands on coming back.
+	forum     *screens.TopicListModel
+	topicSub  project.SubID
+	lastTopic map[int64]int
+	// forumCursorPending is set on entering a forum and cleared by the topic
+	// list's first Reset, which is when there are rows to place the cursor on.
+	forumCursorPending bool
+	historyLimit       int
+	verbose            bool
+	log                *zap.Logger
 	// logPath is where this run's log is written, named on the login screen
 	// when something goes wrong there. Empty in tests.
 	logPath string
@@ -526,6 +540,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRetryOutbox(msg)
 	case components.DiscardOutboxRequest:
 		return m.handleDiscardOutbox(msg)
+	case screens.ForwardForumChosen:
+		return m.handleForwardForumChosen(msg)
+	case forwardTopicsMsg:
+		return m.handleForwardTopics(msg)
 	case screens.ForwardToChatRequest:
 		return m.handleForwardToChat(msg)
 	case screens.SearchUsersRequest:
@@ -588,9 +606,13 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case notifyOpenMsg:
 		// Clicking a notify toast dismisses it and opens the target chat via the
 		// existing open path.
+		// A notification from a forum topic opens that topic (#275).
 		m.toasts.Dismiss(msg.serial)
-		chatID, title := msg.chatID, msg.title
-		return m, func() tea.Msg { return screens.OpenChatMsg{ChatID: chatID, Title: title} }
+		open := screens.OpenChatMsg{
+			ChatID: msg.chatID, Title: msg.title,
+			IsForum: msg.topicID != 0, TopicID: msg.topicID, TopicTitle: msg.topicTitle,
+		}
+		return m, func() tea.Msg { return open }
 	case chatLoadErrMsg:
 		return m.handleChatLoadErr(msg)
 	case retryChatLoadMsg:
@@ -599,10 +621,16 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// still falls short.
 		m.chat.SetLoading(true)
 		m.chat.SetLoadError("")
-		m.subscribeChat(msg.chatID)
+		h := domain.HistoryKey{ChatID: msg.chatID}
+		if msg.chatID == m.currentChatID {
+			h = m.currentHistory()
+		}
+		m.subscribeChat(h)
 		return m, nil
 	// network/data messages
 	case screens.OpenChatMsg,
+		screens.OpenTopicMsg,
+		screens.LeaveForumMsg,
 		screens.LoadMoreMsg,
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,

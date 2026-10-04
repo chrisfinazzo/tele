@@ -327,6 +327,48 @@ func TestForwardPicker_EnterEmitsForwardToChatRequest(t *testing.T) {
 	assert.Equal(t, int64(1), req.ToChatID)
 }
 
+// Forwarding into a forum is forwarding into one of its topics, so choosing a
+// forum asks for its topics instead of forwarding (#275).
+func TestForwardPicker_ChoosingAForumAsksForItsTopics(t *testing.T) {
+	m := screens.NewForwardPicker([]project.ChatRow{{ID: 50, Title: "Dev", IsForum: true}}, 55, 80, 24, nil)
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, screens.ForwardForumChosen{ChatID: 50, Title: "Dev", MsgID: 55}, cmd())
+}
+
+func TestForwardPicker_ChoosingATopicForwardsIntoIt(t *testing.T) {
+	m := screens.NewForwardTopicPicker(50, "Dev",
+		[]project.TopicRow{{ID: 12, Title: "Releases"}, {ID: 30, Title: "Design"}}, 55, 80, 24, nil)
+
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.ForwardToChatRequest)
+	require.True(t, ok)
+	assert.Equal(t, int64(50), req.ToChatID)
+	assert.Equal(t, 30, req.ToTopicID)
+	assert.Equal(t, "Dev › Design", req.Title)
+	assert.Equal(t, 55, req.MsgID)
+}
+
+// A comment typed for a topic goes there with the forward.
+func TestForwardPicker_ACommentForATopicKeepsTheTopic(t *testing.T) {
+	m := screens.NewForwardTopicPicker(50, "Dev", []project.TopicRow{{ID: 12, Title: "Releases"}}, 55, 80, 24, nil)
+
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m.Update(tea.KeyPressMsg{Code: 'o', Text: "o"})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.ForwardToChatRequest)
+	require.True(t, ok)
+	assert.Equal(t, 12, req.ToTopicID)
+	assert.Equal(t, "o", req.Comment)
+}
+
 func TestForwardPicker_RendersUnreadCount(t *testing.T) {
 	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, nil)
 	assert.Contains(t, m.View(), "3")

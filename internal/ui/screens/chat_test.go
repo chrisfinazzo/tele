@@ -143,6 +143,37 @@ func TestChat_SendMessage_EmitsRequest(t *testing.T) {
 	assert.Equal(t, "hello", req.Text)
 }
 
+// A message typed in a forum topic goes to that topic.
+func TestChat_SendInATopicNamesIt(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetHeader(screens.ChatHeader{ChatID: 50, TopicID: 30, Title: "Dev › Design", IsGroup: true})
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetComposerValue("hello")
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.SendMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, int64(50), req.ChatID)
+	assert.Equal(t, 30, req.TopicID)
+}
+
+// Two topics of one forum are two conversations, and a draft typed in one is
+// not carried into the other.
+func TestChat_EachTopicKeepsItsOwnDraft(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetHeader(screens.ChatHeader{ChatID: 50, TopicID: 12})
+	m.SetComposerValue("about releases")
+
+	m.SetHeader(screens.ChatHeader{ChatID: 50, TopicID: 30})
+	assert.Empty(t, m.ComposerValue())
+
+	m.SetHeader(screens.ChatHeader{ChatID: 50, TopicID: 12})
+	assert.Equal(t, "about releases", m.ComposerValue())
+}
+
 func TestChat_SendMessage_CarriesMentionEntities(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerChannel}}
@@ -717,7 +748,7 @@ func TestChatModel_SeedDraft_PopulatesEmptyChat(t *testing.T) {
 	chat := &domain.Chat{ID: 5, Peer: domain.Peer{ID: 5, Type: domain.PeerUser}}
 
 	// Server-known draft seeded before opening the chat (e.g. from the dialog list).
-	m.SeedDraft(5, "from server")
+	m.SeedDraft(domain.HistoryKey{ChatID: 5}, "from server")
 	openChat(m, chat)
 	assert.Equal(t, "from server", m.ComposerValue())
 }
@@ -732,7 +763,7 @@ func TestChatModel_SeedDraft_DoesNotClobberLocalDraft(t *testing.T) {
 	openChat(m, chatB) // flushes "local edit" into the session map for chat 1
 
 	// A stale server seed must not overwrite the newer local draft.
-	m.SeedDraft(1, "stale server")
+	m.SeedDraft(domain.HistoryKey{ChatID: 1}, "stale server")
 	openChat(m, chatA)
 	assert.Equal(t, "local edit", m.ComposerValue())
 }

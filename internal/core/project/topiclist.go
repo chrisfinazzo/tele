@@ -31,15 +31,23 @@ type TopicListContents struct {
 // BuildTopicList slices the window out of a forum's topics. Order comes from
 // the reader; this function never sorts.
 func BuildTopicList(r Reader, w TopicListWindow) TopicListContents {
-	all := r.Topics(w.ChatID)
-	chat, _ := r.GetChat(w.ChatID)
-	forumMuted := chat.IsMuted
+	all := TopicRows(r, w.ChatID)
 	out := TopicListContents{ChatID: w.ChatID, Offset: w.Offset, Total: len(all)}
 	start := min(max(w.Offset, 0), len(all))
 	end := min(start+w.Limit, len(all))
-	out.Rows = make([]TopicRow, 0, end-start)
-	for _, t := range all[start:end] {
-		out.Rows = append(out.Rows, topicRow(t, forumMuted))
+	out.Rows = all[start:end]
+	return out
+}
+
+// TopicRows is a forum's whole topic list as rows, in the reader's order. A
+// query answers with it too, so a client handles one shape of topic whether it
+// came from a subscription or a one-off answer.
+func TopicRows(r Reader, chatID int64) []TopicRow {
+	all := r.Topics(chatID)
+	chat, _ := r.GetChat(chatID)
+	out := make([]TopicRow, 0, len(all))
+	for _, t := range all {
+		out = append(out, topicRow(t, chat.IsMuted))
 	}
 	return out
 }

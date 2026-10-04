@@ -56,6 +56,10 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			m.folderBar.SetSize(lay.folders.Width, lay.folders.Height)
 		}
 		m.chatList.SetSize(lay.chatList.Width, lay.chatList.Height)
+		if m.forum != nil {
+			m.forum.SetSize(lay.chatList.Width, lay.chatList.Height)
+			m.syncTopicListWindow()
+		}
 		// A taller pane shows more rows, so it needs a wider window.
 		m.syncChatListWindow()
 		// The chat pane owns both the message list and the composer, so it is

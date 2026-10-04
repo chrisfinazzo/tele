@@ -19,6 +19,8 @@ import (
 // root after the command that built it has run, by which time another chat may
 // be open; the request still belongs to the one it was typed into (#278).
 type SendMsgRequest struct {
+	// TopicID is the forum topic the message was typed in, 0 outside a forum.
+	TopicID      int
 	ChatID       int64
 	Text         string
 	ReplyToMsgID int
@@ -28,6 +30,7 @@ type SendMsgRequest struct {
 // SendMediaRequest is emitted when enter is pressed with a staged attachment.
 // It carries no file details; the root fills those from its pendingAttachment.
 type SendMediaRequest struct {
+	TopicID      int
 	ChatID       int64
 	Caption      string
 	ReplyToMsgID int
@@ -42,8 +45,9 @@ type EditSendRequest struct {
 }
 
 type SetTypingRequest struct {
-	ChatID int64
-	Action domain.TypingAction
+	TopicID int
+	ChatID  int64
+	Action  domain.TypingAction
 }
 
 type LoadMoreMsg struct {
@@ -71,9 +75,9 @@ type ChatModel struct {
 	typingDots      components.TypingDots
 	lastTypingAt    time.Time
 	// drafts holds the unsent composer text for chats that are not currently
-	// open, keyed by peer ID. The open chat's draft lives in the composer
+	// open, keyed by history. The open chat's draft lives in the composer
 	// itself; it is flushed here on switch-away and restored on switch-to (#62).
-	drafts map[int64]string
+	drafts map[domain.HistoryKey]string
 
 	// keyMap is the active key map, used to surface the live "write" binding in
 	// the composer placeholder. replyName is the reply target's sender name, used
@@ -97,7 +101,7 @@ func NewChatModel(width, height int) *ChatModel {
 		width:    width,
 		height:   height,
 		logo:     logo,
-		drafts:   make(map[int64]string),
+		drafts:   make(map[domain.HistoryKey]string),
 	}
 }
 
@@ -130,6 +134,7 @@ func (m *ChatModel) TickLogo() { m.logo.Tick() }
 // reads no store.
 type ChatHeader struct {
 	ChatID          int64
+	TopicID         int
 	Title           string
 	IsUser          bool
 	IsGroup         bool
@@ -142,9 +147,9 @@ type ChatHeader struct {
 // same chat (a data refresh, e.g. presence) leaves the composer untouched so it
 // cannot clobber text the user is currently typing (#62).
 func (m *ChatModel) SetHeader(h ChatHeader) {
-	changed := h.ChatID != m.header.ChatID
+	changed := h.ChatID != m.header.ChatID || h.TopicID != m.header.TopicID
 	if changed {
-		m.saveDraft(m.header.ChatID, m.composer.Value())
+		m.saveDraft(m.history(), m.composer.Value())
 		m.typingBase = ""
 		m.lastTypingAt = time.Time{}
 	}
@@ -154,14 +159,14 @@ func (m *ChatModel) SetHeader(h ChatHeader) {
 	m.msgList.SetOutboxReadMaxID(h.ReadOutboxMaxID)
 
 	if changed {
-		m.composer.SetValue(m.drafts[h.ChatID])
+		m.composer.SetValue(m.drafts[domain.HistoryKey{ChatID: h.ChatID, TopicID: h.TopicID}])
 		m.syncMsgListHeight()
 	}
 }
 
 // Close clears the pane when no chat is open.
 func (m *ChatModel) Close() {
-	m.saveDraft(m.header.ChatID, m.composer.Value())
+	m.saveDraft(m.history(), m.composer.Value())
 	m.header = ChatHeader{}
 	m.typingBase = ""
 	m.lastTypingAt = time.Time{}
@@ -184,29 +189,37 @@ func (m *ChatModel) IsGroup() bool { return m.header.IsGroup }
 // local edit (already typed and flushed on switch-away) must never be clobbered
 // by a stale server value (#62). Empty text is ignored. The seeded value is
 // applied to the composer the next time the chat is opened via SetChat.
-func (m *ChatModel) SeedDraft(peerID int64, text string) {
-	if peerID == 0 || text == "" {
+func (m *ChatModel) SeedDraft(h domain.HistoryKey, text string) {
+	if h.ChatID == 0 || text == "" {
 		return
 	}
-	if _, exists := m.drafts[peerID]; exists {
+	if _, exists := m.drafts[h]; exists {
 		return
 	}
-	m.drafts[peerID] = text
+	m.drafts[h] = text
 }
 
-// saveDraft stores unsent composer text for a chat, keyed by peer ID. Empty
-// text removes the entry so the map does not accumulate stale keys. id==0
-// (no chat) is never persisted.
-func (m *ChatModel) saveDraft(id int64, text string) {
-	if id == 0 {
+// saveDraft stores unsent composer text for a history - a chat, or a forum
+// topic, each with its own draft (#275). Empty text removes the entry so the
+// map does not accumulate stale keys. No chat is never persisted.
+func (m *ChatModel) saveDraft(h domain.HistoryKey, text string) {
+	if h.ChatID == 0 {
 		return
 	}
 	if text == "" {
-		delete(m.drafts, id)
+		delete(m.drafts, h)
 		return
 	}
-	m.drafts[id] = text
+	m.drafts[h] = text
 }
+
+// history names what the pane shows: a chat, or one topic of a forum.
+func (m *ChatModel) history() domain.HistoryKey {
+	return domain.HistoryKey{ChatID: m.header.ChatID, TopicID: m.header.TopicID}
+}
+
+// HeaderTitle is what the pane's header calls the open history.
+func (m *ChatModel) HeaderTitle() string               { return m.header.Title }
 func (m *ChatModel) SetMessages(msgs []domain.Message) { m.msgList.SetMessages(msgs) }
 
 // SetOutbox replaces the queued sends drawn below the window (#193).
@@ -555,10 +568,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composer.Blur()
 				m.msgList.SetShowIndicator(true)
 				if !m.lastTypingAt.IsZero() && m.header.ChatID != 0 {
-					chatID := m.header.ChatID
+					chatID, topicID := m.header.ChatID, m.header.TopicID
 					m.lastTypingAt = time.Time{}
 					return m, func() tea.Msg {
-						return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionCancel}
+						return SetTypingRequest{ChatID: chatID, TopicID: topicID, Action: domain.TypingActionCancel}
 					}
 				}
 			}
@@ -655,9 +668,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				if m.header.ChatID == 0 {
 					return m, nil
 				}
-				chatID := m.header.ChatID
+				chatID, topicID := m.header.ChatID, m.header.TopicID
 				return m, func() tea.Msg {
-					return SendMediaRequest{ChatID: chatID, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
+					return SendMediaRequest{ChatID: chatID, TopicID: topicID, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
 				}
 			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
@@ -674,7 +687,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.syncMsgListHeight()
 				m.lastTypingAt = time.Time{}
 				if m.header.ChatID != 0 && text != "" {
-					chatID := m.header.ChatID
+					chatID, topicID := m.header.ChatID, m.header.TopicID
 					var sendCmd tea.Cmd
 					if editID != 0 {
 						sendCmd = func() tea.Msg {
@@ -682,12 +695,12 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 						}
 					} else {
 						sendCmd = func() tea.Msg {
-							return SendMsgRequest{ChatID: chatID, Text: text, ReplyToMsgID: replyID, Entities: entities}
+							return SendMsgRequest{ChatID: chatID, TopicID: topicID, Text: text, ReplyToMsgID: replyID, Entities: entities}
 						}
 					}
 					if wasTyping {
 						cancelCmd := func() tea.Msg {
-							return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionCancel}
+							return SetTypingRequest{ChatID: chatID, TopicID: topicID, Action: domain.TypingActionCancel}
 						}
 						return m, tea.Batch(sendCmd, cancelCmd)
 					}
@@ -699,10 +712,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			m.composer = newC
 			m.syncMsgListHeight()
 			if m.header.ChatID != 0 && time.Since(m.lastTypingAt) >= 4*time.Second {
-				chatID := m.header.ChatID
+				chatID, topicID := m.header.ChatID, m.header.TopicID
 				m.lastTypingAt = time.Now()
 				typingCmd := func() tea.Msg {
-					return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionTyping}
+					return SetTypingRequest{ChatID: chatID, TopicID: topicID, Action: domain.TypingActionTyping}
 				}
 				if cmd != nil {
 					return m, tea.Batch(cmd, typingCmd)

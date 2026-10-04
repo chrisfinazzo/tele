@@ -70,6 +70,12 @@ func (m RootModel) View() tea.View {
 		}
 
 		chatListTitle := "[1] Chats"
+		middleView, middleScroll := m.chatList.View(), m.chatList.ScrollInfo()
+		if m.forum != nil {
+			// A forum's topic list fills the pane where the chat list was (#275).
+			chatListTitle = "[1] " + m.forum.Title()
+			middleView, middleScroll = m.forum.View(), m.forum.ScrollInfo()
+		}
 		chatTitle := "[2] " + m.chat.Title()
 		chatDot := ""
 		if m.chat.IsTyping() {
@@ -85,10 +91,10 @@ func (m RootModel) View() tea.View {
 			const sidebarW = 18
 			_, chatlistW, chatW := layout.SplitThree(m.width, sidebarW, 0.30)
 			foldersSB := &components.Scrollbar{Info: m.folderBar.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
-			chatListSB := &components.Scrollbar{Info: m.chatList.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
+			chatListSB := &components.Scrollbar{Info: middleScroll, TrackTop: 0, TrackLen: innerH}
 			chatSB := &components.Scrollbar{Info: m.chat.ScrollInfo(), TrackTop: 0, TrackLen: m.chat.MessageListHeight()}
 			foldersView := components.RenderBox(m.folderBar.View(), "[0] Folders", "", "", "", foldersBorder, foldersFg, sidebarW, innerH, foldersSB)
-			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatlistW, innerH, chatListSB)
+			chatListView := components.RenderBox(middleView, chatListTitle, "", "", "", chatListBorder, chatListFg, chatlistW, innerH, chatListSB)
 			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatW, innerH, chatSB)
 			main = joinPanes(foldersView, chatListView, chatView)
 			chatPanelLeft = sidebarW + chatlistW
@@ -99,9 +105,9 @@ func (m RootModel) View() tea.View {
 			leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
 			chatListWidth := leftW - 2*borderSize + 2
 			chatWidth := rightW - 2*borderSize + 2
-			chatListSB := &components.Scrollbar{Info: m.chatList.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
+			chatListSB := &components.Scrollbar{Info: middleScroll, TrackTop: 0, TrackLen: innerH}
 			chatSB := &components.Scrollbar{Info: m.chat.ScrollInfo(), TrackTop: 0, TrackLen: m.chat.MessageListHeight()}
-			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatListWidth, innerH, chatListSB)
+			chatListView := components.RenderBox(middleView, chatListTitle, "", "", "", chatListBorder, chatListFg, chatListWidth, innerH, chatListSB)
 			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatWidth, innerH, chatSB)
 			main = joinPanes(chatListView, chatView)
 			chatPanelLeft = chatListWidth

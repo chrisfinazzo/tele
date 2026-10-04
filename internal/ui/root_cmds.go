@@ -23,9 +23,9 @@ func (m RootModel) markReadCmd() tea.Cmd {
 	if maxID <= 0 || maxID <= m.chat.InboxReadMaxID() {
 		return nil
 	}
-	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	ctx, owner, h := m.ctx, m.owner, m.currentHistory()
 	return func() tea.Msg {
-		if err := owner.MarkRead(ctx, domain.HistoryKey{ChatID: chatID}, maxID); err != nil {
+		if err := owner.MarkRead(ctx, h, maxID); err != nil {
 			return errStatusBackground("mark read", err)
 		}
 		return nil
@@ -34,13 +34,13 @@ func (m RootModel) markReadCmd() tea.Cmd {
 
 // readReactionsCmd tells the owner to mark this chat's reactions read. The
 // owner clears the badge itself once Telegram confirms.
-func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
+func (m RootModel) readReactionsCmd(h domain.HistoryKey) tea.Cmd {
 	if m.owner == nil {
 		return nil
 	}
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := owner.ReadReactions(ctx, domain.HistoryKey{ChatID: chatID}); err != nil {
+		if err := owner.ReadReactions(ctx, h); err != nil {
 			return errStatusBackground("read reactions", err)
 		}
 		return nil
@@ -48,13 +48,13 @@ func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
 }
 
 // readMentionsCmd tells the owner to mark this chat's mentions read.
-func (m RootModel) readMentionsCmd(chatID int64) tea.Cmd {
+func (m RootModel) readMentionsCmd(h domain.HistoryKey) tea.Cmd {
 	if m.owner == nil {
 		return nil
 	}
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := owner.ReadMentions(ctx, domain.HistoryKey{ChatID: chatID}); err != nil {
+		if err := owner.ReadMentions(ctx, h); err != nil {
 			return errStatusBackground("read mentions", err)
 		}
 		return nil

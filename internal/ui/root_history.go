@@ -13,44 +13,25 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case screens.OpenChatMsg:
 		m.searchModel = nil
-		if msg.ChatID == m.currentChatID {
-			result, cmd := m.focusPane(FocusChat)
+		if msg.IsForum {
+			// A forum opens through its topic list: it has no history of its
+			// own. A notification names the topic it came from, and opens that.
+			m.chatList.SetActiveByID(msg.ChatID)
+			m = m.enterForum(msg.ChatID, msg.Title)
+			if msg.TopicID != 0 {
+				return m.openTopic(screens.OpenTopicMsg{ChatID: msg.ChatID, TopicID: msg.TopicID, Title: msg.TopicTitle})
+			}
+			result, cmd := m.focusPane(FocusChatList)
 			return result.(RootModel), cmd
 		}
-		// Persist the chat we are leaving as a Telegram draft before switching
-		// (#62). Captured here while currentChatID still points at the old chat.
-		draftFlush := m.flushCurrentDraftCmd()
-		m.currentChatID = msg.ChatID
-		m.stopGifAnim()
-		// Drop decoded GIF frames from the previous chat; they are large (up to
-		// gifMaxFrames RGBA images each) and otherwise accumulate for the whole
-		// session. They re-decode on demand if a GIF is selected again.
-		clear(m.gifFrames)
-		m.chatList.SetActiveByID(msg.ChatID)
-		if m.owner != nil {
-			m.owner.SetFocus(domain.HistoryKey{ChatID: msg.ChatID})
-		}
-		m.chat.ClearPendingAction()
-		// Paint the title immediately; everything else arrives on the
-		// subscription's first delta, which is always a full Reset.
-		m.chat.SetHeader(screens.ChatHeader{ChatID: msg.ChatID, Title: msg.Title})
-		m.chat.SetLoading(true)
-		m.chat.SetKnownImages(m.imageCache)
-		m.focus = FocusChat
-		m.chatList.SetFocused(false)
-		m.chat.SetFocused(true)
-		m.statusBar.SetActivePane("chat")
-		// Drop the previous chat's placements; reconcile (after this update)
-		// transmits the now-visible images.
-		m.requestKittyReset()
+		return m.openHistory(domain.HistoryKey{ChatID: msg.ChatID}, msg.Title)
 
-		// The previous chat's window and draft stop describing anything; the new
-		// chat's arrive on its opening Reset, which also reads its mentions.
-		m.chatMsgs = nil
-		m.chatDraft = ""
-		m.readMentionsOnReset = true
-		m.subscribeChat(msg.ChatID)
-		return m, draftFlush
+	case screens.OpenTopicMsg:
+		m.searchModel = nil
+		return m.openTopic(msg)
+
+	case screens.LeaveForumMsg:
+		return m.leaveForum(), nil
 
 	case screens.LoadMoreMsg:
 		// Reaching the top of the window asks the owner to widen it. Whether the

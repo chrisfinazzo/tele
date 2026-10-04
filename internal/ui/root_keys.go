@@ -190,6 +190,25 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.focus == FocusChatList && m.forum != nil {
+		// A forum's topic list fills the pane: the same keys move through it,
+		// Enter opens a topic and Esc goes back to the chat list (#275).
+		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
+		if res == keys.MatchPending {
+			return m, nil
+		}
+		if action == keys.ActionOpenContextMenu {
+			return m.openTopicMenu()
+		}
+		if action != keys.ActionNone && action != keys.ActionShowProfile {
+			newPane, cmd := m.forum.Update(keys.ActionMsg{Action: action})
+			m.forum = newPane.(*screens.TopicListModel)
+			m.syncTopicListWindow()
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	if m.focus == FocusChatList {
 		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
 		if res == keys.MatchPending {
@@ -234,13 +253,16 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.chat.Close()
 		m.chat.SetMessages(nil)
 		m.chatMsgs = nil
-		m.currentChatID = 0
+		m.currentChatID, m.currentTopicID = 0, 0
 		if m.owner != nil {
 			// The owner cannot see the screen: leaving a chat has to be reported
 			// as explicitly as entering one, or it stays silenced (#192).
 			m.owner.SetFocus(domain.HistoryKey{})
 		}
 		m.chatList.SetActiveByID(0)
+		if m.forum != nil {
+			m.forum.SetActive(0)
+		}
 		if m.owner != nil && m.chatSub != 0 {
 			m.owner.Unsubscribe(m.chatSub)
 			m.chatSub = 0

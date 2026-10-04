@@ -78,6 +78,11 @@ type SearchModel struct {
 	phase        forwardPhase // forward mode only: select (default) | comment
 	comment      string
 	target       project.ChatRow // chat chosen when entering the comment phase
+	// forwardForum, when set, makes the picker choose among that forum's
+	// topics: its rows are topics under their ids, and confirming one forwards
+	// into it (#275). forwardForumTitle names the forum in the result.
+	forwardForum      int64
+	forwardForumTitle string
 	// globalResults holds users found via server-side contacts.search (#82),
 	// shown in the "New contacts" section. serial guards debounce/RPC staleness.
 	globalResults []project.ChatRow
@@ -104,6 +109,37 @@ func NewForwardPicker(chats []project.ChatRow, msgID int, width, height int, km 
 	m := NewSearchModel(chats, width, height, km)
 	m.forwardMsgID = msgID
 	return m
+}
+
+// ForwardForumChosen is emitted when the forward picker's chosen target is a
+// forum: a forward goes into one of its topics, which have to be listed first.
+type ForwardForumChosen struct {
+	ChatID int64
+	Title  string
+	MsgID  int
+}
+
+// NewForwardTopicPicker builds the forward picker over one forum's topics:
+// confirming a topic forwards into it.
+func NewForwardTopicPicker(forumID int64, forumTitle string, topics []project.TopicRow, msgID int, width, height int, km keys.KeyMap) *SearchModel {
+	rows := make([]project.ChatRow, 0, len(topics))
+	for _, t := range topics {
+		rows = append(rows, project.ChatRow{ID: int64(t.ID), Title: TopicTitle(t), Unread: t.Unread, Muted: t.Muted})
+	}
+	m := NewForwardPicker(rows, msgID, width, height, km)
+	m.forwardForum, m.forwardForumTitle = forumID, forumTitle
+	return m
+}
+
+// forwardRequest is the forward a confirmed target makes: into a chat, or in
+// topic mode into a topic of the forum being picked from.
+func (m *SearchModel) forwardRequest(target project.ChatRow, comment string) ForwardToChatRequest {
+	req := ForwardToChatRequest{ToChatID: target.ID, Title: target.Title, MsgID: m.forwardMsgID, Comment: comment}
+	if m.forwardForum != 0 {
+		req.ToChatID, req.ToTopicID = m.forwardForum, int(target.ID)
+		req.Title = m.forwardForumTitle + " › " + target.Title
+	}
+	return req
 }
 
 // SetChats installs the chat list the overlay searches, keeping whatever was
@@ -306,6 +342,10 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 	case tea.KeyTab:
 		if m.forwardMsgID != 0 {
 			if chat, ok := m.selectableAt(m.list.Cursor()); ok {
+				if chat.IsForum && m.forwardForum == 0 {
+					chosen := ForwardForumChosen{ChatID: chat.ID, Title: chat.Title, MsgID: m.forwardMsgID}
+					return m, func() tea.Msg { return chosen }
+				}
 				m.target = chat
 				m.comment = ""
 				m.phase = forwardComment
@@ -320,16 +360,17 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 			return m, nil
 		}
 		if m.forwardMsgID != 0 {
-			msgID := m.forwardMsgID
-			to, title := chat.ID, chat.Title
-			return m, func() tea.Msg {
-				return ForwardToChatRequest{ToChatID: to, Title: title, MsgID: msgID}
+			if chat.IsForum && m.forwardForum == 0 {
+				chosen := ForwardForumChosen{ChatID: chat.ID, Title: chat.Title, MsgID: m.forwardMsgID}
+				return m, func() tea.Msg { return chosen }
 			}
+			req := m.forwardRequest(chat, "")
+			return m, func() tea.Msg { return req }
 		}
 		// A search hit may be a contact with no dialog. It opens by id like any
 		// chat: the owner kept the address search returned (#278).
-		chatID, title := chat.ID, chat.Title
-		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title} }
+		chatID, title, forum := chat.ID, chat.Title, chat.IsForum
+		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title, IsForum: forum} }
 	case tea.KeyBackspace:
 		if len(m.query) > 0 {
 			runes := []rune(m.query)
@@ -378,12 +419,8 @@ func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		m.phase = forwardSelect
 		return m, nil
 	case tea.KeyEnter:
-		comment := m.comment
-		to, title := m.target.ID, m.target.Title
-		msgID := m.forwardMsgID
-		return m, func() tea.Msg {
-			return ForwardToChatRequest{ToChatID: to, Title: title, MsgID: msgID, Comment: comment}
-		}
+		req := m.forwardRequest(m.target, m.comment)
+		return m, func() tea.Msg { return req }
 	case tea.KeyBackspace:
 		if len(m.comment) > 0 {
 			r := []rune(m.comment)

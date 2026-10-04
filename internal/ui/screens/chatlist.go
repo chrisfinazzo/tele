@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,6 +25,12 @@ import (
 type OpenChatMsg struct {
 	ChatID int64
 	Title  string
+	// IsForum opens the chat through its topic list instead (#275). TopicID,
+	// when set, opens that topic of it as well, as a notification does;
+	// TopicTitle is what the header shows until the topic's projection lands.
+	IsForum    bool
+	TopicID    int
+	TopicTitle string
 }
 
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user
@@ -34,9 +41,11 @@ type ForwardToChatRequest struct {
 	// Title names the target in the result status. The picker had the chat in
 	// hand when the user chose it, so it travels along rather than being looked
 	// up again — a search hit may not be a chat the owner holds at all.
-	Title   string
-	MsgID   int
-	Comment string // optional; sent as a separate message before the forward
+	Title string
+	// ToTopicID is the forum topic forwarded into, 0 outside a forum (#275).
+	ToTopicID int
+	MsgID     int
+	Comment   string // optional; sent as a separate message before the forward
 }
 
 // The row styles used to live here as package-level vars carrying no colour.
@@ -129,34 +138,16 @@ func rowIndicators(c project.ChatRow, base lipgloss.Style) string {
 
 // ChatListModel renders a window onto the chat list rather than the whole list:
 // the core owns order and filtering, and hands over a slice around what is on
-// screen. cursor indexes the whole list, so it stays meaningful when the window
-// moves under it.
+// screen. The window, the cursor and the highlight are rowList's; what is here
+// is what makes the rows chats.
 type ChatListModel struct {
-	rows   []project.ChatRow
-	offset int // index of rows[0] in the whole filtered list
-	total  int // length of the whole filtered list
-	cursor int // index into the whole list, not into rows
-	// reqOffset/reqLimit are the last window asked for, so a repeated request
-	// for the same window is silent. Zero limit means nothing asked for yet.
-	reqOffset int
-	reqLimit  int
-	// activeID is the open chat, held by id rather than index so it survives a
-	// window that no longer contains it.
-	activeID int64
-	width    int
-	height   int
-	focused  bool
-	spinner  components.Spinner
-
-	// highlightChatID is the chat currently flashed because a new incoming
-	// message bumped it to the top; highlightStep counts down to 0 (none).
-	// Tracked by id so the highlight survives a window reset.
-	highlightChatID int64
-	highlightStep   int
+	rowList[project.ChatRow]
+	width   int
+	spinner components.Spinner
 }
 
 func NewChatListModel() *ChatListModel {
-	return &ChatListModel{}
+	return &ChatListModel{rowList: rowList[project.ChatRow]{idOf: func(r project.ChatRow) int64 { return r.ID }}}
 }
 
 // TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
@@ -167,192 +158,36 @@ func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 // spinner tick loop (issue #147).
 func (m *ChatListModel) IsLoadingChats() bool { return m.total == 0 }
 
-// SetWindow replaces the window with the contents of a chatlist Reset delta.
-// The cursor follows the chat it was on, which is what makes a Reset — emitted
-// on every reorder — non-disruptive.
-//
-// When the cursor sits outside the window being replaced, there is no chat to
-// follow and the numeric position is kept instead. That case is not exotic: a
-// jump to the end of the list moves the cursor first and only then asks for the
-// window around it, so the arriving window is precisely the one the cursor is
-// no longer inside.
-func (m *ChatListModel) SetWindow(offset, total int, rows []project.ChatRow) {
-	cursorID := int64(0)
-	if r, ok := m.rowAt(m.cursor); ok {
-		cursorID = r.ID
-	}
-
-	m.rows = rows
-	m.offset = offset
-	m.total = total
-
-	if cursorID != 0 {
-		for i, r := range rows {
-			if r.ID == cursorID {
-				m.cursor = offset + i
-				break
-			}
-		}
-	}
-	m.clampCursor()
-}
-
-// SetRow replaces one row in place, from a chatlist Row delta. The row is found
-// by id: a Row is only emitted while the window's order is unchanged, so the id
-// is unambiguous and no index travels on the wire.
-func (m *ChatListModel) SetRow(row project.ChatRow) {
-	for i := range m.rows {
-		if m.rows[i].ID == row.ID {
-			m.rows[i] = row
-			return
-		}
-	}
-}
-
-// rowAt returns the row at a whole-list index, translating through the window.
-// ok is false when the index falls outside the window the core has sent.
-func (m *ChatListModel) rowAt(i int) (project.ChatRow, bool) {
-	j := i - m.offset
-	if j < 0 || j >= len(m.rows) {
-		return project.ChatRow{}, false
-	}
-	return m.rows[j], true
-}
-
-// viewStart is the whole-list index of the first visible row. It is the single
-// definition of the scroll position: View, ScrollInfo, CursorViewportRow and
-// ChatAtViewportRow all derive from it, because four copies of this arithmetic
-// is how a click lands on the wrong chat.
-func (m *ChatListModel) viewStart() int {
-	if m.height <= 0 {
-		return 0
-	}
-	start := m.cursor - m.height + 1
-	if start < 0 {
-		start = 0
-	}
-	if max := m.total - m.height; start > max {
-		if max < 0 {
-			max = 0
-		}
-		start = max
-	}
-	return start
-}
-
-func (m *ChatListModel) clampCursor() {
-	if m.total == 0 {
-		m.cursor = 0
-		return
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-	if m.cursor >= m.total {
-		m.cursor = m.total - 1
-	}
-}
-
-// WindowRequest reports the window the model wants for its current scroll
-// position: the visible rows plus one screen of overscan either side, so
-// ordinary scrolling never waits on a round trip. changed is false when this is
-// the window it last asked for, which keeps a quiet list quiet.
-//
-// It compares against the last request rather than against the window it holds,
-// because at the end of the list the core legitimately returns fewer rows than
-// asked for and a held-window comparison would ask again forever.
-func (m *ChatListModel) WindowRequest() (offset, limit int, changed bool) {
-	h := m.height
-	if h <= 0 {
-		h = 1
-	}
-	offset = m.viewStart() - h
-	if offset < 0 {
-		offset = 0
-	}
-	limit = 3 * h
-	if offset == m.reqOffset && limit == m.reqLimit {
-		return offset, limit, false
-	}
-	m.reqOffset, m.reqLimit = offset, limit
-	return offset, limit, true
-}
-
 // HighlightChat starts a fade highlight on the chat-list row for the given id.
-func (m *ChatListModel) HighlightChat(id int64) {
-	m.highlightChatID = id
-	m.highlightStep = components.HighlightInitialStep
-}
+func (m *ChatListModel) HighlightChat(id int64) { m.highlight(id) }
 
 // StepChatHighlight advances the chat-row highlight fade by one step. Returns
 // true while still active; clears the highlight and returns false at 0. No-op
 // (false) when no highlight is active.
-func (m *ChatListModel) StepChatHighlight() bool {
-	if m.highlightStep <= 0 {
-		return false
-	}
-	m.highlightStep--
-	if m.highlightStep <= 0 {
-		m.highlightChatID = 0
-		return false
-	}
-	return true
-}
+func (m *ChatListModel) StepChatHighlight() bool { return m.StepHighlight() }
 
 // HighlightedChatID returns the currently highlighted chat id (0 when none).
-func (m *ChatListModel) HighlightedChatID() int64 { return m.highlightChatID }
-
-// HighlightStep returns the current chat-row fade step (0 when none).
-func (m *ChatListModel) HighlightStep() int { return m.highlightStep }
+func (m *ChatListModel) HighlightedChatID() int64 { return m.highlightID }
 
 // styleTitle applies the fade-accent foreground to a row's (already truncated)
 // title while that row is the active highlight target. The focused-cursor row
 // keeps its selection background instead, so it is left unstyled here.
 func (m *ChatListModel) styleTitle(i int, id int64, truncated string, base lipgloss.Style) string {
-	if m.highlightStep <= 0 || id != m.highlightChatID {
+	return styleHighlighted(&m.rowList, i, id, truncated, base, theme.T().HighlightBaseChat)
+}
+
+// styleHighlighted paints a row title with the fade accent while the row is the
+// highlight target, for any list built on rowList.
+func styleHighlighted[R any](m *rowList[R], i int, id int64, truncated string, base lipgloss.Style, from color.Color) string {
+	if m.highlightStep <= 0 || id != m.highlightID {
 		return base.Render(truncated)
 	}
 	if i == m.cursor && m.focused {
 		// The selection fill supplies the colour; the title only takes the fill.
 		return base.Render(truncated)
 	}
-	fg := components.FadeAccentColor(theme.T().HighlightAccent, theme.T().HighlightBaseChat, m.highlightStep, components.HighlightFadeSteps)
+	fg := components.FadeAccentColor(theme.T().HighlightAccent, from, m.highlightStep, components.HighlightFadeSteps)
 	return base.Foreground(fg).Render(truncated)
-}
-
-func (m *ChatListModel) Cursor() int { return m.cursor }
-
-// Rows returns the window's rows. For assertions and for the mouse mapping;
-// callers must not assume it is the whole list.
-func (m *ChatListModel) Rows() []project.ChatRow { return m.rows }
-
-// Total is the length of the whole filtered list, which the window is a slice of.
-func (m *ChatListModel) Total() int { return m.total }
-
-// ActiveIdx is the whole-list index of the open chat, or -1 when it is outside
-// the window (or no chat is open).
-func (m *ChatListModel) ActiveIdx() int {
-	if m.activeID == 0 {
-		return -1
-	}
-	for i, r := range m.rows {
-		if r.ID == m.activeID {
-			return m.offset + i
-		}
-	}
-	return -1
-}
-
-// SetActive marks a chat as the open one. It does not touch the cursor: the
-// window is replaced on every reorder, and dragging the cursor back to the open
-// chat each time would pin it there for as long as a chat is open.
-func (m *ChatListModel) SetActive(id int64) { m.activeID = id }
-
-// SetActiveByID marks a chat as the open one and moves the cursor onto it. For
-// the moment a chat is opened, where the cursor should follow.
-func (m *ChatListModel) SetActiveByID(id int64) {
-	m.activeID = id
-	m.SetCursorByID(id)
 }
 
 // SelectedChat returns the open chat's row, when the window holds it.
@@ -363,132 +198,43 @@ func (m *ChatListModel) SelectedChat() (project.ChatRow, bool) {
 	return project.ChatRow{}, false
 }
 
-func (m *ChatListModel) SetCursorByID(id int64) {
-	for i, r := range m.rows {
-		if r.ID == id {
-			m.cursor = m.offset + i
-			return
-		}
-	}
-}
 func (m *ChatListModel) Context() keys.Context { return keys.ContextChatList }
-func (m *ChatListModel) Focused() bool         { return m.focused }
-func (m *ChatListModel) SetFocused(f bool)     { m.focused = f }
 
 func (m *ChatListModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 }
 
+// Width returns the pane's content width in cells.
+func (m *ChatListModel) Width() int { return m.width }
+
 // CursorChat returns the row currently under the cursor.
 func (m *ChatListModel) CursorChat() (project.ChatRow, bool) { return m.rowAt(m.cursor) }
-
-// Height returns the pane's content height in rows.
-func (m *ChatListModel) Height() int { return m.height }
-
-// ScrollInfo reports the chat list's scroll position for the pane scrollbar. It
-// reflects the whole list, not the window: the scrollbar is the user's sense of
-// how much account there is.
-func (m *ChatListModel) ScrollInfo() components.ScrollInfo {
-	if m.height <= 0 {
-		return components.ScrollInfo{Total: m.total, Visible: m.total, Offset: 0}
-	}
-	return components.ScrollInfo{Total: m.total, Visible: m.height, Offset: m.viewStart()}
-}
-
-// CursorViewportRow returns the cursor's row index within the visible viewport.
-func (m *ChatListModel) CursorViewportRow() int {
-	if m.height <= 0 {
-		return m.cursor
-	}
-	return m.cursor - m.viewStart()
-}
-
-// SetCursor moves the selection cursor to a whole-list index, clamped. It is a
-// no-op when the list is empty.
-func (m *ChatListModel) SetCursor(i int) {
-	if m.total == 0 {
-		return
-	}
-	m.cursor = i
-	m.clampCursor()
-}
 
 // ChatAtViewportRow maps a content row (0-based, within the visible viewport) to
 // a chat row. ok is false when the viewport row holds no chat: past the end of
 // the list, or inside a window the core has not sent yet.
 func (m *ChatListModel) ChatAtViewportRow(row int) (project.ChatRow, bool) {
-	if row < 0 || m.total == 0 {
-		return project.ChatRow{}, false
-	}
-	visible := m.height
-	if visible <= 0 {
-		visible = m.total
-	}
-	if row >= visible {
-		return project.ChatRow{}, false
-	}
-	return m.rowAt(m.viewStart() + row)
+	return m.rowAtViewportRow(row)
 }
 
 // ChatIndexAtViewportRow maps a viewport row to a whole-list index, for callers
 // that move the cursor rather than read the row.
 func (m *ChatListModel) ChatIndexAtViewportRow(row int) (int, bool) {
-	if row < 0 || m.total == 0 {
-		return 0, false
-	}
-	visible := m.height
-	if visible <= 0 {
-		visible = m.total
-	}
-	if row >= visible {
-		return 0, false
-	}
-	idx := m.viewStart() + row
-	if idx >= m.total {
-		return 0, false
-	}
-	return idx, true
+	return m.indexAtViewportRow(row)
 }
 
 func (m *ChatListModel) Init() tea.Cmd { return nil }
 
 func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case keys.ActionMsg:
-		switch msg.Action {
-		case keys.ActionDown:
-			if m.cursor < m.total-1 {
-				m.cursor++
-			}
-		case keys.ActionUp:
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case keys.ActionGoTop:
-			m.cursor = 0
-		case keys.ActionGoBottom:
-			if m.total > 0 {
-				m.cursor = m.total - 1
-			}
-		case keys.ActionScrollHalfDown:
-			step := m.height * 2 / 3
-			if step < 1 {
-				step = 1
-			}
-			m.cursor += step
-			m.clampCursor()
-		case keys.ActionScrollHalfUp:
-			step := m.height * 2 / 3
-			if step < 1 {
-				step = 1
-			}
-			m.cursor -= step
-			m.clampCursor()
-		case keys.ActionConfirm:
+	if msg, ok := msg.(keys.ActionMsg); ok {
+		if m.move(msg.Action) {
+			return m, nil
+		}
+		if msg.Action == keys.ActionConfirm {
 			if row, ok := m.rowAt(m.cursor); ok {
 				m.activeID = row.ID
-				return m, func() tea.Msg { return OpenChatMsg{ChatID: row.ID, Title: row.Title} }
+				return m, func() tea.Msg { return OpenChatMsg{ChatID: row.ID, Title: row.Title, IsForum: row.IsForum} }
 			}
 		}
 	}
@@ -501,15 +247,7 @@ func (m *ChatListModel) View() string {
 		// only what it adds itself (#260).
 		return theme.S().Body.Render(m.spinner.View() + " Loading chats...")
 	}
-	visible := m.height
-	if visible <= 0 {
-		visible = m.total
-	}
-	start := m.viewStart()
-	end := start + visible
-	if end > m.total {
-		end = m.total
-	}
+	start, end := m.visibleRange()
 
 	w := m.width
 	if w < 1 {
@@ -539,14 +277,7 @@ func (m *ChatListModel) View() string {
 		// — which is the presence dot, or the unread badge, or a highlighted
 		// title. On a selected row that reads as the highlight tearing halfway
 		// across, and on an unselected one as a hole in the canvas.
-		base := theme.S().Body
-		switch {
-		case i == m.cursor && m.focused:
-			base = theme.S().SelectedChat
-		case i == activeIdx:
-			base = theme.S().BodyBold
-		}
-		base = base.Inline(true)
+		base := rowBase(i == m.cursor && m.focused, i == activeIdx)
 
 		badge := rowIndicators(row, base)
 
@@ -563,27 +294,36 @@ func (m *ChatListModel) View() string {
 			}
 		}
 
-		var content string
-		if badge == "" {
-			trunc := runewidth.Truncate(row.Title, inner, "…")
-			lw := lipgloss.Width(trunc)
-			content = m.styleTitle(i, row.ID, trunc, base) + padRow(base, inner-lw)
-		} else {
-			badgeW := lipgloss.Width(badge)
-			maxTitleW := inner - badgeW - 1
-			if maxTitleW < 0 {
-				maxTitleW = 0
-			}
-			truncTitle := runewidth.Truncate(row.Title, maxTitleW, "…")
-			titleW := lipgloss.Width(truncTitle)
-			pad := inner - titleW - badgeW
-			if pad < 0 {
-				pad = 0
-			}
-			content = m.styleTitle(i, row.ID, truncTitle, base) + padRow(base, pad) + badge
-		}
-
-		lines = append(lines, prefix+content)
+		lines = append(lines, prefix+rowContent(row.Title, badge, inner, base, func(t string) string {
+			return m.styleTitle(i, row.ID, t, base)
+		}))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// rowBase is a list row's own style: the selection fill under a focused
+// cursor, bold for the open row, body text otherwise.
+func rowBase(selected, active bool) lipgloss.Style {
+	base := theme.S().Body
+	switch {
+	case selected:
+		base = theme.S().SelectedChat
+	case active:
+		base = theme.S().BodyBold
+	}
+	return base.Inline(true)
+}
+
+// rowContent lays out a row's title and its right-aligned indicators across
+// inner cells, truncating the title to leave the indicators room.
+func rowContent(title, badge string, inner int, base lipgloss.Style, styleTitle func(string) string) string {
+	if badge == "" {
+		trunc := runewidth.Truncate(title, inner, "…")
+		return styleTitle(trunc) + padRow(base, inner-lipgloss.Width(trunc))
+	}
+	badgeW := lipgloss.Width(badge)
+	maxTitleW := max(inner-badgeW-1, 0)
+	truncTitle := runewidth.Truncate(title, maxTitleW, "…")
+	pad := max(inner-lipgloss.Width(truncTitle)-badgeW, 0)
+	return styleTitle(truncTitle) + padRow(base, pad) + badge
 }

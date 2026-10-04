@@ -65,6 +65,9 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 	}
 	m.focus = target
 	m.chatList.SetFocused(target == FocusChatList)
+	if m.forum != nil {
+		m.forum.SetFocused(target == FocusChatList)
+	}
 	m.chat.SetFocused(target == FocusChat)
 	if m.folderBar != nil {
 		m.folderBar.SetFocused(target == FocusFolders)
@@ -79,7 +82,7 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 		// A reaction that arrived while the pane was not focused is only being
 		// looked at now, so this is when it counts as seen.
 		if m.chatUnreadReactions > 0 {
-			return m, m.readReactionsCmd(m.currentChatID)
+			return m, m.readReactionsCmd(m.currentHistory())
 		}
 	}
 	return m, nil

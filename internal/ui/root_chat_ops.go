@@ -18,9 +18,9 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 		if m.owner == nil {
 			return m, nil, true
 		}
-		ctx, owner, chatID, muted := m.ctx, m.owner, req.ChatID, req.Muted
+		ctx, owner, h, muted := m.ctx, m.owner, domain.HistoryKey{ChatID: req.ChatID, TopicID: req.TopicID}, req.Muted
 		return m, func() tea.Msg {
-			if err := owner.SetMuted(ctx, domain.HistoryKey{ChatID: chatID}, muted); err != nil {
+			if err := owner.SetMuted(ctx, h, muted); err != nil {
 				return errStatus("mute", err)
 			}
 			return nil
@@ -43,7 +43,7 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 		// Mark as read: a maxID of 0 reads the chat outright, clearing both the
 		// count and the manual mark.
 		return m, func() tea.Msg {
-			if err := owner.MarkRead(ctx, domain.HistoryKey{ChatID: chatID}, 0); err != nil {
+			if err := owner.MarkRead(ctx, domain.HistoryKey{ChatID: chatID, TopicID: req.TopicID}, 0); err != nil {
 				return errStatus("mark read", err)
 			}
 			return nil

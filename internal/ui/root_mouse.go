@@ -85,6 +85,13 @@ func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	r, _, _ := m.hitTest(mo.X, mo.Y)
 	switch r {
 	case regionChatList:
+		if m.forum != nil {
+			// A forum's topic list fills the pane (#275).
+			newPane, cmd := m.forum.Update(keys.ActionMsg{Action: action})
+			m.forum = newPane.(*screens.TopicListModel)
+			m.syncTopicListWindow()
+			return m, cmd
+		}
 		newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
 		m.chatList = newPane.(*screens.ChatListModel)
 		// The wheel moves the cursor as surely as a key does, so it has to ask
@@ -133,6 +140,16 @@ func (m RootModel) handleMouseClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	case regionChatList:
 		res, fcmd := m.focusPane(FocusChatList)
 		m = res.(RootModel)
+		if m.forum != nil {
+			idx, ok := m.forum.TopicIndexAtViewportRow(localY)
+			if !ok {
+				return m, tea.Batch(blurCmd, fcmd)
+			}
+			m.forum.SetCursor(idx)
+			newPane, ocmd := m.forum.Update(keys.ActionMsg{Action: keys.ActionConfirm})
+			m.forum = newPane.(*screens.TopicListModel)
+			return m, tea.Batch(blurCmd, fcmd, ocmd)
+		}
 		idx, ok := m.chatList.ChatIndexAtViewportRow(localY)
 		if !ok {
 			return m, tea.Batch(blurCmd, fcmd)

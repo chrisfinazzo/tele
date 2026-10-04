@@ -305,6 +305,28 @@ func TestOwner_ScrollingTheTopicListLoadsTheNextPage(t *testing.T) {
 	assert.Len(t, c.offsetsAsked(), 1, "every topic is held, so there is nothing more to ask for")
 }
 
+// A modal choosing a topic - the forward picker - asks for a forum's topics
+// once, the way it asks for the chat list.
+func TestOwner_TopicsAnswersWithAForumsTopicRows(t *testing.T) {
+	c := newTopicConn()
+	o, s := forumOwner(t, c)
+	s.Store().SetTopicsPage(forumChat, []domain.Topic{
+		{ChatID: forumChat, ID: 12, Title: "Releases", UnreadCount: 2},
+		{ChatID: forumChat, ID: 30, Title: "Design", Mute: domain.TopicMuted},
+	})
+
+	rows, err := o.Topics(context.Background(), forumChat)
+
+	require.NoError(t, err)
+	byID := make(map[int]project.TopicRow, len(rows))
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	require.Len(t, byID, 2)
+	assert.Equal(t, project.TopicRow{ID: 12, Title: "Releases", Unread: 2}, byID[12])
+	assert.True(t, byID[30].Muted)
+}
+
 func TestOwner_BootstrapLoadsEachForumsTopics(t *testing.T) {
 	c := newTopicConn()
 	c.dialogs = []domain.Chat{

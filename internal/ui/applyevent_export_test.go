@@ -186,6 +186,10 @@ func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]projec
 
 // Chats, Chat and FolderFilters answer from the test's store, as the real
 // owner answers from its own.
+func (o *testOwner) Topics(_ context.Context, chatID int64) ([]project.TopicRow, error) {
+	return project.TopicRows(storeReader{o.state.Store()}, chatID), o.cmdErr
+}
+
 func (o *testOwner) Chats(_ context.Context) ([]project.ChatRow, error) {
 	var rows []project.ChatRow
 	for _, c := range o.state.Store().Chats() {

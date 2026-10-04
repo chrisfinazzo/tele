@@ -19,6 +19,8 @@ func (m RootModel) handleDelta(d project.Delta) (RootModel, tea.Cmd) {
 		return m.handleChatListDelta(d.ChatList)
 	case d.History != nil && d.Sub == m.chatSub:
 		return m.handleChatDelta(d.History)
+	case d.TopicList != nil && d.Sub == m.topicSub:
+		return m.handleTopicListDelta(d.TopicList)
 	}
 	// A delta for a subscription this model no longer holds: the window was
 	// replaced (a chat switch) and the reply raced the unsubscribe. Dropping it
@@ -56,6 +58,9 @@ func (m RootModel) handleChatListDelta(d *project.ChatListDelta) (RootModel, tea
 // interrupted — that arrives separately, as a Notification.
 func (m RootModel) handleIncoming(in core.Incoming) (RootModel, tea.Cmd) {
 	m.chatList.HighlightChat(in.ChatID)
+	if m.forum != nil && m.forum.ChatID() == in.ChatID && in.TopicID != 0 {
+		m.forum.HighlightTopic(in.TopicID)
+	}
 	m.chatHighlightSerial++
 	return m, chatHighlightFadeCmd(m.chatHighlightSerial)
 }
@@ -88,8 +93,12 @@ func (m RootModel) handleFailure(f core.Failure) (RootModel, tea.Cmd) {
 // toast and opens the target chat (#59 click-to-open).
 type notifyOpenMsg struct {
 	chatID int64
-	title  string
-	serial int
+	// topicID is the forum topic the notification came from, 0 outside a
+	// forum; opening it goes into the forum and opens that topic (#275).
+	topicID    int
+	title      string
+	topicTitle string
+	serial     int
 }
 
 // showInAppNotify adds a top-right notify toast for a decision the owner made
@@ -101,7 +110,7 @@ func (m RootModel) showInAppNotify(n core.Notification) tea.Cmd {
 		title = "New message"
 	}
 	serial := m.toasts.Add(components.ToastNotify, title+"\n"+n.Body)
-	m.toasts.SetClick(serial, notifyOpenMsg{chatID: n.ChatID, title: n.Title, serial: serial})
+	m.toasts.SetClick(serial, notifyOpenMsg{chatID: n.ChatID, topicID: n.TopicID, title: n.ChatTitle, topicTitle: n.TopicTitle, serial: serial})
 	return tea.Tick(durationFor(components.SeverityInfo), func(time.Time) tea.Msg {
 		return ClearStatusErrMsg{Serial: serial}
 	})

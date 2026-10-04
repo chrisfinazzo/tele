@@ -16,11 +16,14 @@ import (
 // command, addressed by chat id like every other (#278).
 type ToggleUnreadRequest struct {
 	ChatID int64
-	Unread bool
+	// TopicID names the forum topic the request is about, 0 for a chat (#275).
+	TopicID int
+	Unread  bool
 }
 type ToggleMuteRequest struct {
-	ChatID int64
-	Muted  bool
+	ChatID  int64
+	TopicID int
+	Muted   bool
 }
 type AddToFolderRequest struct {
 	ChatID   int64
@@ -43,7 +46,10 @@ const (
 // row. It reuses the menu styles and box rendering from the message
 // context menu but carries chat-specific actions.
 type ChatContextMenu struct {
-	chat      project.ChatRow
+	chat project.ChatRow
+	// topicID, when set, makes this the menu over a forum topic's row: chat is
+	// then the forum, and only what can be done to a topic is offered (#275).
+	topicID   int
 	folders   []domain.FolderFilter
 	items     []menuItem
 	savedMain []menuItem
@@ -57,6 +63,19 @@ type ChatContextMenu struct {
 // come from an owner query and arrive through SetFolders (#278).
 func NewChatContextMenu(chat project.ChatRow, folders []domain.FolderFilter, km keys.KeyMap) *ChatContextMenu {
 	cm := &ChatContextMenu{chat: chat, folders: folders, keyMap: km, list: NewListView(true)}
+	cm.setItems(cm.mainItems())
+	return cm
+}
+
+// NewTopicContextMenu builds the menu over a forum topic's row: read it, mute
+// it or unmute it. A topic has no unread mark, no folder and no archive.
+func NewTopicContextMenu(forumID int64, topic project.TopicRow, km keys.KeyMap) *ChatContextMenu {
+	cm := &ChatContextMenu{
+		chat:    project.ChatRow{ID: forumID, Unread: topic.Unread, Muted: topic.Muted},
+		topicID: topic.ID,
+		keyMap:  km,
+		list:    NewListView(true),
+	}
 	cm.setItems(cm.mainItems())
 	return cm
 }
@@ -96,6 +115,9 @@ func (cm *ChatContextMenu) setItems(items []menuItem) {
 func (cm *ChatContextMenu) Cursor() int { return cm.list.Cursor() }
 
 func (cm *ChatContextMenu) mainItems() []menuItem {
+	if cm.topicID != 0 {
+		return cm.topicItems()
+	}
 	var items []menuItem
 	if cm.chat.Unread > 0 || cm.chat.UnreadMark {
 		items = append(items, menuItem{label: "Mark as read", action: keys.ActionMarkRead})
@@ -119,6 +141,19 @@ func (cm *ChatContextMenu) mainItems() []menuItem {
 	// chat and absent for a group or a channel (#222).
 	if cm.chat.IsUser {
 		items = append(items, menuItem{label: "Profile", action: keys.ActionShowProfile})
+	}
+	return items
+}
+
+func (cm *ChatContextMenu) topicItems() []menuItem {
+	var items []menuItem
+	if cm.chat.Unread > 0 {
+		items = append(items, menuItem{label: "Mark as read", action: keys.ActionMarkRead})
+	}
+	if cm.chat.Muted {
+		items = append(items, menuItem{label: "Unmute", action: keys.ActionUnmute})
+	} else {
+		items = append(items, menuItem{label: "Mute", action: keys.ActionMute})
 	}
 	return items
 }
@@ -208,15 +243,16 @@ func (cm *ChatContextMenu) execute() (*ChatContextMenu, tea.Cmd) {
 		}
 	}
 
+	topicID := cm.topicID
 	switch item.action {
 	case keys.ActionMarkRead:
-		return nil, func() tea.Msg { return ToggleUnreadRequest{ChatID: chatID, Unread: false} }
+		return nil, func() tea.Msg { return ToggleUnreadRequest{ChatID: chatID, TopicID: topicID, Unread: false} }
 	case keys.ActionMarkUnread:
 		return nil, func() tea.Msg { return ToggleUnreadRequest{ChatID: chatID, Unread: true} }
 	case keys.ActionMute:
-		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, Muted: true} }
+		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, TopicID: topicID, Muted: true} }
 	case keys.ActionUnmute:
-		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, Muted: false} }
+		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, TopicID: topicID, Muted: false} }
 	case keys.ActionAddToFolder:
 		cm.savedMain = cm.items
 		cm.setItems(cm.folderSubItems())

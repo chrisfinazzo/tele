@@ -32,8 +32,13 @@ type Notification struct {
 	// TopicID is the forum topic the event landed in, 0 outside a forum, so a
 	// client opening the notification opens that topic (#275).
 	TopicID int
-	Title   string
-	Body    string
+	// Title is what the notification is headed with: the chat's title, and in
+	// a forum the topic's after it. ChatTitle and TopicTitle are the two
+	// apart, for a client opening the chat the notification is about.
+	Title      string
+	ChatTitle  string
+	TopicTitle string
+	Body       string
 }
 
 // decideNotification is the whole notification policy. It is pure: the store,
@@ -67,10 +72,11 @@ func decideNotification(
 		// You are looking at it; a banner would tell you nothing.
 		return Notification{}, false
 	}
-	muted, title := chat.IsMuted, chat.Title
+	muted, title, topicTitle := chat.IsMuted, chat.Title, ""
 	if h.TopicID != 0 {
 		topic, _ := st.Topic(chatID, h.TopicID)
 		muted = topic.MutedIn(chat.IsMuted)
+		topicTitle = topic.Title
 		if topic.Title != "" {
 			title = chat.Title + " › " + topic.Title
 		}
@@ -81,7 +87,11 @@ func decideNotification(
 	if at.IsZero() || now.Sub(at) > NotifyFreshnessWindow {
 		return Notification{}, false
 	}
-	return Notification{ChatID: chatID, TopicID: h.TopicID, Title: title, Body: body}, true
+	return Notification{
+		ChatID: chatID, TopicID: h.TopicID,
+		Title: title, ChatTitle: chat.Title, TopicTitle: topicTitle,
+		Body: body,
+	}, true
 }
 
 // historyOfEvent names the history an event landed in. A message names its own

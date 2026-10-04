@@ -70,6 +70,7 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	req := core.SendRequest{
 		Ref:          core.NewRef(),
 		ChatID:       msg.ChatID,
+		TopicID:      msg.TopicID,
 		Text:         msg.Text,
 		Entities:     msg.Entities,
 		ReplyToMsgID: msg.ReplyToMsgID,
@@ -101,6 +102,7 @@ func (m RootModel) handleSendMedia(msg screens.SendMediaRequest) (RootModel, tea
 	req := core.MediaSendRequest{
 		Ref:          core.NewRef(),
 		ChatID:       msg.ChatID,
+		TopicID:      msg.TopicID,
 		Files:        files,
 		Caption:      msg.Caption,
 		Entities:     msg.Entities,
@@ -247,7 +249,7 @@ func (m RootModel) flushCurrentDraftCmd() tea.Cmd {
 	if text == m.chatDraft {
 		return nil // unchanged — avoid a redundant messages.saveDraft round-trip
 	}
-	return m.saveDraftCmd(m.currentChatID, text)
+	return m.saveDraftCmd(m.currentHistory(), text)
 }
 
 // windowMessage finds a message in the open chat's window. Everything the user
@@ -266,7 +268,7 @@ func (m RootModel) windowMessage(msgID int) (domain.Message, bool) {
 
 // saveDraftCmd returns a managed Cmd that saves (or clears, when text == "")
 // a chat's draft through the owner, which stores it locally either way.
-func (m RootModel) saveDraftCmd(chatID int64, text string) tea.Cmd {
+func (m RootModel) saveDraftCmd(h domain.HistoryKey, text string) tea.Cmd {
 	if m.owner == nil {
 		return nil
 	}
@@ -276,7 +278,7 @@ func (m RootModel) saveDraftCmd(chatID int64, text string) tea.Cmd {
 		defer cancel()
 		// A failed draft sync is not worth interrupting for: the text is kept
 		// locally and the next flush retries.
-		_ = owner.SaveDraft(ctx, domain.HistoryKey{ChatID: chatID}, text)
+		_ = owner.SaveDraft(ctx, h, text)
 		return nil
 	}
 }
@@ -285,7 +287,7 @@ func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea
 	if m.owner == nil || msg.ChatID == 0 {
 		return m, nil
 	}
-	appCtx, owner, chatID := m.ctx, m.owner, msg.ChatID
+	appCtx, owner, h := m.ctx, m.owner, domain.HistoryKey{ChatID: msg.ChatID, TopicID: msg.TopicID}
 	action := msg.Action
 	// Run as a managed tea.Cmd (not a detached goroutine) so the RPC is bound to
 	// the app lifecycle context and cancelled on shutdown.
@@ -293,7 +295,7 @@ func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea
 		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 		defer cancel()
 		// Typing notices are best-effort; a toast per failure would be noise.
-		_ = owner.SetTyping(ctx, domain.HistoryKey{ChatID: chatID}, action)
+		_ = owner.SetTyping(ctx, h, action)
 		return nil
 	}
 }
@@ -453,13 +455,13 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 		return m, nil
 	}
 	ctx, owner, from := m.ctx, m.owner, m.currentChatID
-	to, toTitle := msg.ToChatID, msg.Title
+	to, topic, toTitle := msg.ToChatID, msg.ToTopicID, msg.Title
 	ids, comment := []int{msg.MsgID}, msg.Comment
 	m.debug("forward: client asked",
 		zap.Int64("from_chat", from), zap.Int64("to_chat", to),
 		zap.Ints("msg_ids", ids), zap.Bool("with_comment", comment != ""))
 	return m, func() tea.Msg {
-		err := owner.Forward(ctx, from, domain.HistoryKey{ChatID: to}, ids, comment)
+		err := owner.Forward(ctx, from, domain.HistoryKey{ChatID: to, TopicID: topic}, ids, comment)
 		return forwardDoneMsg{toTitle: toTitle, err: err}
 	}
 }

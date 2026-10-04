@@ -60,6 +60,8 @@ type Owner interface {
 	// Chats is every chat the owner holds, archived ones included, in list
 	// order: what search and the forward picker look through.
 	Chats(ctx context.Context) ([]project.ChatRow, error)
+	// Topics answers with a forum's topics, for a modal choosing one (#275).
+	Topics(ctx context.Context, chatID int64) ([]project.TopicRow, error)
 	// Chat is one chat the owner holds; false for a person it can only address.
 	Chat(ctx context.Context, chatID int64) (project.ChatRow, bool, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)

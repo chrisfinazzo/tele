@@ -29,6 +29,13 @@ func (o *Owner) SearchContacts(ctx context.Context, q string, limit int) ([]proj
 	return rows, nil
 }
 
+// Topics answers with every topic of a forum the owner knows, in the order the
+// topic list shows them. Like Chats, it is for a modal - the forward picker
+// choosing a topic - rather than a pane (#275).
+func (o *Owner) Topics(_ context.Context, chatID int64) ([]project.TopicRow, error) {
+	return project.TopicRows(o.reader(), chatID), nil
+}
+
 // Chats answers with every chat the owner holds, archived ones included, in
 // the order the chat list shows them. It is a query for a modal - search, the
 // forward picker - that looks at the whole list for a few seconds; a pane that

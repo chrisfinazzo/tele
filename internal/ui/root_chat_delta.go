@@ -8,13 +8,13 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
-// subscribeChat opens the chat:<id> subscription for a newly opened chat,
-// anchored on the first unread so the pane lands on the separator. The previous
-// subscription is dropped: a window nobody looks at must stop costing.
-func (m *RootModel) subscribeChat(chatID int64) {
+// subscribeChat opens the subscription for a newly opened history - a chat, or
+// a topic of a forum - anchored on the first unread so the pane lands on the
+// separator. The previous subscription is dropped: a window nobody looks at
+// must stop costing.
+func (m *RootModel) subscribeChat(h domain.HistoryKey) {
 	if m.owner == nil {
 		return
 	}
@@ -23,10 +23,11 @@ func (m *RootModel) subscribeChat(chatID int64) {
 		m.chatSub = 0
 	}
 	m.chatWindow = project.HistoryWindow{
-		ChatID: chatID,
-		Anchor: project.Anchor{Kind: project.AnchorFirstUnread},
-		Before: m.historyLimit,
-		After:  0,
+		ChatID:  h.ChatID,
+		TopicID: h.TopicID,
+		Anchor:  project.Anchor{Kind: project.AnchorFirstUnread},
+		Before:  m.historyLimit,
+		After:   0,
 	}
 	m.chatSub = m.owner.Subscribe(m.chatWindow)
 }
@@ -47,15 +48,8 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 	switch d.Kind {
 	case project.HistoryReset:
 		c := d.Contents
-		m.chat.SetHeader(screens.ChatHeader{
-			ChatID:          c.ChatID,
-			Title:           c.Title,
-			IsUser:          c.IsUser,
-			IsGroup:         c.IsGroup,
-			Online:          c.Online,
-			ReadOutboxMaxID: c.ReadOutboxMaxID,
-		})
-		m.chat.SeedDraft(c.ChatID, c.Draft)
+		m.chat.SetHeader(chatHeader(c))
+		m.chat.SeedDraft(domain.HistoryKey{ChatID: c.ChatID, TopicID: c.TopicID}, c.Draft)
 		m.chatDraft = c.Draft
 		m.chat.SetInboxReadMaxID(c.ReadInboxMaxID)
 		m.chatMsgs = c.Messages
@@ -72,7 +66,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		if m.readMentionsOnReset {
 			m.readMentionsOnReset = false
 			if c.UnreadMentions > 0 {
-				mentionsCmd = m.readMentionsCmd(c.ChatID)
+				mentionsCmd = m.readMentionsCmd(domain.HistoryKey{ChatID: c.ChatID, TopicID: c.TopicID})
 			}
 		}
 		if cmd := m.readReactionsOnScreen(c); cmd != nil {
@@ -98,14 +92,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		// alone: re-seating it would re-anchor the viewport, so a contact coming
 		// online would scroll the chat you are reading back to the bottom.
 		c := d.Contents
-		m.chat.SetHeader(screens.ChatHeader{
-			ChatID:          c.ChatID,
-			Title:           c.Title,
-			IsUser:          c.IsUser,
-			IsGroup:         c.IsGroup,
-			Online:          c.Online,
-			ReadOutboxMaxID: c.ReadOutboxMaxID,
-		})
+		m.chat.SetHeader(chatHeader(c))
 		// Assigned first: the call records the count on the model, and a return
 		// statement gives no guarantee that m is read after it.
 		cmd := m.readReactionsOnScreen(c)
@@ -135,7 +122,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		m.chat.SetMessagesKeepScroll(m.chatMsgs)
 		cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]domain.Message{d.Message})}
 		if m.focus == FocusChat && d.Message.Mentioned {
-			cmds = append(cmds, m.readMentionsCmd(m.currentChatID))
+			cmds = append(cmds, m.readMentionsCmd(m.currentHistory()))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -156,7 +143,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		// cached costs nothing here.
 		cmds := []tea.Cmd{m.pendingDownloadCmds([]domain.Message{d.Message})}
 		if m.focus == FocusChat && d.Message.HasUnreadReactions {
-			cmds = append(cmds, m.readReactionsCmd(m.currentChatID))
+			cmds = append(cmds, m.readReactionsCmd(m.currentHistory()))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -203,13 +190,14 @@ func (m *RootModel) readReactionsOnScreen(c project.HistoryContents) tea.Cmd {
 	if m.focus != FocusChat || c.UnreadReactions == 0 {
 		return nil
 	}
-	return m.readReactionsCmd(c.ChatID)
+	return m.readReactionsCmd(domain.HistoryKey{ChatID: c.ChatID, TopicID: c.TopicID})
 }
 
 // handleTyping shows a composing indicator and arms its expiry. The owner sends
 // no state to clear, so the client's own timeout is what ends it.
 func (m RootModel) handleTyping(t core.Typing) (RootModel, tea.Cmd) {
-	if t.ChatID != m.currentChatID {
+	// In a forum somebody types in one topic, and only that topic shows it.
+	if t.ChatID != m.currentChatID || t.TopicID != m.currentTopicID {
 		return m, nil
 	}
 	return m.applyTypingLabelCmd(t.Label)
