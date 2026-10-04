@@ -171,7 +171,7 @@ func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]projec
 func (o *ownerStub) Chats(_ context.Context) ([]project.ChatRow, error) {
 	var rows []project.ChatRow
 	for _, c := range o.state.Store().Chats() {
-		rows = append(rows, project.Row(c))
+		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, o.err
 }
@@ -181,7 +181,7 @@ func (o *ownerStub) Chat(_ context.Context, chatID int64) (project.ChatRow, bool
 	if !ok {
 		return project.ChatRow{}, false, o.err
 	}
-	return project.Row(c), true, o.err
+	return project.Row(c, o.state.Store().Topics(c.ID)), true, o.err
 }
 
 func (o *ownerStub) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {

@@ -24,7 +24,7 @@ func (o *Owner) SearchContacts(ctx context.Context, q string, limit int) ([]proj
 	rows := make([]project.ChatRow, 0, len(chats))
 	for _, c := range chats {
 		o.state.RememberAddress(c.Peer)
-		rows = append(rows, project.Row(c))
+		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, nil
 }
@@ -37,7 +37,7 @@ func (o *Owner) Chats(_ context.Context) ([]project.ChatRow, error) {
 	chats := o.state.Store().Chats()
 	rows := make([]project.ChatRow, 0, len(chats))
 	for _, c := range chats {
-		rows = append(rows, project.Row(c))
+		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, nil
 }
@@ -50,7 +50,7 @@ func (o *Owner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, er
 	if !ok {
 		return project.ChatRow{}, false, nil
 	}
-	return project.Row(c), true, nil
+	return project.Row(c, o.state.Store().Topics(c.ID)), true, nil
 }
 
 // FolderFilters answers with the folders the owner already holds. It does not

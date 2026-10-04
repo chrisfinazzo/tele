@@ -40,7 +40,7 @@ func (o *Owner) backfill(ctx context.Context, w project.HistoryWindow) {
 	if !ok {
 		return
 	}
-	held := o.state.Store().Messages(domain.HistoryKey{ChatID: w.ChatID})
+	held := o.state.Store().Messages(w.History())
 	// Page backwards from the oldest message held; zero means "from the newest",
 	// which is what an empty window needs.
 	offsetID := 0
@@ -61,7 +61,7 @@ func (o *Owner) backfill(ctx context.Context, w project.HistoryWindow) {
 	// is not written back out of existence. Nothing added means the page was
 	// entirely history the store already had: the chat has no more to give, and
 	// there is no window to rebuild.
-	_, added := o.state.MergeHistory(domain.HistoryKey{ChatID: w.ChatID}, fetched)
+	_, added := o.state.MergeHistory(w.History(), fetched)
 	o.log.Debug("history backfill",
 		zap.Int64("chat", w.ChatID),
 		zap.Int("offset_id", offsetID),

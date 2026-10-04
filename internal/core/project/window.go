@@ -4,6 +4,8 @@
 // change kinds, so a change no window contains costs nothing.
 package project
 
+import "github.com/sorokin-vladimir/tele/internal/domain"
+
 // SubID identifies one live subscription.
 type SubID int
 
@@ -20,6 +22,16 @@ type ChatListWindow struct {
 }
 
 func (ChatListWindow) isWindow() {}
+
+// TopicListWindow is a slice of one forum's topics, in the order the official
+// clients list them (#275).
+type TopicListWindow struct {
+	ChatID int64
+	Offset int
+	Limit  int
+}
+
+func (TopicListWindow) isWindow() {}
 
 // AnchorKind names what a chat window is positioned on. Every hard case in the
 // UI is one of these three: opening a chat (Newest), opening one with unread
@@ -47,9 +59,17 @@ type Anchor struct {
 // of them: a window is at most Before+After+1 messages.
 type HistoryWindow struct {
 	ChatID int64
-	Anchor Anchor
-	Before int
-	After  int
+	// TopicID names the forum topic whose history this is, and is 0 for an
+	// ordinary chat's one history. General is domain.GeneralTopicID (#275).
+	TopicID int
+	Anchor  Anchor
+	Before  int
+	After   int
+}
+
+// History names the history the window is a range of.
+func (w HistoryWindow) History() domain.HistoryKey {
+	return domain.HistoryKey{ChatID: w.ChatID, TopicID: w.TopicID}
 }
 
 func (HistoryWindow) isWindow() {}

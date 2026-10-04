@@ -188,7 +188,7 @@ func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]projec
 func (o *testOwner) Chats(_ context.Context) ([]project.ChatRow, error) {
 	var rows []project.ChatRow
 	for _, c := range o.state.Store().Chats() {
-		rows = append(rows, project.Row(c))
+		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, o.cmdErr
 }
@@ -198,7 +198,7 @@ func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool
 	if !ok {
 		return project.ChatRow{}, false, o.cmdErr
 	}
-	return project.Row(c), true, o.cmdErr
+	return project.Row(c, o.state.Store().Topics(c.ID)), true, o.cmdErr
 }
 
 func (o *testOwner) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {

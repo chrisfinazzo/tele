@@ -26,6 +26,7 @@ type sub struct {
 	window Window
 	list   ChatListContents
 	chat   HistoryContents
+	topics TopicListContents
 }
 
 func NewRegistry(r Reader, emit Emit) *Registry {
@@ -60,7 +61,7 @@ func (g *Registry) MoveWindow(id SubID, w Window) {
 // carryPin keeps a first-unread window's pinned anchor across a move that does
 // not name one. Widening for older history repeats the anchor the client opened
 // with, and re-pinning it there would re-anchor the window on whatever happens
-// to be unread by then. A client asking for a different chat, or naming an
+// to be unread by then. A client asking for a different history, or naming an
 // anchor itself, gets exactly what it asked for.
 func carryPin(prev, next Window) Window {
 	p, okPrev := prev.(HistoryWindow)
@@ -68,7 +69,7 @@ func carryPin(prev, next Window) Window {
 	if !okPrev || !okNext {
 		return next
 	}
-	if p.ChatID != n.ChatID || p.Anchor.Kind != n.Anchor.Kind || n.Anchor.MsgID != 0 {
+	if p.History() != n.History() || p.Anchor.Kind != n.Anchor.Kind || n.Anchor.MsgID != 0 {
 		return next
 	}
 	n.Anchor.MsgID = p.Anchor.MsgID
@@ -124,6 +125,7 @@ func (g *Registry) send(ds []Delta) {
 		if s, ok := g.subs[d.Sub]; ok {
 			s.list = ChatListContents{}
 			s.chat = HistoryContents{}
+			s.topics = TopicListContents{}
 		}
 	}
 }
@@ -151,6 +153,12 @@ func (g *Registry) rebuild(id SubID) []Delta {
 			out = append(out, Delta{Sub: id, ChatList: &d})
 		}
 		s.list = next
+	case TopicListWindow:
+		next := BuildTopicList(g.reader, w)
+		for _, d := range DiffTopicList(s.topics, next) {
+			out = append(out, Delta{Sub: id, TopicList: &d})
+		}
+		s.topics = next
 	case HistoryWindow:
 		next := BuildHistory(g.reader, w)
 		// Pin a first-unread window to the message it actually opened on. The

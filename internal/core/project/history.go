@@ -6,8 +6,12 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 // window plus the header and per-chat state the pane renders around it.
 type HistoryContents struct {
 	ChatID int64
-	Title  string
-	IsUser bool
+	// TopicID and TopicTitle name the forum topic the window shows, when it
+	// shows one; TopicTitle is empty for a topic nothing was learned about yet.
+	TopicID    int
+	TopicTitle string
+	Title      string
+	IsUser     bool
 	// IsGroup covers groups and channels: the message list shows sender names
 	// there and not in a 1:1 chat.
 	IsGroup         bool
@@ -42,29 +46,51 @@ type HistoryContents struct {
 // fetches: a window that comes back shorter than it asked for is how the core
 // learns the store fell short (see Owner.needsBackfill).
 func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
-	out := HistoryContents{ChatID: w.ChatID}
+	out := HistoryContents{ChatID: w.ChatID, TopicID: w.TopicID}
 	chat, ok := r.GetChat(w.ChatID)
 	if ok {
 		out.Title = chat.Title
 		out.IsUser = chat.Peer.IsUser()
 		out.IsGroup = chat.Peer.IsGroup() || chat.Peer.IsChannel()
 		out.Online = chat.Online
-		out.ReadInboxMaxID = chat.ReadInboxMaxID
-		out.ReadOutboxMaxID = chat.ReadOutboxMaxID
-		out.UnreadReactions = chat.UnreadReactionsCount
-		out.UnreadMentions = chat.UnreadMentionsCount
-		out.Draft = chat.Draft
 	}
+	// What is read, unread and half-written belongs to the history: a topic
+	// has its own, and the forum's say nothing about it.
+	read := readState{
+		unread:     chat.UnreadCount,
+		readInbox:  chat.ReadInboxMaxID,
+		readOutbox: chat.ReadOutboxMaxID,
+		mentions:   chat.UnreadMentionsCount,
+		reactions:  chat.UnreadReactionsCount,
+		draft:      chat.Draft,
+	}
+	if w.TopicID != 0 {
+		topic, _ := r.Topic(w.ChatID, w.TopicID)
+		out.TopicTitle = topic.Title
+		read = readState{
+			unread:     topic.UnreadCount,
+			readInbox:  topic.ReadInboxMaxID,
+			readOutbox: topic.ReadOutboxMaxID,
+			mentions:   topic.UnreadMentionsCount,
+			reactions:  topic.UnreadReactionsCount,
+			draft:      topic.Draft,
+		}
+	}
+	out.ReadInboxMaxID = read.readInbox
+	out.ReadOutboxMaxID = read.readOutbox
+	out.UnreadReactions = read.reactions
+	out.UnreadMentions = read.mentions
+	out.Draft = read.draft
 	// Read before the empty-history return below: a chat with nothing stored can
 	// still hold a queued send, and that is the only thing it has to show.
 	out.Outbox = r.Outbox(w.ChatID)
 
-	all := r.Messages(domain.HistoryKey{ChatID: w.ChatID})
+	all := r.Messages(w.History())
 	if len(all) == 0 {
 		return out
 	}
 
-	idx, anchorID := resolveAnchor(all, chat, w.Anchor)
+	idx, anchorID := resolveAnchor(all, read, w.Anchor)
 	out.AnchorMsgID = anchorID
 	if idx < 0 {
 		// The anchor names a message the store does not hold, so the window
@@ -94,10 +120,21 @@ func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
 	return out
 }
 
+// readState is what a history knows about being read and written to: the
+// chat's for an ordinary chat, the topic's for a topic.
+type readState struct {
+	unread     int
+	readInbox  int
+	readOutbox int
+	mentions   int
+	reactions  int
+	draft      string
+}
+
 // resolveAnchor returns the index of the anchor message in all, oldest first,
 // and its id. An index of -1 means the anchor names a message the store does not
 // hold.
-func resolveAnchor(all []domain.Message, chat domain.Chat, a Anchor) (int, int) {
+func resolveAnchor(all []domain.Message, read readState, a Anchor) (int, int) {
 	switch a.Kind {
 	case AnchorMessage:
 		for i, m := range all {
@@ -118,9 +155,9 @@ func resolveAnchor(all []domain.Message, chat domain.Chat, a Anchor) (int, int) 
 				}
 			}
 		}
-		if chat.UnreadCount > 0 {
+		if read.unread > 0 {
 			for i, m := range all {
-				if m.ID > chat.ReadInboxMaxID {
+				if m.ID > read.readInbox {
 					return i, m.ID
 				}
 			}

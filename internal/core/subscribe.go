@@ -5,7 +5,6 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
-	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // projectionReader is what every projection is built from: the store plus the
@@ -24,7 +23,7 @@ func (o *Owner) Subscribe(w project.Window) project.SubID {
 	// it paints cached history at once instead of waiting on the network — and
 	// still shows something when there is no network at all (#139).
 	if cw, ok := w.(project.HistoryWindow); ok {
-		o.state.Store().LoadMessages(domain.HistoryKey{ChatID: cw.ChatID})
+		o.state.Store().LoadMessages(cw.History())
 	}
 	id := o.registry.Subscribe(w)
 	o.maybeFetch(id, w)

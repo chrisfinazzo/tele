@@ -16,6 +16,9 @@ type ChatRow struct {
 	UnreadMark bool
 	Muted      bool
 	Archived   bool
+	// IsForum marks a chat opened through its topic list (#275). Its Unread is
+	// how many of its topics have unread, as Telegram Desktop badges a forum.
+	IsForum bool
 }
 
 // FolderCounts is the folder pane's derived state: how many chats carry unread
@@ -46,7 +49,7 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 	out := ChatListContents{
 		Offset:  w.Offset,
 		Total:   len(filtered),
-		Folders: folderCounts(all, filters),
+		Folders: folderCounts(r, all, filters),
 	}
 
 	start := w.Offset
@@ -62,7 +65,7 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 	}
 	out.Rows = make([]ChatRow, 0, end-start)
 	for _, c := range filtered[start:end] {
-		out.Rows = append(out.Rows, Row(c))
+		out.Rows = append(out.Rows, Row(c, r.Topics(c.ID)))
 	}
 	return out
 }
@@ -70,8 +73,11 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 // Row is how a chat reaches a client: everything a row or a menu over it shows,
 // and no address. Queries answer with it too, so a client handles one shape of
 // chat whether it came from a subscription or a one-off answer (#278).
-func Row(c domain.Chat) ChatRow {
-	return ChatRow{
+//
+// A forum is counted by its topics, which are passed alongside it; for any
+// other chat they are ignored.
+func Row(c domain.Chat, topics []domain.Topic) ChatRow {
+	row := ChatRow{
 		ID:         c.ID,
 		Title:      c.Title,
 		IsUser:     c.Peer.IsUser(),
@@ -82,7 +88,33 @@ func Row(c domain.Chat) ChatRow {
 		UnreadMark: c.UnreadMark,
 		Muted:      c.IsMuted,
 		Archived:   c.IsArchived,
+		IsForum:    c.IsForum,
 	}
+	if c.IsForum {
+		row.Unread, row.Mentions, row.Reactions = 0, 0, 0
+		for _, t := range topics {
+			if t.UnreadCount > 0 {
+				row.Unread++
+			}
+			row.Mentions += t.UnreadMentionsCount
+			row.Reactions += t.UnreadReactionsCount
+		}
+	}
+	return row
+}
+
+// hasUnread reports whether a chat counts as unread for a folder: a forum when
+// any of its topics is, any other chat by its own count.
+func hasUnread(r Reader, c domain.Chat) bool {
+	if !c.IsForum {
+		return c.UnreadCount > 0
+	}
+	for _, t := range r.Topics(c.ID) {
+		if t.UnreadCount > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // filterChats applies one folder to the ordered list. It is the former
@@ -131,7 +163,7 @@ func filterByID(filters []domain.FolderFilter, id int) (domain.FolderFilter, boo
 // folderCounts is the former ui.computeFolderUnreads plus ui.hasArchivedChats.
 // All Chats carries no badge and Archive intentionally shows no count, matching
 // the official client.
-func folderCounts(all []domain.Chat, filters []domain.FolderFilter) FolderCounts {
+func folderCounts(r Reader, all []domain.Chat, filters []domain.FolderFilter) FolderCounts {
 	fc := FolderCounts{Unread: make(map[int]int)}
 	for _, c := range all {
 		if c.IsArchived {
@@ -145,7 +177,7 @@ func folderCounts(all []domain.Chat, filters []domain.FolderFilter) FolderCounts
 		}
 		n := 0
 		for _, c := range all {
-			if f.Matches(c) && c.UnreadCount > 0 {
+			if f.Matches(c) && hasUnread(r, c) {
 				n++
 			}
 		}

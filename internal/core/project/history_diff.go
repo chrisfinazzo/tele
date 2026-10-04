@@ -56,7 +56,7 @@ type HistoryDelta struct {
 // per message, one appended id at the live end is an Append, missing ids are a
 // Remove, and anything else means the window moved and is a Reset.
 func DiffHistory(prev, next HistoryContents) []HistoryDelta {
-	if prev.ChatID != next.ChatID {
+	if prev.ChatID != next.ChatID || prev.TopicID != next.TopicID {
 		return []HistoryDelta{{Kind: HistoryReset, Contents: next}}
 	}
 
@@ -84,7 +84,7 @@ func DiffHistory(prev, next HistoryContents) []HistoryDelta {
 // headerChanged reports a change to the per-chat state rendered around the
 // window.
 func headerChanged(prev, next HistoryContents) bool {
-	return prev.Title != next.Title || prev.IsUser != next.IsUser ||
+	return prev.Title != next.Title || prev.TopicTitle != next.TopicTitle || prev.IsUser != next.IsUser ||
 		prev.IsGroup != next.IsGroup || prev.Online != next.Online ||
 		prev.UnreadReactions != next.UnreadReactions ||
 		prev.UnreadMentions != next.UnreadMentions

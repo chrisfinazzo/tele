@@ -18,6 +18,21 @@ type fakeReader struct {
 	msgs    map[int64][]domain.Message
 	filters []domain.FolderFilter
 	outbox  map[int64][]domain.OutboxEntry
+	// topicMsgs holds a forum's histories, one per topic; topics its topics in
+	// the order the store would list them.
+	topicMsgs map[domain.HistoryKey][]domain.Message
+	topics    map[int64][]domain.Topic
+}
+
+func (f *fakeReader) Topics(chatID int64) []domain.Topic { return f.topics[chatID] }
+
+func (f *fakeReader) Topic(chatID int64, topicID int) (domain.Topic, bool) {
+	for _, t := range f.topics[chatID] {
+		if t.ID == topicID {
+			return t, true
+		}
+	}
+	return domain.Topic{}, false
 }
 
 func (f *fakeReader) Chats() []domain.Chat { return f.chats }
@@ -31,7 +46,12 @@ func (f *fakeReader) GetChat(id int64) (domain.Chat, bool) {
 	return domain.Chat{}, false
 }
 
-func (f *fakeReader) Messages(h domain.HistoryKey) []domain.Message { return f.msgs[h.ChatID] }
+func (f *fakeReader) Messages(h domain.HistoryKey) []domain.Message {
+	if h.TopicID != 0 {
+		return f.topicMsgs[h]
+	}
+	return f.msgs[h.ChatID]
+}
 
 func (f *fakeReader) FolderFilters() []domain.FolderFilter { return f.filters }
 
@@ -148,7 +168,7 @@ func TestBuildChatList_RowCarriesWhatTheRowRenders(t *testing.T) {
 // The chat context menu is built from the row under the cursor, and it offers
 // Archive or Unarchive by this flag (#278).
 func TestRow_CarriesWhetherTheChatIsArchived(t *testing.T) {
-	got := project.Row(domain.Chat{ID: 1, Title: "Ada", IsArchived: true})
+	got := project.Row(domain.Chat{ID: 1, Title: "Ada", IsArchived: true}, nil)
 
 	assert.True(t, got.Archived)
 }

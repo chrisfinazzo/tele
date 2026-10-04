@@ -9,6 +9,9 @@ type Reader interface {
 	GetChat(id int64) (domain.Chat, bool)
 	Messages(h domain.HistoryKey) []domain.Message
 	FolderFilters() []domain.FolderFilter
+	// Topics and Topic answer for a forum's topics (#275).
+	Topics(chatID int64) []domain.Topic
+	Topic(chatID int64, topicID int) (domain.Topic, bool)
 	// Outbox returns a chat's queued sends in submission order. It is not on
 	// store.Store because the queue is not part of the account cache: the
 	// composite reader in internal/core supplies it (#193).
