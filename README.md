@@ -103,8 +103,9 @@ deprecated, last touched in 2022), `arigram` (archived), `tg-tui` (2018),
   movable per-message cursor (`j/k`) that steps bubble-by-bubble and is the
   target for the context menu and per-message actions. Mouse support is
   optional: click a chat or a pane, scroll with the wheel.
-- **Full Telegram support** - private chats, groups, channels, replies,
-  reactions, edits, forwarding, and per-chat drafts synced with Telegram.
+- **Full Telegram support** - private chats, groups, channels, forum topics,
+  replies, reactions, edits, forwarding, and per-chat drafts synced with
+  Telegram.
 - **Photos inline** - full quality via the Kitty graphics protocol in kitty,
   Ghostty and iTerm2 3.7.0+, ANSI block art everywhere else. `o` opens the image
   in an in-app viewer.

@@ -13,6 +13,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Forum topics. A group with topics opens into its topic list in the chat list
+  pane, `Esc` goes back to the chats, and each topic opens on its own with its
+  own messages, unread count, draft and mute setting. The chat list badges a
+  forum with how many of its topics are unread. A message, reply, file or
+  forward sent from a topic lands in that topic, a notification names the
+  topic it came from and opens it, and the topic on screen is the only one
+  kept quiet. `Space` on a topic marks it read or mutes it (#275).
 - Downloading a file, or opening a video or document in an outside app, shows
   how far it has got in the status bar, as `42% · 168/400 MB`, instead of a
   spinner alone. A photo, or a file whose size Telegram does not give, keeps

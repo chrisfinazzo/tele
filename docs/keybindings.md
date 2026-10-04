@@ -23,9 +23,20 @@ rebind works there only if it uses `ctrl` or `alt`.
 | `k` / `↑`           | Previous chat              |
 | `G`                 | Last chat                  |
 | `Ctrl+D` / `Ctrl+U` | Scroll half-page down / up |
-| `Enter`             | Open chat                  |
+| `Enter`             | Open chat, or a forum's topic list |
 | `/`                 | Search chats               |
 | `P`                 | Profile of the person (private chats only) |
+
+## Forum topics
+
+A forum's topics fill the chat list pane while it is open. The chat list keys
+move through them.
+
+| Key       | Action                                   |
+| --------- | ---------------------------------------- |
+| `Enter`   | Open topic                               |
+| `Space`   | Topic menu: mark as read, mute / unmute  |
+| `Esc`     | Back to the chat list                    |
 
 ## Chat (normal mode)
 
@@ -176,7 +187,7 @@ These are the action names usable as YAML keys in the `keybindings:` section
 
 | Action             | Description                           |
 | ------------------ | ------------------------------------- |
-| `cancel`           | Dismiss the current menu or picker    |
+| `cancel`           | Dismiss the current menu or picker; in `chatlist`, leave a forum's topic list |
 | `react`            | React to the selected message         |
 | `play_voice`       | Play the selected voice message       |
 | `edit`             | Edit the selected message             |
