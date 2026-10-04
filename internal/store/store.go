@@ -112,6 +112,21 @@ type Store interface {
 	// SetChatMentionsRead clears a chat's unread-mention count and its tracked
 	// message set (e.g. on open or readMentions completion).
 	SetChatMentionsRead(chatID int64)
+	// Topics returns a forum's known topics, pinned first in pin order, then by
+	// newest message (#275).
+	Topics(chatID int64) []domain.Topic
+	Topic(chatID int64, topicID int) (domain.Topic, bool)
+	// SetTopicsPage records the first page of a forum's topics, the only
+	// statement of the order they were pinned in.
+	SetTopicsPage(chatID int64, topics []domain.Topic)
+	// UpdateTopics records topics read again by id, each keeping its pin place.
+	UpdateTopics(chatID int64, topics []domain.Topic)
+	// RemoveTopics forgets topics Telegram reported deleted.
+	RemoveTopics(chatID int64, ids []int)
+	// ApplyIncomingTopic records what an arriving message means for its topic:
+	// its newest message and its unread count. known reports whether the topic
+	// was described before, so a caller can ask Telegram about one that was not.
+	ApplyIncomingTopic(msg domain.Message) (h domain.HistoryKey, known bool)
 	FolderFilters() []domain.FolderFilter
 	SetFolderFilters(filters []domain.FolderFilter)
 	// Address returns how to reach a chat the account holds no dialog for: a

@@ -55,6 +55,11 @@ func (o *Owner) handleEvent(evt store.Event) {
 	case store.EventGapScan:
 		go o.scanForGaps(o.ctx)
 		return
+	case store.EventTopicsChanged:
+		// Like a gap, this is work rather than news: what changed is learned by
+		// reading the topics again, and the read is what commits.
+		o.topicsChanged(evt)
+		return
 	}
 
 	// Applying commits, and the owner's commit listener publishes the resulting
@@ -65,8 +70,12 @@ func (o *Owner) handleEvent(evt store.Event) {
 	// and the second time changes nothing: no banner, no toast, no row flash
 	// (ADR 0016). The notification is still decided once, from one snapshot, and
 	// both sinks still get the same value (#192, ADR 0013).
-	if _, changed := state.Apply(o.state, evt); !changed {
+	c, changed := state.Apply(o.state, evt)
+	if !changed {
 		return
+	}
+	if c.UnknownTopic != 0 {
+		o.refreshTopics(c.ChatID, []int{c.UnknownTopic})
 	}
 
 	focused := o.focus.focused
@@ -107,7 +116,31 @@ func (o *Owner) Bootstrap(ctx context.Context) error {
 		o.log.Info("archived dialogs loaded", zap.Int("count", len(archived)))
 		o.state.SetDialogs(archived)
 	}
+	// Topics are read after the dialog list rather than with it: the list is
+	// what the main screen waits for, and a forum's badge can follow it.
+	go o.loadForumTopics(ctx, append(chats, archived...))
 	return nil
+}
+
+// forumTopicsPage is how many topics the first page of a forum asks for, which
+// is what a forum's badge is counted from until a topic list is scrolled.
+const forumTopicsPage = 100
+
+// loadForumTopics reads the first page of every forum's topics. It runs at
+// every connection, since topics changed while the account was away are known
+// only by asking.
+func (o *Owner) loadForumTopics(ctx context.Context, chats []domain.Chat) {
+	for _, chat := range chats {
+		if !chat.IsForum {
+			continue
+		}
+		page, err := o.client.GetForumTopics(ctx, chat.Peer, forumTopicsPage)
+		if err != nil {
+			o.log.Warn("forum topics load failed", zap.Int64("chat", chat.ID), zap.Error(err))
+			continue
+		}
+		o.state.ApplyTopicsPage(chat.ID, page.Topics, page.Deleted)
+	}
 }
 
 // LoadFolderFilters refreshes folder filters from the network. Returns the

@@ -24,6 +24,10 @@ type Client interface {
 	// it. A page whose newest message is not past afterID means there is
 	// nothing newer to fetch.
 	GetHistoryAfter(ctx context.Context, peer domain.Peer, afterID int, limit int) ([]domain.Message, error)
+	// GetForumTopics fetches the first page of a forum's topics (#275).
+	GetForumTopics(ctx context.Context, peer domain.Peer, limit int) (ForumTopicsPage, error)
+	// GetForumTopicsByID fetches the current state of named topics of a forum.
+	GetForumTopicsByID(ctx context.Context, peer domain.Peer, ids []int) (ForumTopicsPage, error)
 	// RefreshMessage re-fetches a single message to obtain fresh media file
 	// references (Telegram FileReferences expire).
 	RefreshMessage(ctx context.Context, peer domain.Peer, msgID int) (domain.Message, error)

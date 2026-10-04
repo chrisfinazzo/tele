@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS messages (
 	PRIMARY KEY (chat_id, msg_id)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_chat_date ON messages(chat_id, date);
+CREATE TABLE IF NOT EXISTS topics (
+	chat_id  INTEGER NOT NULL,
+	topic_id INTEGER NOT NULL,
+	pin_rank INTEGER NOT NULL DEFAULT -1,
+	data     TEXT    NOT NULL,
+	PRIMARY KEY (chat_id, topic_id)
+);
 CREATE TABLE IF NOT EXISTS chat_gap (
 	chat_id      INTEGER PRIMARY KEY,
 	after_msg_id INTEGER NOT NULL
@@ -168,6 +175,20 @@ type SQLiteStore struct {
 	// changed under them (#275).
 	purgeMsgs   map[int64]struct{}
 	purgingMsgs map[int64]struct{}
+
+	// topics holds every forum's known topics, and pinRank the order the first
+	// page put its pinned ones in (#275). dirtyTopics and deletedTopics queue
+	// their rows for the next flush, in the same transaction as messages so a
+	// purge always runs before what was written after it.
+	topics        map[int64]map[int]domain.Topic
+	pinRank       map[int64]map[int]int
+	dirtyTopics   map[int64]map[int]struct{}
+	deletedTopics map[int64]map[int]struct{}
+	// topicUnread and topicMentions count a topic's unread messages and
+	// mentions from the last number Telegram stated, mirroring baselineUnread
+	// and unreadMsgs for chats.
+	topicUnread   map[domain.HistoryKey]*topicCounter
+	topicMentions map[domain.HistoryKey]*topicCounter
 }
 
 // sharedPtsBox reports whether a peer's messages live in the account's common
@@ -233,11 +254,21 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		deletingMsgs:       make(map[int64]map[int]struct{}),
 		purgeMsgs:          make(map[int64]struct{}),
 		purgingMsgs:        make(map[int64]struct{}),
+		topics:             make(map[int64]map[int]domain.Topic),
+		pinRank:            make(map[int64]map[int]int),
+		dirtyTopics:        make(map[int64]map[int]struct{}),
+		deletedTopics:      make(map[int64]map[int]struct{}),
+		topicUnread:        make(map[domain.HistoryKey]*topicCounter),
+		topicMentions:      make(map[domain.HistoryKey]*topicCounter),
 		db:                 db,
 		log:                log,
 		orderDirty:         true, // build the sorted view lazily on first Chats() call
 	}
 	if err := s.loadChats(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := s.loadTopics(); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

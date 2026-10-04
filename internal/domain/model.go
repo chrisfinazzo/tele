@@ -252,6 +252,32 @@ type FolderFilter struct {
 	ExcludeArchived bool
 }
 
+// Topic is one named division of a forum: its own messages, with everything an
+// ordinary chat has about being read and written to (#275). A topic with no
+// title is one whose messages arrived before anything about it did.
+type Topic struct {
+	ChatID int64
+	// ID is the id of the message that opened the topic, which is how Telegram
+	// names it everywhere; General's is GeneralTopicID.
+	ID     int
+	Title  string
+	Pinned bool
+	// Closed reports that only admins may write in the topic; whether a send
+	// is refused is still Telegram's to decide.
+	Closed bool
+	// Hidden reports that admins folded General away; it applies to General
+	// only.
+	Hidden               bool
+	TopMessageID         int
+	LastMessage          *Message
+	ReadInboxMaxID       int
+	ReadOutboxMaxID      int
+	UnreadCount          int
+	UnreadMentionsCount  int
+	UnreadReactionsCount int
+	Draft                string
+}
+
 // GeneralTopicID is the id of the topic every forum has from the start, where
 // messages that name no topic land.
 const GeneralTopicID = 1

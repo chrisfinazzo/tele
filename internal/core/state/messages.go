@@ -30,6 +30,9 @@ func (s *State) ApplyIncoming(msg domain.Message) (Change, bool) {
 		MsgID:         msg.ID,
 		UnreadChanged: unreadChanged,
 	}
+	if h, known := s.st.ApplyIncomingTopic(msg); !known {
+		c.UnknownTopic = h.TopicID
+	}
 	s.commit(c)
 	return c, true
 }

@@ -292,19 +292,21 @@ type msgDelete struct {
 	msgID  int
 }
 
-// msgWrites is one flush's worth of message rows. purges run first: they drop
-// rows written under a shape the chat no longer has, and an upsert queued after
-// the purge belongs to the new shape.
-type msgWrites struct {
-	purges  []int64
-	upserts []msgUpsert
-	deletes []msgDelete
+// rowWrites is one flush's worth of message and topic rows. purges run first:
+// they drop rows written under a shape the chat no longer has, and an upsert
+// queued after the purge belongs to the new shape.
+type rowWrites struct {
+	purges       []int64
+	upserts      []msgUpsert
+	deletes      []msgDelete
+	topicUpserts []topicUpsert
+	topicDeletes []topicDelete
 }
 
 // snapshotMessageWritesLocked drains the purge, dirty and deleted message sets
 // into flat slices, reading upsert payloads from the current in-memory
 // messages. Caller holds the lock.
-func (s *SQLiteStore) snapshotMessageWritesLocked() msgWrites {
+func (s *SQLiteStore) snapshotMessageWritesLocked() rowWrites {
 	var purges []int64
 	for chatID := range s.purgeMsgs {
 		purges = append(purges, chatID)
@@ -343,12 +345,13 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() msgWrites {
 		}
 	}
 	s.deletedMsgs = make(map[int64]map[int]struct{})
-	return msgWrites{purges: purges, upserts: upserts, deletes: deletes}
+	topicUpserts, topicDeletes := s.snapshotTopicWritesLocked()
+	return rowWrites{purges: purges, upserts: upserts, deletes: deletes, topicUpserts: topicUpserts, topicDeletes: topicDeletes}
 }
 
 // clearDeletesInFlight forgets purges and deletes whose flush transaction has
 // finished.
-func (s *SQLiteStore) clearDeletesInFlight(w msgWrites) {
+func (s *SQLiteStore) clearDeletesInFlight(w rowWrites) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, chatID := range w.purges {
@@ -405,14 +408,16 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 	// shape have nothing left to do.
 	delete(s.dirtyMsgs, chatID)
 	delete(s.deletedMsgs, chatID)
+	s.discardTopicsLocked(chatID)
 	s.purgeMsgs[chatID] = struct{}{}
 }
 
-// flushMessageRows applies queued purges, upserts and deletes in one
-// transaction. Runs off-lock. Logs errors; the Store interface does not
-// propagate them.
-func (s *SQLiteStore) flushMessageRows(w msgWrites) {
-	if len(w.purges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 {
+// flushMessageRows applies queued purges, upserts and deletes of messages and
+// topics in one transaction. Runs off-lock. Logs errors; the Store interface
+// does not propagate them.
+func (s *SQLiteStore) flushMessageRows(w rowWrites) {
+	if len(w.purges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 &&
+		len(w.topicUpserts) == 0 && len(w.topicDeletes) == 0 {
 		return
 	}
 	tx, err := s.db.Begin()
@@ -421,9 +426,26 @@ func (s *SQLiteStore) flushMessageRows(w msgWrites) {
 		return
 	}
 	for _, chatID := range w.purges {
-		if _, err := tx.Exec(`DELETE FROM messages WHERE chat_id = ?`, chatID); err != nil {
+		for _, q := range []string{`DELETE FROM messages WHERE chat_id = ?`, `DELETE FROM topics WHERE chat_id = ?`} {
+			if _, err := tx.Exec(q, chatID); err != nil {
+				_ = tx.Rollback()
+				s.log.Error("purge chat rows failed", zap.Int64("chat_id", chatID), zap.Error(err))
+				return
+			}
+		}
+	}
+	for _, u := range w.topicUpserts {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO topics(chat_id, topic_id, pin_rank, data) VALUES (?, ?, ?, ?)`,
+			u.chatID, u.topicID, u.pinRank, u.data); err != nil {
 			_ = tx.Rollback()
-			s.log.Error("purge messages failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			s.log.Error("upsert topic failed", zap.Int64("chat_id", u.chatID), zap.Int("topic_id", u.topicID), zap.Error(err))
+			return
+		}
+	}
+	for _, d := range w.topicDeletes {
+		if _, err := tx.Exec(`DELETE FROM topics WHERE chat_id = ? AND topic_id = ?`, d.chatID, d.topicID); err != nil {
+			_ = tx.Rollback()
+			s.log.Error("delete topic failed", zap.Int64("chat_id", d.chatID), zap.Int("topic_id", d.topicID), zap.Error(err))
 			return
 		}
 	}

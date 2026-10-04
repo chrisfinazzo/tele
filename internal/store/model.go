@@ -34,6 +34,12 @@ const (
 	// covers every chat that is not a channel and names none of them. What is
 	// missing can only be found by asking Telegram where each chat now ends.
 	EventGapScan
+	// EventTopicsChanged reports that something about a forum's topics changed
+	// other than a message arriving: a topic opened, edited or read, or what is
+	// pinned (#275). It is not applied but answered, by reading the topics
+	// named in Event.MsgIDs again, or the first page when Event.TopicsPage is
+	// set, since only that page states the order topics are pinned in.
+	EventTopicsChanged
 )
 
 type Event struct {
@@ -57,4 +63,7 @@ type Event struct {
 	Muted         bool
 	// Draft carries the new draft text for EventDraftMessage.
 	Draft string
+	// TopicsPage asks for a forum's first page of topics to be read again, for
+	// EventTopicsChanged.
+	TopicsPage bool
 }

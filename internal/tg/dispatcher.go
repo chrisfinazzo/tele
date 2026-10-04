@@ -45,6 +45,13 @@ func setupDispatcher(
 	// (users/basic groups) and UpdateNewChannelMessage (channels/supergroups)
 	// handlers, which carry an identically shaped Message field.
 	handleNewMessage := func(ctx context.Context, e tg.Entities, raw tg.MessageClass, pts int) error {
+		if evt, ok := topicServiceEvent(raw); ok {
+			select {
+			case mustDeliver <- evt:
+			case <-ctx.Done():
+			}
+			return nil
+		}
 		peerID := extractPeerID(raw)
 		msg, ok := convertMessage(raw, peerID)
 		if !ok {
@@ -129,6 +136,31 @@ func setupDispatcher(
 	// supergroup/channel messages during live updates (issue #116).
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewChannelMessage) error {
 		return handleNewMessage(ctx, e, upd.Message, upd.Pts)
+	})
+
+	// Everything Telegram says about a forum's topics other than a message
+	// arriving is answered by reading the topics again rather than interpreted
+	// here: a read pointer comes without the count it leaves, and a pin without
+	// the order (#275).
+	topicsChanged := func(ctx context.Context, evt store.Event) error {
+		evt.Kind = store.EventTopicsChanged
+		select {
+		case mustDeliver <- evt:
+		case <-ctx.Done():
+		}
+		return nil
+	}
+	dispatcher.OnReadChannelDiscussionInbox(func(ctx context.Context, _ tg.Entities, upd *tg.UpdateReadChannelDiscussionInbox) error {
+		return topicsChanged(ctx, store.Event{ChatID: upd.ChannelID, MsgIDs: []int{upd.TopMsgID}})
+	})
+	dispatcher.OnReadChannelDiscussionOutbox(func(ctx context.Context, _ tg.Entities, upd *tg.UpdateReadChannelDiscussionOutbox) error {
+		return topicsChanged(ctx, store.Event{ChatID: upd.ChannelID, MsgIDs: []int{upd.TopMsgID}})
+	})
+	dispatcher.OnPinnedForumTopic(func(ctx context.Context, _ tg.Entities, upd *tg.UpdatePinnedForumTopic) error {
+		return topicsChanged(ctx, store.Event{ChatID: peerIDFromPeer(upd.Peer), TopicsPage: true})
+	})
+	dispatcher.OnPinnedForumTopics(func(ctx context.Context, _ tg.Entities, upd *tg.UpdatePinnedForumTopics) error {
+		return topicsChanged(ctx, store.Event{ChatID: peerIDFromPeer(upd.Peer), TopicsPage: true})
 	})
 
 	// handleEditMessage converts an edited message and emits EventEditMessage.

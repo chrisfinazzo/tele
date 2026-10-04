@@ -1,0 +1,71 @@
+package tg
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/gotd/td/tg"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
+
+func topicsEvent(t *testing.T, upd tg.UpdateClass) store.Event {
+	t.Helper()
+	d, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+	require.NoError(t, d.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}}))
+	select {
+	case evt := <-mustDeliver:
+		return evt
+	case <-time.After(time.Second):
+		t.Fatal("no event received")
+		return store.Event{}
+	}
+}
+
+func TestDispatcher_ATopicCreatedIsReadAgain(t *testing.T) {
+	evt := topicsEvent(t, &tg.UpdateNewChannelMessage{Pts: 1, PtsCount: 1, Message: &tg.MessageService{
+		ID: 77, PeerID: &tg.PeerChannel{ChannelID: 50},
+		Action: &tg.MessageActionTopicCreate{Title: "Design"},
+	}})
+
+	assert.Equal(t, store.EventTopicsChanged, evt.Kind)
+	assert.Equal(t, int64(50), evt.ChatID)
+	assert.Equal(t, []int{77}, evt.MsgIDs, "a topic is named by the message that opened it")
+}
+
+func TestDispatcher_ATopicEditedIsReadAgain(t *testing.T) {
+	evt := topicsEvent(t, &tg.UpdateNewChannelMessage{Pts: 1, PtsCount: 1, Message: &tg.MessageService{
+		ID: 78, PeerID: &tg.PeerChannel{ChannelID: 50},
+		ReplyTo: &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: 12},
+		Action:  &tg.MessageActionTopicEdit{Title: "Releases 2"},
+	}})
+
+	assert.Equal(t, store.EventTopicsChanged, evt.Kind)
+	assert.Equal(t, []int{12}, evt.MsgIDs)
+}
+
+func TestDispatcher_ATopicReadIsReadAgain(t *testing.T) {
+	in := topicsEvent(t, &tg.UpdateReadChannelDiscussionInbox{ChannelID: 50, TopMsgID: 12, ReadMaxID: 90})
+	assert.Equal(t, store.EventTopicsChanged, in.Kind)
+	assert.Equal(t, int64(50), in.ChatID)
+	assert.Equal(t, []int{12}, in.MsgIDs)
+
+	out := topicsEvent(t, &tg.UpdateReadChannelDiscussionOutbox{ChannelID: 50, TopMsgID: 12, ReadMaxID: 91})
+	assert.Equal(t, store.EventTopicsChanged, out.Kind)
+	assert.Equal(t, []int{12}, out.MsgIDs)
+}
+
+// Only the first page says in what order topics are pinned, so a change to
+// what is pinned reads that page again rather than the topics it names.
+func TestDispatcher_APinChangeReadsTheFirstPageAgain(t *testing.T) {
+	one := topicsEvent(t, &tg.UpdatePinnedForumTopic{Peer: &tg.PeerChannel{ChannelID: 50}, TopicID: 12, Pinned: true})
+	assert.Equal(t, store.EventTopicsChanged, one.Kind)
+	assert.Equal(t, int64(50), one.ChatID)
+	assert.True(t, one.TopicsPage)
+
+	all := topicsEvent(t, &tg.UpdatePinnedForumTopics{Peer: &tg.PeerChannel{ChannelID: 50}, Order: []int{12, 1}})
+	assert.True(t, all.TopicsPage)
+}

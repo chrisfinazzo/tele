@@ -49,6 +49,9 @@ const (
 	// after Telegram expired the old one. Nothing the user can see changes; the
 	// chat window rebuilds so the next fetch addresses the fresh reference.
 	ChangeMediaRef
+	// ChangeTopics reports that what is known about a forum's topics changed:
+	// a page or a topic was read from Telegram, or a topic was deleted (#275).
+	ChangeTopics
 )
 
 // Change describes one applied difference in domain state, carrying what a
@@ -71,4 +74,7 @@ type Change struct {
 	// count actually moved as a result.
 	ReactionsUnread       bool
 	UnreadReactionChanged bool
+	// UnknownTopic names the forum topic a new message landed in when nothing
+	// about that topic was known yet, so the owner can ask Telegram (#275).
+	UnknownTopic int
 }

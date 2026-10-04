@@ -78,6 +78,10 @@ type Owner struct {
 	// by Telegram saying a channel fell behind while nobody was looking at it.
 	repairing map[int64]bool
 
+	// topics coalesces the forum topic reads owed to Telegram (#275).
+	topicsMu sync.Mutex
+	topics   topicRefresh
+
 	// focus is what each attached client is showing. The notification policy's
 	// only view of clients (#192).
 	focus *focusRegistry
