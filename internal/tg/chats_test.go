@@ -38,6 +38,16 @@ func TestConvertChannel_ToChat(t *testing.T) {
 	assert.Equal(t, int64(99), chat.Peer.AccessHash)
 }
 
+func TestConvertChannel_Forum(t *testing.T) {
+	forum, ok := convertChannel(&tg.Channel{ID: 301, Title: "Dev", Megagroup: true, Forum: true})
+	require.True(t, ok)
+	assert.True(t, forum.IsForum)
+
+	group, ok := convertChannel(&tg.Channel{ID: 302, Title: "Chat", Megagroup: true})
+	require.True(t, ok)
+	assert.False(t, group.IsForum)
+}
+
 func TestConvertUser_Bot(t *testing.T) {
 	user := &tg.User{ID: 101, FirstName: "MyBot", Bot: true, AccessHash: 55}
 	chat, ok := convertUser(user)

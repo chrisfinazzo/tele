@@ -77,6 +77,28 @@ func TestConvertMessage_Mentioned(t *testing.T) {
 	assert.False(t, out2.Mentioned)
 }
 
+// A plain message in a topic names the topic in reply_to_msg_id and nothing in
+// reply_to_top_id: it belongs to the topic and replies to nothing.
+func TestConvertMessage_PlainMessageInATopic(t *testing.T) {
+	raw := &tg.Message{ID: 40, Date: 1700000000, Message: "hi",
+		ReplyTo: &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: 12}}
+	out, ok := convertMessage(raw, 5)
+	require.True(t, ok)
+	assert.Equal(t, 12, out.TopicID)
+	assert.Zero(t, out.ReplyToMsgID)
+}
+
+// A reply inside a topic names the topic in reply_to_top_id, which leaves
+// reply_to_msg_id free to be the message replied to.
+func TestConvertMessage_ReplyInsideATopic(t *testing.T) {
+	raw := &tg.Message{ID: 41, Date: 1700000000, Message: "agreed",
+		ReplyTo: &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: 40, ReplyToTopID: 12}}
+	out, ok := convertMessage(raw, 5)
+	require.True(t, ok)
+	assert.Equal(t, 12, out.TopicID)
+	assert.Equal(t, 40, out.ReplyToMsgID)
+}
+
 func TestConvertMessageGroupedID(t *testing.T) {
 	raw := &tg.Message{ID: 10, Message: "part", Date: 1700000000}
 	raw.SetGroupedID(9988776655)

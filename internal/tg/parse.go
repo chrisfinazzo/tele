@@ -281,6 +281,16 @@ func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 	out.Media = classifyMedia(msg.Media)
 	if hdr, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		out.ReplyToMsgID = hdr.ReplyToMsgID
+		// In a topic reply_to_msg_id names the topic itself unless top_id is
+		// there to take that role, so a plain message in a topic is no reply.
+		if hdr.ForumTopic {
+			if hdr.ReplyToTopID != 0 {
+				out.TopicID = hdr.ReplyToTopID
+			} else {
+				out.TopicID = hdr.ReplyToMsgID
+				out.ReplyToMsgID = 0
+			}
+		}
 	}
 	// The two travel together and mean different things. edit_date is when the
 	// message was last edited; edit_hide is Telegram asking that it be shown as

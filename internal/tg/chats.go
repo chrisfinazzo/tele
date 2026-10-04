@@ -389,9 +389,10 @@ func convertChannel(ch *tg.Channel) (domain.Chat, bool) {
 		peerType = domain.PeerSuperGroup
 	}
 	return domain.Chat{
-		ID:    ch.ID,
-		Title: ch.Title,
-		Peer:  domain.Peer{ID: ch.ID, Type: peerType, AccessHash: ch.AccessHash},
+		ID:      ch.ID,
+		Title:   ch.Title,
+		Peer:    domain.Peer{ID: ch.ID, Type: peerType, AccessHash: ch.AccessHash},
+		IsForum: ch.Forum,
 	}, true
 }
 

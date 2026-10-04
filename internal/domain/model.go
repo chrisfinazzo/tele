@@ -221,6 +221,9 @@ type Chat struct {
 	// IsArchived reports whether the chat lives in the built-in Archive
 	// folder (folder_id 1).
 	IsArchived bool
+	// IsForum reports a group with topics enabled: its messages are divided
+	// among topics and it has no history of its own (#275).
+	IsForum bool
 	// Draft is the unsent message draft synced with Telegram (#62). It is
 	// loaded from the dialog list and kept current via updateDraftMessage; it
 	// is not persisted to disk (the server is the source of truth on restart).
@@ -264,8 +267,11 @@ type Message struct {
 	// GroupedID is Telegram's album key: album parts share the same non-zero
 	// grouped_id. 0 means the message is not part of an album.
 	GroupedID    int64
-	ReplyToMsgID int        // 0 if not a reply
-	EditDate     *time.Time // nil if not edited
+	ReplyToMsgID int // 0 if not a reply
+	// TopicID is the forum topic Telegram named for the message, 0 when it named
+	// none. In a forum 0 means General: messages there carry no topic (#275).
+	TopicID  int
+	EditDate *time.Time // nil if not edited
 	// EditHidden is Telegram's edit_hide: the message must be shown as
 	// unmodified even though it carries an edit date. It is a statement about
 	// the label alone and never about the content, which may well have changed
