@@ -47,7 +47,9 @@ const (
 func (af *AuthFlow) authorize(ctx context.Context, self func(context.Context) (*tg.User, error),
 	client auth.FlowClient, hadSession bool) (*tg.User, error) {
 	user, err := self(ctx)
-	if telerr.Of(err) != telerr.Unauthorized {
+	// A key Telegram dropped cannot log in either; the connection is already
+	// ending, and the session goes with it.
+	if telerr.Of(err) != telerr.Unauthorized || tgerr.Is(err, "AUTH_KEY_DUPLICATED") {
 		return user, err
 	}
 	reason := ""

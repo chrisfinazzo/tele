@@ -37,6 +37,11 @@ func (c *GotdClient) mapError(op string, err error) error {
 	var te *tgerr.Error
 	if errors.As(err, &te) {
 		kind, reason, retryAfter := classifyTgErr(te)
+		if te.Type == "AUTH_KEY_DUPLICATED" {
+			// Whichever request it came back on, the key is dead for all of
+			// them: the connection ends here rather than one failure at a time.
+			c.dropped.report()
+		}
 		if kind == telerr.Internal && c.log != nil {
 			// The kind set is closed, the mapping table is not. Unmapped types
 			// are logged so the table is extended on evidence rather than by

@@ -101,6 +101,11 @@ type Error struct {
 	RetryAfter time.Duration `json:"retry_after,omitempty"`
 	// Transient is set for Network only, and reports whether a retry may help.
 	Transient bool `json:"transient,omitempty"`
+	// SessionRemoved is set for Unauthorized only, when the owner removed the
+	// session itself because Telegram had invalidated its key and no login could
+	// use it. It reports what the owner did rather than what Telegram said: the
+	// next start begins a new account, and a client says so.
+	SessionRemoved bool `json:"session_removed,omitempty"`
 	// Cause is the underlying error. It is not serialisable and never crosses a
 	// process boundary, but it must be preserved in-process: gotd recognises
 	// its own errors through the unwrap chain.

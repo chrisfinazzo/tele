@@ -18,6 +18,20 @@ import (
 // and someone who is has still not reached Telegram.
 const connectFailedAction = "Could not connect to Telegram"
 
+// sessionRemovedText is said when Telegram invalidated the session's key and
+// tele removed the session. The rest of the account's footprint goes on the
+// next start, which finds no session, so the text says when as well as what.
+// The login box does not wrap, so the lines are broken here to fit a narrow
+// terminal; a toast rewraps them anyway.
+const sessionRemovedText = "Telegram invalidated this session:\n" +
+	"its key was used from two connections at once.\n\n" +
+	"Removed: the session.\n" +
+	"On the next start tele also removes this account's\n" +
+	"local history and cached media, since logging in\n" +
+	"makes a new account.\n" +
+	"Kept: config, themes, log.\n\n" +
+	"Restart tele to log in."
+
 // isLoginQuit reports whether a key pressed on the login screen quits. Only a
 // quit binding that carries ctrl or alt does: a bare key such as q is a
 // character someone may be typing into the phone or password field, and on this
@@ -112,6 +126,16 @@ func (m RootModel) handleConnectFailed(msg ConnectFailedMsg) (RootModel, tea.Cmd
 	text, sev, ok := errText(connectFailedAction, msg.Err)
 	if !ok {
 		return m, nil
+	}
+	// Not a failure to connect: Telegram dropped the key and tele removed the
+	// session itself. Wherever it lands, the person is told what went, what the
+	// next start removes with it, what stays, and how to log in (#254).
+	if e, typed := telerr.As(msg.Err); typed && e.SessionRemoved {
+		if m.screen != ScreenLogin {
+			m.toasts.Add(components.ToastError, sessionRemovedText)
+			return m, nil
+		}
+		return m.routeLoginError(m.loginErrorText(sessionRemovedText, msg.Err.Error()))
 	}
 	if m.screen != ScreenLogin {
 		m.toasts.Add(components.ToastKindOf(sev), text)

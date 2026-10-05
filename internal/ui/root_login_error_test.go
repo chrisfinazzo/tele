@@ -76,6 +76,26 @@ func TestLogin_ABannedNumberIsNamedAsSuch(t *testing.T) {
 	assert.NotContains(t, view, "Could not connect")
 }
 
+// A key Telegram dropped cannot log in, so tele removed the session itself. The
+// screen says what was removed and why, what the next start removes with it,
+// what stays on disk, and that a restart is the way to log in (#254).
+func TestLogin_ARemovedSessionSaysWhatWasRemovedAndWhatStays(t *testing.T) {
+	err := &telerr.Error{Kind: telerr.Unauthorized, Op: "session", Detail: "AUTH_KEY_DUPLICATED", SessionRemoved: true}
+
+	view := withLoginStep(t, sizedLoginRoot(t), ui.ConnectFailedMsg{Err: err}).View().Content
+
+	for _, want := range []string{
+		"Telegram invalidated this session",
+		"Removed: the session.",
+		"local history and cached media",
+		"Kept: config, themes, log.",
+		"Restart tele to log in.",
+	} {
+		assert.Contains(t, view, want)
+	}
+	assert.NotContains(t, view, "Could not connect")
+}
+
 // Quitting cancels the connection, and the cancellation is not news.
 func TestLogin_CancelledConnectShowsNothing(t *testing.T) {
 	err := fmt.Errorf("run: %w", context.Canceled)
