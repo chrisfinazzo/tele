@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gotd/log/logzap"
@@ -47,6 +48,11 @@ type GotdClient struct {
 	// loggedOut ends the connection as a log out: the person's, or a key
 	// Telegram invalidated (#254, #297).
 	loggedOut loggedOut
+	// authorized is set once the login is behind the connection, from when
+	// a refused request means the session may have been logged out, and
+	// recheck asks the main data centre whether it was (#297).
+	authorized atomic.Bool
+	recheck    recheck
 }
 
 // SetOnClockSkew installs the function told about clock skew: the skew when it
@@ -267,6 +273,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	runCtx, cancelRun := context.WithCancelCause(ctx)
 	defer cancelRun(nil)
 	c.loggedOut.arm(cancelRun)
+	c.recheck.arm(runCtx)
 
 	c.log.Debug("connecting to telegram")
 	err := tc.Run(runCtx, func(ctx context.Context) error {
@@ -281,6 +288,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			return err
 		}
 		c.log.Info("authenticated", zap.Int64("user_id", self.ID))
+		c.authorized.Store(true)
 
 		if onAuth != nil {
 			onAuth(self.ID, self.Username)
@@ -302,6 +310,8 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			},
 		})
 	})
+	// A check still asking the main data centre ends with the connection.
+	c.recheck.wait()
 	return c.loggedOut.outcome(err)
 }
 

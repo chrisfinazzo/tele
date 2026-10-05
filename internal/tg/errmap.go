@@ -60,6 +60,12 @@ func (c *GotdClient) mapError(op string, err error) error {
 		}
 		if kind == telerr.Unauthorized {
 			mapped.LogOut = logOutOf(te)
+			// Once logged in, a refusal is checked against the main data
+			// centre before anything ends (#297). A dropped key needs no
+			// check: Telegram has said it is dead everywhere.
+			if c.authorized.Load() && mapped.LogOut != telerr.LogOutKeyDropped {
+				c.recheck.start(c.checkSession)
+			}
 		}
 		return mapped
 	}

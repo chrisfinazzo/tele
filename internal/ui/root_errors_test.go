@@ -22,11 +22,12 @@ func TestErrText_KindToTextAndSeverity(t *testing.T) {
 		wantSev components.Severity
 	}{
 		{
-			// A log out, whoever did it; the restart is the only way to the
-			// login screen while tele runs.
+			// Said of one request: a log out the main data centre confirms
+			// takes the person to the login by itself, and one it does not
+			// was no log out at all (#297).
 			"unauthorized",
 			&telerr.Error{Kind: telerr.Unauthorized},
-			"mark read: logged out, restart tele to log in again",
+			"mark read: Telegram refused this session",
 			components.SeverityError,
 		},
 		{

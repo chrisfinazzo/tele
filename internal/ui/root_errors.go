@@ -37,9 +37,11 @@ func errText(action string, err error) (string, components.Severity, bool) {
 
 	switch e.Kind {
 	case telerr.Unauthorized:
-		// A log out, whoever made it. The login screen is reached only from a
-		// fresh start for now, so the restart is part of the remedy (#297).
-		return action + ": logged out, restart tele to log in again", components.SeverityError, true
+		// Said of this one request. A log out the main data centre confirms
+		// ends the account and takes the person to the login by itself; one
+		// it does not, such as a media data centre's refusal, was no log out
+		// at all (#297).
+		return action + ": Telegram refused this session", components.SeverityError, true
 	case telerr.AccountBanned:
 		// No remedy to offer: logging in again meets the same ban.
 		return action + ": account banned by Telegram", components.SeverityError, true

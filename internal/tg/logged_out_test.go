@@ -3,7 +3,9 @@ package tg
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/gotd/td/bin"
 	gotdtg "github.com/gotd/td/tg"
@@ -55,16 +57,93 @@ func logOutOfOutcome(t *testing.T, c *GotdClient) telerr.LogOut {
 	return e.LogOut
 }
 
-// recordingInvoker answers every request with err, and remembers what it was
-// asked, through the same mapping every request goes through.
+// recordingInvoker answers every request with err, or with what errFor names
+// for its method, and remembers what it was asked, through the same mapping
+// every request goes through.
 type recordingInvoker struct {
-	err   error
-	asked []string
+	mu     sync.Mutex
+	err    error
+	errFor map[string]error
+	asked  []string
 }
 
 func (r *recordingInvoker) Invoke(_ context.Context, input bin.Encoder, _ bin.Decoder) error {
-	r.asked = append(r.asked, opName(input))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	op := opName(input)
+	r.asked = append(r.asked, op)
+	if err, ok := r.errFor[op]; ok {
+		return err
+	}
 	return r.err
+}
+
+func (r *recordingInvoker) count(op string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, a := range r.asked {
+		if a == op {
+			n++
+		}
+	}
+	return n
+}
+
+// A 401 while the account is in use is a question, not an answer: a media data
+// centre can refuse a session the main one still holds. The main one is asked,
+// and only its 401 ends the account, as the log out it reports (#297).
+func TestRecheck_ALogOutConfirmedOnTheMainDataCentreEndsTheAccount(t *testing.T) {
+	inv := &recordingInvoker{err: tgerr.New(401, "AUTH_KEY_UNREGISTERED")}
+	c, ctx := clientOver(inv)
+	c.authorized.Store(true)
+
+	_ = c.mapError("upload.getFile", tgerr.New(401, "AUTH_KEY_UNREGISTERED"))
+
+	require.Eventually(t, func() bool { return ctx.Err() != nil }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, 1, inv.count("users.getUsers"))
+	assert.Equal(t, telerr.LogOutElsewhere, logOutOfOutcome(t, c))
+}
+
+func TestRecheck_ASessionTheMainDataCentreStillHoldsGoesOn(t *testing.T) {
+	inv := &recordingInvoker{}
+	c, ctx := clientOver(inv)
+	c.authorized.Store(true)
+
+	_ = c.mapError("upload.getFile", tgerr.New(401, "AUTH_KEY_UNREGISTERED"))
+
+	require.Eventually(t, func() bool { return inv.count("users.getUsers") == 1 }, time.Second, 5*time.Millisecond)
+	c.recheck.wait()
+	assert.NoError(t, ctx.Err())
+}
+
+// A burst of refusals asks once, and a session found alive is not asked about
+// again straight away.
+func TestRecheck_IsNotAskedOverAndOver(t *testing.T) {
+	inv := &recordingInvoker{}
+	c, _ := clientOver(inv)
+	c.authorized.Store(true)
+
+	for i := 0; i < 5; i++ {
+		_ = c.mapError("upload.getFile", tgerr.New(401, "AUTH_KEY_UNREGISTERED"))
+	}
+	c.recheck.wait()
+	_ = c.mapError("upload.getFile", tgerr.New(401, "AUTH_KEY_UNREGISTERED"))
+	c.recheck.wait()
+
+	assert.Equal(t, 1, inv.count("users.getUsers"))
+}
+
+// Before the login a 401 is what a session with nothing to log out of answers,
+// and the login sorts it out.
+func TestRecheck_NotBeforeTheLogin(t *testing.T) {
+	inv := &recordingInvoker{}
+	c, _ := clientOver(inv)
+
+	_ = c.mapError("users.getUsers", tgerr.New(401, "AUTH_KEY_UNREGISTERED"))
+	c.recheck.wait()
+
+	assert.Zero(t, inv.count("users.getUsers"))
 }
 
 func clientOver(inv *recordingInvoker) (*GotdClient, context.Context) {
@@ -72,6 +151,7 @@ func clientOver(inv *recordingInvoker) (*GotdClient, context.Context) {
 	c.api = gotdtg.NewClient(c.errorMiddleware().Handle(inv))
 	ctx, cancel := context.WithCancelCause(context.Background())
 	c.loggedOut.arm(cancel)
+	c.recheck.arm(ctx)
 	return c, ctx
 }
 
