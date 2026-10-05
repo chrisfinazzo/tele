@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -14,16 +13,14 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 	"github.com/gotd/td/telegram/dcs"
+	"github.com/gotd/td/telegram/updates"
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
-	"github.com/sorokin-vladimir/tele/internal/core/outbox"
-	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/proxy"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -37,11 +34,9 @@ type App struct {
 	// everything through one place.
 	cfgStore *config.Store
 	log      *zap.Logger
-	st       store.Store
-	owner    *core.Owner
-	// sqlite is the same object as st, kept concretely because notice
-	// seen-state needs the database handle and store.Store does not expose it.
-	sqlite *store.SQLiteStore
+	// acct is the account running in this process: its database, connection,
+	// owner and caches. The App is its host and outlives it (#297).
+	acct *account
 	// tmpDir holds this run's scratch files: media saved for an external
 	// player, GIFs staged for decoding, and the media cache when the user asked
 	// for no persistent one. Removed on exit.
@@ -132,7 +127,7 @@ func (a *App) reloadConfig() (*config.Config, error) {
 		return nil, err
 	}
 	cfg := a.cfg()
-	a.owner.SetConfig(cfg)
+	a.acct.owner.SetConfig(cfg)
 	return cfg, nil
 }
 
@@ -163,82 +158,63 @@ func openRoute(cfg *config.Config, path string, log *zap.Logger) (dcs.Resolver, 
 
 func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*App, error) {
 	cfg := cfgStore.Current()
-	statePath := filepath.Join(cfg.StateDir, "state.db")
-	sqliteStore, err := store.NewSQLite(statePath, log)
-	if err != nil {
-		return nil, fmt.Errorf("open state DB: %w", err)
-	}
-	stateStorage := internaltg.NewSQLiteStateStorage(sqliteStore.DB())
 	resolver, err := openRoute(cfg, cfgStore.Path(), log)
 	if err != nil {
 		return nil, err
 	}
-	client := internaltg.NewGotdClient(log, stateStorage, trace, resolver)
-	owner := core.New(cfg, log, state.New(sqliteStore), client, newNotifier(log))
-	// The client finds a skewed clock in what gotd logs; the owner hands it on
-	// to whoever is drawing (#277).
-	client.SetOnClockSkew(owner.SetClockSkew)
-
-	// The send queue shares the account database: the file DB runs on a single
-	// connection (#119), and a second one to the same file is how SQLITE_BUSY
-	// came back last time.
-	sendQueue, err := outbox.NewStore(sqliteStore.DB())
-	if err != nil {
-		return nil, fmt.Errorf("open outbox: %w", err)
-	}
-	owner.SetOutbox(sendQueue)
 
 	// The temp directory is created here rather than in Run because the media
 	// cache may live inside it, and the owner needs the cache before it starts.
+	// It is the host's: it outlives the accounts that cache into it.
 	tmpDir, err := os.MkdirTemp("", "tele-*")
 	if err != nil {
 		log.Warn("failed to create temp dir for media", zap.Error(err))
 		tmpDir = ""
 	}
 	removeLegacyMediaCache(log)
-	if cache, cerr := openMediaCache(cfg, tmpDir, log); cerr != nil {
-		log.Warn("media cache unavailable; media will not be cached", zap.Error(cerr))
-	} else {
-		owner.SetMediaCache(cache)
-	}
-	if cache, cerr := openAvatarCache(cfg, tmpDir, log); cerr != nil {
-		log.Warn("avatar cache unavailable; avatars will not be shown", zap.Error(cerr))
-	} else {
-		owner.SetAvatarCache(cache)
-	}
 
 	a := &App{
 		cfgStore: cfgStore,
 		log:      log,
-		st:       sqliteStore,
-		sqlite:   sqliteStore,
-		owner:    owner,
 		tmpDir:   tmpDir,
 		verbose:  verbose,
 	}
-	// Registered after the App exists: the account identity is needed both by
-	// the message list (own messages) and by the farewell banner on exit.
-	owner.SetOnAuth(func(userID int64, username string) {
-		if err := accountstate.Record(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
-			log.Error("record account identity", zap.Error(err))
-		}
-		components.SetSelfIdentity(userID, username)
-		a.setSelf(userID, username)
+	a.acct, err = openAccount(accountDeps{
+		cfg:      cfg,
+		log:      log,
+		tmpDir:   tmpDir,
+		notifier: newNotifier(log),
+		connect: func(stateStorage updates.StateStorage) core.Connection {
+			return internaltg.NewGotdClient(log, stateStorage, trace, resolver)
+		},
+		// The account identity is needed both by the message list (own
+		// messages) and by the farewell banner on exit.
+		onAuth: func(userID int64, username string) {
+			if err := accountstate.Record(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
+				log.Error("record account identity", zap.Error(err))
+			}
+			components.SetSelfIdentity(userID, username)
+			a.setSelf(userID, username)
+		},
 	})
+	if err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
 func (a *App) Run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if sc, ok := a.st.(interface{ Close() error }); ok {
-		defer func() { _ = sc.Close() }()
-	}
 
+	// Deferred in this order so they run in the other: the account stops and
+	// closes its database before the temp directory its caches may live in goes.
 	defer os.RemoveAll(a.tmpDir) //nolint:errcheck
+	defer a.acct.stop()
 
-	authFlow := a.owner.AuthFlow()
-	readyCh := a.owner.Ready()
+	owner := a.acct.owner
+	authFlow := owner.AuthFlow()
+	readyCh := owner.Ready()
 
 	// The owner holds the connection; this process also happens to render it.
 	// Start returns only when the connection is over. Its error is kept for the
@@ -246,16 +222,12 @@ func (a *App) Run() error {
 	// exit to report it meant nobody saw it, on a screen nobody could quit (#283).
 	tgErr := make(chan error, 1)
 	startFailed := make(chan error, 1)
-	a.owner.SetContext(ctx)
-	go func() {
-		err := a.owner.Start(ctx)
+	a.acct.run(ctx, func(err error) {
 		tgErr <- err
 		if err != nil && ctx.Err() == nil {
 			startFailed <- err
 		}
-	}()
-	go a.owner.RunUpdates(ctx)
-	go a.owner.RunOutbox(ctx)
+	})
 
 	// Build bubbletea model
 	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg().KeybindingOverrides())
@@ -264,7 +236,7 @@ func (a *App) Run() error {
 	}
 	// The client attaches: the focus it reports and the detach that ends it
 	// belong to it, everything else is the owner's (#192).
-	att := a.owner.Attach()
+	att := owner.Attach()
 	defer att.Detach()
 
 	root := ui.NewRootModel(a.cfg().UI.HistoryLimit, a.verbose)
@@ -275,7 +247,7 @@ func (a *App) Run() error {
 
 	// One-time startup notices (#197). Seen-state is written on dismissal, so
 	// quitting before the countdown ends shows the notice again next time.
-	noticeSeen := notices.NewSQLiteSeen(a.sqlite.DB())
+	noticeSeen := notices.NewSQLiteSeen(a.acct.store.DB())
 	root = root.WithNotices(notices.Pending(a.pendingNotices(), noticeSeen), noticeSeen)
 
 	prog := tea.NewProgram(root)
@@ -313,7 +285,7 @@ func (a *App) Run() error {
 		}
 		// Connected: the owner loads the authoritative dialog list.
 		go func() {
-			if err := a.owner.Bootstrap(ctx); err != nil {
+			if err := owner.Bootstrap(ctx); err != nil {
 				a.log.Error("GetDialogs failed", zap.Error(err))
 				return
 			}
@@ -321,11 +293,11 @@ func (a *App) Run() error {
 		}()
 
 		// Send cached folder filters immediately, then refresh from network
-		if cached := a.st.FolderFilters(); len(cached) > 0 {
+		if cached := a.acct.store.FolderFilters(); len(cached) > 0 {
 			prog.Send(ui.FolderFiltersMsg{Filters: cached})
 		}
 		go func() {
-			filters, err := a.owner.LoadFolderFilters(ctx)
+			filters, err := owner.LoadFolderFilters(ctx)
 			if err != nil {
 				a.log.Warn("GetDialogFilters failed", zap.Error(err))
 				return
@@ -343,21 +315,21 @@ func (a *App) Run() error {
 			select {
 			case <-ctx.Done():
 				return
-			case d := <-a.owner.Deltas():
+			case d := <-owner.Deltas():
 				prog.Send(d)
-			case in := <-a.owner.Incoming():
+			case in := <-owner.Incoming():
 				prog.Send(in)
-			case n := <-a.owner.Notifications():
+			case n := <-owner.Notifications():
 				prog.Send(n)
-			case f := <-a.owner.Failures():
+			case f := <-owner.Failures():
 				prog.Send(f)
-			case tp := <-a.owner.Typing():
+			case tp := <-owner.Typing():
 				prog.Send(tp)
-			case pr := <-a.owner.Progress():
+			case pr := <-owner.Progress():
 				prog.Send(pr)
-			case dp := <-a.owner.Downloads():
+			case dp := <-owner.Downloads():
 				prog.Send(dp)
-			case sk := <-a.owner.ClockSkew():
+			case sk := <-owner.ClockSkew():
 				prog.Send(sk)
 			}
 		}

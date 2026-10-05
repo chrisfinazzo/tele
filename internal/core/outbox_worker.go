@@ -168,14 +168,19 @@ func (o *Owner) recordSent(e domain.OutboxEntry, sent domain.Message) {
 	// The listener normally has the row already. This is the backstop for the
 	// case where it did not: the send happened, and a bubble stuck at "sending"
 	// would be the lie.
-	go o.dropIfUndelivered(e.Ref)
+	o.spawn(func() { o.dropIfUndelivered(e.Ref) })
 }
 
 // dropIfUndelivered removes a sent entry the update path never claimed. Without
 // it a message that went out but produced no update would sit at "sending"
 // forever, which is a worse lie than dropping the entry: the send did happen.
 func (o *Owner) dropIfUndelivered(ref string) {
-	time.Sleep(sentGracePeriod)
+	select {
+	case <-time.After(sentGracePeriod):
+	case <-o.ctx.Done():
+		// The account is ending, and its send queue goes with it.
+		return
+	}
 	cur, ok := o.outbox.Get(ref)
 	if !ok || len(cur.SentMsgIDs) == 0 {
 		return

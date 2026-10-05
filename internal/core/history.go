@@ -99,7 +99,7 @@ func (o *Owner) recordGap(chatID int64) {
 		// stopped being able to. Fetching the history directly is the only way
 		// they see anything until it recovers, so it happens now rather than at
 		// the next open.
-		go o.forwardFill(o.ctx, chatID)
+		o.spawn(func() { o.forwardFill(o.ctx, chatID) })
 	}
 }
 
@@ -129,7 +129,7 @@ func (o *Owner) scanForGaps(ctx context.Context) {
 		st.MarkGap(chat.ID, tail)
 		marked++
 		if o.focus.focused(chat.ID) {
-			go o.forwardFill(ctx, chat.ID)
+			o.spawn(func() { o.forwardFill(ctx, chat.ID) })
 		}
 	}
 	o.log.Info("gap scan done", zap.Int("dialogs", len(chats)), zap.Int("marked", marked))

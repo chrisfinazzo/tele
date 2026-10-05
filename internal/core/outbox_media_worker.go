@@ -208,7 +208,7 @@ func (o *Owner) recordSentMedia(e domain.OutboxEntry, peer domain.Peer, ids []in
 
 	// The listener normally has the row already. This is the backstop for the
 	// case where it did not.
-	go o.dropIfUndelivered(e.Ref)
+	o.spawn(func() { o.dropIfUndelivered(e.Ref) })
 }
 
 // beginUpload derives the cancellable context this entry's upload runs on and

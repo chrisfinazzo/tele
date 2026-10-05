@@ -94,7 +94,8 @@ func (o *Owner) maybeFetchTopics(w project.TopicListWindow) {
 	}
 	o.topics.paging[w.ChatID] = true
 	o.topicsMu.Unlock()
-	go o.fetchTopicsAfter(o.ctx, w.ChatID, held[len(held)-1])
+	last := held[len(held)-1]
+	o.spawn(func() { o.fetchTopicsAfter(o.ctx, w.ChatID, last) })
 }
 
 func (o *Owner) fetchTopicsAfter(ctx context.Context, chatID int64, last domain.Topic) {
@@ -141,7 +142,7 @@ func (o *Owner) queueTopics(chatID int64, ids []int, page bool) {
 		return
 	}
 	o.topics.running[chatID] = true
-	go o.runTopicRefresh(o.ctx, chatID)
+	o.spawn(func() { o.runTopicRefresh(o.ctx, chatID) })
 }
 
 // runTopicRefresh drains a forum's pending topic reads one request at a time.

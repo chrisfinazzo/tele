@@ -66,7 +66,7 @@ func (o *Owner) maybeFetch(id project.SubID, w project.Window) {
 	if !hasGap && !needsBackfill(project.BuildHistory(o.reader(), cw), cw) {
 		return
 	}
-	go o.fill(o.ctx, id, cw)
+	o.spawn(func() { o.fill(o.ctx, id, cw) })
 }
 
 // needsBackfill reports that the store could not fill the window: it returned

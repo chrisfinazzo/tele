@@ -54,7 +54,7 @@ func (o *Owner) handleEvent(evt store.Event) {
 		o.recordGap(evt.ChatID)
 		return
 	case store.EventGapScan:
-		go o.scanForGaps(o.ctx)
+		o.spawn(func() { o.scanForGaps(o.ctx) })
 		return
 	case store.EventTopicsChanged:
 		// Like a gap, this is work rather than news: what changed is learned by
@@ -119,7 +119,7 @@ func (o *Owner) Bootstrap(ctx context.Context) error {
 	}
 	// Topics are read after the dialog list rather than with it: the list is
 	// what the main screen waits for, and a forum's badge can follow it.
-	go o.loadForumTopics(ctx, append(chats, archived...))
+	o.spawn(func() { o.loadForumTopics(ctx, append(chats, archived...)) })
 	return nil
 }
 

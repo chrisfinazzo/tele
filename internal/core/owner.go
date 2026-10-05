@@ -65,8 +65,16 @@ type Owner struct {
 
 	// ctx bounds the owner's background work (history backfill). It is stored
 	// rather than passed because that work is started by a subscription, which
-	// has no call context of its own and outlives it either way.
-	ctx context.Context
+	// has no call context of its own and outlives it either way. It is the
+	// owner's own and ends with Stop: an owner lasts one account (#297).
+	ctx    context.Context
+	cancel context.CancelFunc
+	// work counts the background work started through spawn, so Stop can wait
+	// for all of it. stopped refuses new work once Stop has begun, which is
+	// also what keeps an Add from racing the Wait.
+	workMu  sync.Mutex
+	work    sync.WaitGroup
+	stopped bool
 
 	// fetching guards one in-flight history fetch per subscription: rapid
 	// scroll-up would otherwise fire several identical fetches whose duplicate
@@ -127,13 +135,13 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		clockSkew:     newClockSkewOut(),
 		notifications: make(chan Notification, 32),
 		readyCh:       make(chan struct{}),
-		ctx:           context.Background(),
 		fetching:      make(map[project.SubID]bool),
 		repairing:     make(map[int64]bool),
 		focus:         newFocusRegistry(),
 		outboxWake:    make(chan struct{}, 1),
 		uploadCancels: make(map[string]context.CancelFunc),
 	}
+	o.ctx, o.cancel = context.WithCancel(context.Background())
 	o.cfg.Store(cfg)
 	// Built from the owner, not from the store alone: the projection reads the
 	// send queue too, and the queue arrives later through SetOutbox (#193).
@@ -149,8 +157,33 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 	return o
 }
 
-// SetContext bounds the owner's background work. Call before Start.
-func (o *Owner) SetContext(ctx context.Context) { o.ctx = ctx }
+// spawn runs fn as the owner's background work: bounded by the owner's context
+// and waited for by Stop. Once Stop has begun nothing new is started, so a
+// command arriving while the account ends cannot reach what is being closed.
+func (o *Owner) spawn(fn func()) {
+	o.workMu.Lock()
+	defer o.workMu.Unlock()
+	if o.stopped {
+		return
+	}
+	o.work.Add(1)
+	go func() {
+		defer o.work.Done()
+		fn()
+	}()
+}
+
+// Stop ends the owner's background work and waits for it. The connection and
+// the two loops are stopped by whoever runs them, through the context they
+// were given; Stop is for what the owner started on its own. After it returns
+// nothing of the owner touches the account's files (#297).
+func (o *Owner) Stop() {
+	o.workMu.Lock()
+	o.stopped = true
+	o.workMu.Unlock()
+	o.cancel()
+	o.work.Wait()
+}
 
 // Config is the config the owner is running on. Read it where it is used rather
 // than copying a value out of it, so that a setting follows a reload without
