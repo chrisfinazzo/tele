@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -95,6 +96,47 @@ func TestSettings_MasksTheApiHash(t *testing.T) {
 	assert.Contains(t, row, "read-only")
 
 	assert.Contains(t, find(t, m, "API ID"), "12345", "the id is not a secret")
+}
+
+// A file that names no app key is not a client without one: the build carries
+// a key, and the rows say which kind without showing it (#239).
+func TestSettings_NamesTheBuiltInKeyInForce(t *testing.T) {
+	for _, tt := range []struct {
+		source appkey.Source
+		want   string
+	}{
+		{appkey.SourceInjected, "built-in (official build)"},
+		{appkey.SourcePublished, "built-in (published)"},
+	} {
+		t.Run(string(tt.source), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yml")
+			require.NoError(t, os.WriteFile(path, []byte("ui:\n  history_limit: 50\n"), 0600))
+			store, err := config.NewStore(path, t.TempDir())
+			require.NoError(t, err)
+			store.SetKeySource(tt.source)
+			m := components.NewSettingsModal(store, keys.DefaultKeyMap(), keys.DefaultKeyMap(), 100, 40)
+
+			id := find(t, m, "API ID")
+			assert.Contains(t, id, tt.want)
+			assert.NotContains(t, id, " 0 ", "zero is not the key in force")
+			hash := find(t, m, "API hash")
+			assert.Contains(t, hash, tt.want)
+			assert.NotContains(t, hash, "••••", "a mask would say the file holds a hash")
+		})
+	}
+}
+
+// A key the person put in the file is what the rows show, whatever the build
+// carries.
+func TestSettings_ShowsTheKeyTheFileNames(t *testing.T) {
+	path := writeConfig(t, "")
+	store, err := config.NewStore(path, t.TempDir())
+	require.NoError(t, err)
+	store.SetKeySource(appkey.SourceUser)
+	m := components.NewSettingsModal(store, keys.DefaultKeyMap(), keys.DefaultKeyMap(), 100, 40)
+
+	assert.Contains(t, find(t, m, "API ID"), "12345")
+	assert.Contains(t, find(t, m, "API hash"), "••••")
 }
 
 // Read-only rows say so, and the overlay says where they are changed instead -

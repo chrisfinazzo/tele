@@ -126,6 +126,11 @@ func (s Status) String() string {
 	return fmt.Sprintf("status(%d)", uint8(s))
 }
 
+// Described is a value a store names rather than shows: what is in force is not
+// a value the store holds, only one it can say something about. The overlay
+// draws it as written, on a secret's row too, since there is nothing to mask.
+type Described string
+
 // Entry declares one setting. Everything the overlay needs to show and edit a
 // setting is here, and nothing about where the value is kept.
 type Entry struct {

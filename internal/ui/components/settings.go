@@ -281,6 +281,9 @@ func renderValue(e settings.Entry, value any, status settings.Status) string {
 	if status == settings.Unknown {
 		return "…"
 	}
+	if described, ok := value.(settings.Described); ok {
+		return string(described)
+	}
 	if e.Secret {
 		if value == nil || value == "" {
 			return "not set"

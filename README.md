@@ -354,6 +354,8 @@ telegram:
   api_hash: "your api hash"
 ```
 
+Set both or neither: a config that names only one stops `tele` at startup.
+
 Or install an official build, which carries a key of its own: the Homebrew tap
 above, the install script, apt, dnf, apk, Snap, Scoop and winget all ship
 binaries built by `tele`'s release pipeline.

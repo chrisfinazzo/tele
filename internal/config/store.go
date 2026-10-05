@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/proxy"
 	"github.com/sorokin-vladimir/tele/internal/settings"
 )
@@ -32,6 +33,37 @@ type Store struct {
 	// changed at once cannot each write a file that lacks the other's change.
 	writes  sync.Mutex
 	current atomic.Pointer[Config]
+
+	// keySource is where the app key in force came from. The file holds only
+	// the person's own key; which built-in one runs in its place is settled
+	// beside the file, when the process starts (#239).
+	keySource appkey.Source
+}
+
+// SetKeySource records where the app key in force came from, so the rows for
+// the key can name a built-in one when the file names none. Set once, before
+// anything reads the store.
+func (s *Store) SetKeySource(source appkey.Source) { s.keySource = source }
+
+// builtInKey answers the two key rows while a built-in key is in force. The
+// file names no key then, and its zero and its empty hash would read as a
+// client without one. Which built-in key it is gets named; the key itself is
+// not shown, because it is not the person's and this screen ends up in
+// recordings.
+func (s *Store) builtInKey(cfg *Config, key string) (settings.Described, bool) {
+	if key != "telegram.api_id" && key != "telegram.api_hash" {
+		return "", false
+	}
+	if cfg == nil || cfg.Telegram.APIID != 0 || cfg.Telegram.APIHash != "" {
+		return "", false
+	}
+	switch s.keySource {
+	case appkey.SourceInjected:
+		return "built-in (official build)", true
+	case appkey.SourcePublished:
+		return "built-in (published)", true
+	}
+	return "", false
 }
 
 // Verify the file store answers everything a store has to answer, including
@@ -76,7 +108,11 @@ func (s *Store) Entries() []settings.Entry { return Settings() }
 // known or not a setting at all, so the status is Saved or the answer is
 // Unknown; the states in between belong to a store that has to ask a server.
 func (s *Store) Value(key string) (any, settings.Status) {
-	v, ok := settingValue(s.Current(), key)
+	cfg := s.Current()
+	if builtIn, ok := s.builtInKey(cfg, key); ok {
+		return builtIn, settings.Saved
+	}
+	v, ok := settingValue(cfg, key)
 	if !ok {
 		return nil, settings.Unknown
 	}

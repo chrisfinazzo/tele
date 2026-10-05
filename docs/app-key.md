@@ -25,6 +25,14 @@ telegram:
   api_hash: "your api hash"
 ```
 
+Set both or neither. A config that names one and not the other stops `tele` at
+startup: half a key identifies nothing, and pairing it with half of the built-in
+one would run on a key nobody issued.
+
+The settings overlay shows which key is in force. With none in the config, its
+API ID and API hash rows say `built-in (official build)` or
+`built-in (published)` instead of a number.
+
 To bake your own key into a binary instead of reading it from the config, see
 [development.md](development.md#building-with-your-own-app-key).
 

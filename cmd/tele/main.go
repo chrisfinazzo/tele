@@ -96,7 +96,7 @@ func main() {
 	// The key is settled once, beside the config rather than in it: the config is
 	// what the file says, and a reload would lose a key written into it (#239).
 	injectedID, _ := strconv.Atoi(buildAPIID)
-	key, _, err := appkey.Resolve(
+	key, source, err := appkey.Resolve(
 		appkey.Key{ID: cfg.Telegram.APIID, Hash: cfg.Telegram.APIHash},
 		appkey.Key{ID: injectedID, Hash: buildAPIHash},
 	)
@@ -108,6 +108,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "config: set telegram.api_id and telegram.api_hash in %s\nGet credentials at https://my.telegram.org\n", *cfgPath)
 		os.Exit(1)
 	}
+	cfgStore.SetKeySource(source)
 
 	// The log lives in the platform state home regardless of where the account
 	// state was pinned: it is per-machine diagnostic output, not account data.
