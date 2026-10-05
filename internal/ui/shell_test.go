@@ -62,7 +62,7 @@ func TestLoginNotice_NamesEachEnd(t *testing.T) {
 		core.EndLoggedOutElsewhere: "This session was logged out.",
 		core.EndAccountDeleted:     "This Telegram account was deleted.",
 		core.EndKeyInvalidated:     "Telegram invalidated this session's key",
-		core.EndBanned:             "Logged out of the banned account.",
+		core.EndBanned:             "Log in with another number.",
 	} {
 		assert.Contains(t, loginNotice(core.AccountEnded{Reason: reason}), want, reason)
 	}

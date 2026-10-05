@@ -36,9 +36,29 @@ func (c *loggedOutConnection) Connect(context.Context, *config.Config, *internal
 
 func (c *loggedOutConnection) Updates() <-chan store.Event { return c.updates }
 
+// bannedConnection connects only to learn the account is banned: the
+// connection ends, and the account stays until the person leaves it.
+type bannedConnection struct {
+	internaltg.Client
+	updates chan store.Event
+}
+
+func (c *bannedConnection) Connect(context.Context, *config.Config, *internaltg.AuthFlow,
+	chan<- struct{}, func(int64, string)) error {
+	return &telerr.Error{Kind: telerr.AccountBanned}
+}
+
+func (c *bannedConnection) Updates() <-chan store.Event { return c.updates }
+
 // testHost is a host over a fresh state directory whose first account is
 // logged out as soon as it connects, and whose next one stays connected.
 func testHost(t *testing.T) (*App, chan tea.Msg, string) {
+	t.Helper()
+	return testHostWith(t, &loggedOutConnection{updates: make(chan store.Event)})
+}
+
+// testHostWith is testHost with first as the first account's connection.
+func testHostWith(t *testing.T, first core.Connection) (*App, chan tea.Msg, string) {
 	t.Helper()
 	stateDir := t.TempDir()
 	cfg := &config.Config{StateDir: stateDir}
@@ -59,7 +79,7 @@ func testHost(t *testing.T) (*App, chan tea.Msg, string) {
 			defer mu.Unlock()
 			opened++
 			if opened == 1 {
-				return &loggedOutConnection{updates: make(chan store.Event)}
+				return first
 			}
 			return &heldConnection{updates: make(chan store.Event)}
 		},
@@ -112,6 +132,31 @@ func TestHost_ALogOutStartsTheNextAccountWithNothingOfTheLast(t *testing.T) {
 	assert.Error(t, err, "the next account found the last one's data")
 
 	cancel()
+	a.switching.Lock()
+	next.stop()
+	a.switching.Unlock()
+}
+
+// A banned account's connection is over before the person decides anything.
+// Leaving it to log in with another number is the client's request, and ends
+// the account like any log out; what the banned one ended with is no longer
+// the process's exit error (#297).
+func TestHost_LeavingABannedAccountStartsTheNextOne(t *testing.T) {
+	a, delivered, _ := testHostWith(t, &bannedConnection{updates: make(chan store.Event)})
+	first, epoch := a.current()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.launch(ctx, first, epoch)
+	require.Eventually(t, func() bool { return a.lastExitErr() != nil }, 2*time.Second, 5*time.Millisecond)
+
+	first.owner.EndAccount(core.EndBanned)
+	ended := waitForEnd(t, delivered)
+
+	assert.Equal(t, core.EndBanned, ended.Ended.Reason)
+	assert.NoError(t, a.lastExitErr())
+
+	cancel()
+	next, _ := a.current()
 	a.switching.Lock()
 	next.stop()
 	a.switching.Unlock()

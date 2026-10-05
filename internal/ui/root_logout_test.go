@@ -12,6 +12,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 func logOutModel(t *testing.T, unsent int) (RootModel, *ownerStub) {
@@ -101,6 +102,37 @@ func TestLogOut_TelegramOutOfReachAsksAgain(t *testing.T) {
 	m, cmd, _ = m.handleLogOutKey(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	_, _ = m.handleLogOutDone(cmd().(logOutDoneMsg))
 	assert.Equal(t, []bool{true, false}, o.loggedOut)
+}
+
+// A banned account offers no login for its number, but the person can leave it
+// and log in with another one: Enter asks for the account to end (#297).
+func TestBanned_EnterLeavesForAnotherNumber(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	m := nextAccountRoot().WithOwner(o)
+	m, _ = m.handleConnectFailed(ConnectFailedMsg{Err: &telerr.Error{Kind: telerr.AccountBanned}})
+	require.Contains(t, screenText(m), "Press Enter to log in with another number.")
+
+	m, cmd, handled := m.handleBannedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.True(t, handled)
+	require.NotNil(t, cmd)
+	cmd()
+	_, _, again := m.handleBannedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	assert.False(t, again, "asked once")
+
+	assert.Equal(t, []core.EndReason{core.EndBanned}, o.endedWith)
+}
+
+// Any other failure on the login screen leaves Enter alone: there is nothing
+// to leave.
+func TestBanned_EnterDoesNothingElsewhere(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	m := nextAccountRoot().WithOwner(o)
+	m, _ = m.handleConnectFailed(ConnectFailedMsg{Err: &telerr.Error{Kind: telerr.Network}})
+
+	_, _, handled := m.handleBannedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	assert.False(t, handled)
+	assert.Empty(t, o.endedWith)
 }
 
 // While the dialog is open it owns the keys: nothing reaches the chat behind.

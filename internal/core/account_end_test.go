@@ -87,6 +87,18 @@ func (s *stubClient) LogOut(_ context.Context, tellTelegram bool) error {
 	return s.err
 }
 
+// A client can ask for the account to end when nothing ended the connection
+// for it: a banned account's connection is already over, and the person leaves
+// it to log in with another number (#297). The host hears the request.
+func TestEndAccount_IsHandedToTheHost(t *testing.T) {
+	o, _, _ := newTestOwner(t)
+
+	o.EndAccount(EndBanned)
+	o.EndAccount(EndBanned) // a second ask while one waits does not block
+
+	assert.Equal(t, EndBanned, <-o.EndRequests())
+}
+
 // Logging out is the connection's to carry out: the owner hands it on.
 func TestLogOut_IsHandedToTheConnection(t *testing.T) {
 	c := &stubClient{}

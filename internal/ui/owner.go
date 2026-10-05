@@ -21,6 +21,9 @@ type Owner interface {
 	// confirm; LogOut logs out, telling Telegram first when asked to (#297).
 	LogOutPreview() core.LogOutPreview
 	LogOut(ctx context.Context, tellTelegram bool) error
+	// EndAccount asks for the account to end when nothing ended its connection
+	// for it, such as leaving a banned account.
+	EndAccount(reason core.EndReason)
 
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.

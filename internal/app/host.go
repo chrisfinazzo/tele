@@ -119,9 +119,24 @@ func (a *App) send(epoch uint64, msg tea.Msg) {
 }
 
 // launch runs acct with the work the host does for it: the two bridges to its
-// model.
+// model, and listening for the client to ask for the account to end.
 func (a *App) launch(ctx context.Context, acct *account, epoch uint64) {
-	acct.run(ctx, a.connectionEnded(ctx, acct, epoch), a.authBridge(acct, epoch), a.deltaBridge(acct, epoch))
+	acct.run(ctx, a.connectionEnded(ctx, acct, epoch),
+		a.authBridge(acct, epoch), a.deltaBridge(acct, epoch), a.endRequests(ctx, acct, epoch))
+}
+
+// endRequests ends acct when its client asks: for an end the connection did not
+// bring about itself, such as leaving a banned account (#297).
+func (a *App) endRequests(hostCtx context.Context, acct *account, epoch uint64) func(context.Context) {
+	return func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+		case reason := <-acct.owner.EndRequests():
+			// On a goroutine of its own: ending the account waits for this
+			// work, which is the account's.
+			go a.endAccount(hostCtx, acct, epoch, reason)
+		}
+	}
 }
 
 // connectionEnded is told what acct's connection ended with. A log out ends the
@@ -177,6 +192,11 @@ func (a *App) endAccount(ctx context.Context, acct *account, epoch uint64, reaso
 		_ = os.RemoveAll(acct.tmpDir)
 	}
 	a.log.Info("account ended", zap.String("reason", string(reason)), zap.Int("discarded", discarded))
+	// What the ended account's connection ended with is not the process's
+	// to exit on.
+	a.mu.Lock()
+	a.exitErr = nil
+	a.mu.Unlock()
 
 	next, nextEpoch, err := a.openNext()
 	if err != nil {

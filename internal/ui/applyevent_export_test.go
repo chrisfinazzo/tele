@@ -125,6 +125,8 @@ func (o *testOwner) LogOutPreview() core.LogOutPreview { return core.LogOutPrevi
 
 func (o *testOwner) LogOut(context.Context, bool) error { return nil }
 
+func (o *testOwner) EndAccount(core.EndReason) {}
+
 func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
 	o.moves = append(o.moves, w)
 	o.reg.MoveWindow(id, w)

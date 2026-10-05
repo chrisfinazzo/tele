@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -121,10 +122,13 @@ func (m RootModel) handleConnectFailed(msg ConnectFailedMsg) (RootModel, tea.Cmd
 	// that logging in cannot help (#254). Where it came from says whose ban
 	// it is - the account's before any step, the number's once one was given.
 	if telerr.Of(msg.Err) == telerr.AccountBanned {
-		cause := "This Telegram account is banned. Logging in again will not help."
+		cause := "This Telegram account is banned.\nLogging in again with this number will not help."
 		if m.login.AskingNumber() {
 			cause = "This phone number is banned by Telegram."
 		}
+		// Another number is the one way on, and it starts a new account (#297).
+		m.banned = true
+		cause += "\nPress Enter to log in with another number."
 		return m.routeLoginError(m.loginErrorText(cause, msg.Err.Error()))
 	}
 	// An error with a kind has a phrase for it, and its own text goes underneath
@@ -135,6 +139,22 @@ func (m RootModel) handleConnectFailed(msg ConnectFailedMsg) (RootModel, tea.Cmd
 		cause = connectFailedAction + "."
 	}
 	return m.routeLoginError(m.loginErrorText(cause, msg.Err.Error()))
+}
+
+// handleBannedKey takes Enter on a ban's screen: the person leaves the banned
+// account to log in with another number, which the host does by ending this
+// account and starting the next (#297). Every other key, and Enter anywhere
+// else, is left to the login screen.
+func (m RootModel) handleBannedKey(msg tea.KeyPressMsg) (RootModel, tea.Cmd, bool) {
+	if !m.banned || msg.Code != tea.KeyEnter || m.owner == nil {
+		return m, nil, false
+	}
+	m.banned = false
+	owner := m.owner
+	return m, func() tea.Msg {
+		owner.EndAccount(core.EndBanned)
+		return nil
+	}, true
 }
 
 // routeLoginError hands the finished text to the login model as its error step.

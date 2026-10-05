@@ -80,6 +80,21 @@ func (o *Owner) LogOut(ctx context.Context, tellTelegram bool) error {
 	return o.client.LogOut(ctx, tellTelegram)
 }
 
+// EndAccount asks the host to end the account for reason. It is for an end the
+// connection did not bring about itself: a banned account's connection is
+// already over, and the person leaves it to log in with another number. One
+// request waiting is enough; more are dropped.
+func (o *Owner) EndAccount(reason EndReason) {
+	select {
+	case o.endRequests <- reason:
+	default:
+	}
+}
+
+// EndRequests is where the host hears that a client asked for the account to
+// end.
+func (o *Owner) EndRequests() <-chan EndReason { return o.endRequests }
+
 // UnsentCount is how many messages in the send queue have not gone out yet:
 // what an account that ends now takes with it.
 func (o *Owner) UnsentCount() int {

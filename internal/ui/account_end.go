@@ -31,7 +31,9 @@ func loginNotice(e core.AccountEnded) string {
 	case core.EndKeyInvalidated:
 		text = "Telegram invalidated this session's key:\nit was used from two connections at once.\nLog in again."
 	case core.EndBanned:
-		text = "Logged out of the banned account."
+		// The ban may have been the number's, before any account was
+		// logged in, so nothing here claims one was left.
+		text = "Log in with another number."
 	}
 	switch {
 	case e.Discarded == 1:

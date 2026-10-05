@@ -65,6 +65,8 @@ type Owner struct {
 	// selfName is the logged-in user's username, once known: a log out names
 	// whose account it ends (#297).
 	selfName atomic.Pointer[string]
+	// endRequests carries a client's request that the account end (#297).
+	endRequests chan EndReason
 
 	// ctx bounds the owner's background work (history backfill). It is stored
 	// rather than passed because that work is started by a subscription, which
@@ -138,6 +140,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		clockSkew:     newClockSkewOut(),
 		notifications: make(chan Notification, 32),
 		readyCh:       make(chan struct{}),
+		endRequests:   make(chan EndReason, 1),
 		fetching:      make(map[project.SubID]bool),
 		repairing:     make(map[int64]bool),
 		focus:         newFocusRegistry(),

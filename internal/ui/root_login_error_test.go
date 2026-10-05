@@ -61,7 +61,8 @@ func TestLogin_ABannedAccountIsNamedAsSuch(t *testing.T) {
 
 	view := withLoginStep(t, sizedLoginRoot(t), ui.ConnectFailedMsg{Err: err}).View().Content
 
-	assert.Contains(t, view, "This Telegram account is banned. Logging in again will not help.")
+	assert.Contains(t, view, "This Telegram account is banned.")
+	assert.Contains(t, view, "Logging in again with this number will not help.")
 	assert.NotContains(t, view, "Could not connect")
 	assert.Contains(t, view, testLogPath)
 }

@@ -193,6 +193,9 @@ type RootModel struct {
 
 	// logOut is the open log out confirmation, nil when none is (#297).
 	logOut *logOutDialog
+	// banned is set while the login screen shows a ban, where Enter leaves
+	// the banned account to log in with another number (#297).
+	banned bool
 }
 
 // Image-cache capacities (entry counts). Thumbnails churn fast and are small;
@@ -701,6 +704,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen == ScreenLogin {
 			if m.isLoginQuit(msg) {
 				return m, tea.Quit
+			}
+			if next, cmd, handled := m.handleBannedKey(msg); handled {
+				return next, cmd
 			}
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)

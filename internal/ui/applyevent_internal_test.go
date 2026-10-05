@@ -85,7 +85,10 @@ type ownerStub struct {
 	logOutPreview core.LogOutPreview
 	loggedOut     []bool
 	logOutErrs    []error
+	endedWith     []core.EndReason
 }
+
+func (o *ownerStub) EndAccount(reason core.EndReason) { o.endedWith = append(o.endedWith, reason) }
 
 func (o *ownerStub) LogOutPreview() core.LogOutPreview { return o.logOutPreview }
 
