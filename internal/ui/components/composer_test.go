@@ -1028,3 +1028,55 @@ func TestAttachments_VisualHeightGrowsWithList(t *testing.T) {
 
 	assert.Equal(t, one+1, c.VisualHeight())
 }
+
+func TestAttachments_SeparatorBeforeReplyPreview(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetAttachment("pic.jpg", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
+	c.SetReplyPreview("▌ Reply to message")
+
+	view := stripANSI(c.View())
+	lines := strings.Split(view, "\n")
+
+	chipIdx, previewIdx := -1, -1
+	for i, l := range lines {
+		if strings.Contains(l, "pic.jpg") {
+			chipIdx = i
+		}
+		if strings.Contains(l, "▌ Reply to message") {
+			previewIdx = i
+		}
+	}
+	require.GreaterOrEqual(t, chipIdx, 0, "attachment chip not found")
+	require.GreaterOrEqual(t, previewIdx, 0, "reply preview not found")
+	require.Equal(t, chipIdx+2, previewIdx, "expected exactly one line between chip and preview")
+
+	// The line between chip and preview must be blank inside the box borders.
+	sep := strings.TrimSpace(strings.Trim(lines[chipIdx+1], "│ "))
+	assert.Empty(t, sep, "line between attachment chip and preview must be blank")
+}
+
+func TestAttachments_VisualHeightWithAndWithoutSeparator(t *testing.T) {
+	c := components.NewComposer(60)
+	base := c.VisualHeight() // 3 (1 textarea line + 2 border rows)
+
+	// Attachment only: adds 1 row.
+	c.SetAttachment("pic.jpg", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
+	assert.Equal(t, base+1, c.VisualHeight(), "one attachment chip adds 1 row")
+
+	// With reply preview added: adds chip (1) + separator (1) + preview (1) + preview spacer (1) = +4.
+	c.SetReplyPreview("▌ Reply")
+	assert.Equal(t, base+4, c.VisualHeight(), "chip and single-line preview have separator between them")
+
+	// With two-line reply preview: chip (1) + separator (1) + preview (2) + preview spacer (1) = +5.
+	c.SetReplyPreview("line1\nline2")
+	assert.Equal(t, base+5, c.VisualHeight(), "chip and two-line preview have separator between them")
+
+	// Clear attachment: preview (2) + preview spacer (1) = +3.
+	c.ClearAttachment()
+	assert.Equal(t, base+3, c.VisualHeight(), "preview only without attachment has no leading separator")
+
+	// Restore attachment and clear preview: chip (1) = +1.
+	c.SetAttachment("pic.jpg", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
+	c.ClearReplyPreview()
+	assert.Equal(t, base+1, c.VisualHeight(), "attachment only restored without preview")
+}
