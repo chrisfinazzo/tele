@@ -1,15 +1,18 @@
 package ui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
-	"github.com/sorokin-vladimir/tele/internal/settings"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -40,104 +43,103 @@ func applyModel(t *testing.T, body string) (RootModel, *config.Store) {
 	return m, store
 }
 
-// liveObservation is how a setting is seen to have taken effect, for the
-// settings whose value is copied out of the config into something else. These
-// are the ones that can silently keep the old value after a reload: a setting
-// read where it is used follows a reload for free, a copy does not.
-type liveObservation struct {
-	// value is what to write into the file.
-	value any
-	// observe reads back what the model or the app is actually running on -
-	// never the config, which would only prove the file was re-read.
-	observe func(RootModel) any
-	want    any
+// takesHoldOnReload writes value to the setting at key and reloads, and checks
+// that what the model is running on - never the config, which would only prove
+// the file was re-read - now reads want. A setting declared to take effect
+// without a restart, and then quietly not taking effect, is worse than one that
+// says it needs a restart: the person changes it, sees nothing, and concludes
+// the setting is broken (#239).
+func takesHoldOnReload(t *testing.T, key string, value any, observe func(RootModel) any, want any) {
+	t.Helper()
+	m, store := applyModel(t, "")
+	require.NotEqual(t, want, observe(m), "%s already looks applied; the test proves nothing", key)
+
+	require.NoError(t, store.Set(key, value))
+	m, _ = m.reloadFromDisk()
+
+	assert.Equal(t, want, observe(m))
 }
 
-var liveObservations = map[string]liveObservation{
-	"ui.toasts.error_zone": {
-		value:   "top-right",
-		observe: func(m RootModel) any { return m.toasts.ZoneOf(components.ToastError) },
-		want:    components.ZoneTopRight,
-	},
-	"ui.toasts.notify_zone": {
-		value:   "bottom-right",
-		observe: func(m RootModel) any { return m.toasts.ZoneOf(components.ToastNotify) },
-		want:    components.ZoneBottomRight,
-	},
-	"ui.toasts.max_visible": {
-		value:   7,
-		observe: func(m RootModel) any { return m.toasts.MaxVisible() },
-		want:    7,
-	},
-	"ui.history_limit": {
-		value:   111,
-		observe: func(m RootModel) any { return m.historyLimit },
-		want:    111,
-	},
-	"ui.theme": {
-		value:   "nord",
-		observe: func(RootModel) any { return theme.T().Name },
-		want:    "nord",
-	},
-	"photos.kitty_placement_cap": {
-		value:   33,
-		observe: func(m RootModel) any { return m.kittyCap },
-		want:    33,
-	},
-	"photos.max_long_side_px": {
-		value:   1234,
-		observe: func(m RootModel) any { return m.chat.MaxMediaPx() },
-		want:    1234,
-	},
+func TestTakesHold_ui_toasts_error_zone(t *testing.T) {
+	takesHoldOnReload(t, "ui.toasts.error_zone", "top-right",
+		func(m RootModel) any { return m.toasts.ZoneOf(components.ToastError) }, components.ZoneTopRight)
 }
 
-// readAtPointOfUse names the settings that need no observation because nothing
-// copies them: the code that acts on them reads the config where it acts, so
-// installing the new config is the whole of applying them.
-var readAtPointOfUse = map[string]bool{
-	"ui.notifications.desktop":  true, // internal/core reads o.Config() at the sink
-	"ui.notifications.toast":    true, // internal/core reads o.Config() at the sink
-	"ui.notifications.preview":  true, // internal/core reads o.Config() as it decides
-	"photos.eager_full_quality": true, // root_download.go reads m.cfg as it downloads
+func TestTakesHold_ui_toasts_notify_zone(t *testing.T) {
+	takesHoldOnReload(t, "ui.toasts.notify_zone", "bottom-right",
+		func(m RootModel) any { return m.toasts.ZoneOf(components.ToastNotify) }, components.ZoneBottomRight)
 }
 
-// The guard on the whole idea. A setting declared to take effect without a
-// restart, and then quietly not taking effect, is worse than one that says it
-// needs a restart: the person changes it, sees nothing, and concludes the
-// setting is broken.
-//
-// Adding a live setting fails this test until it is either observed here or
-// declared to be read where it is used.
-func TestLiveSettings_AreEachAccountedFor(t *testing.T) {
-	for _, e := range config.Settings() {
-		if e.ReadOnly || e.Applies == settings.Startup {
-			continue
+func TestTakesHold_ui_toasts_max_visible(t *testing.T) {
+	takesHoldOnReload(t, "ui.toasts.max_visible", 7,
+		func(m RootModel) any { return m.toasts.MaxVisible() }, 7)
+}
+
+// The interface's half: how much the next chat window asks the owner for. The
+// owner's half, how much the next fetch asks Telegram for, is its own test.
+func TestTakesHold_ui_history_limit(t *testing.T) {
+	takesHoldOnReload(t, "ui.history_limit", 111,
+		func(m RootModel) any { return m.historyLimit }, 111)
+}
+
+func TestTakesHold_ui_theme(t *testing.T) {
+	takesHoldOnReload(t, "ui.theme", "nord",
+		func(RootModel) any { return theme.T().Name }, "nord")
+}
+
+func TestTakesHold_photos_kitty_placement_cap(t *testing.T) {
+	takesHoldOnReload(t, "photos.kitty_placement_cap", 33,
+		func(m RootModel) any { return m.kittyCap }, 33)
+}
+
+func TestTakesHold_photos_max_long_side_px(t *testing.T) {
+	takesHoldOnReload(t, "photos.max_long_side_px", 1234,
+		func(m RootModel) any { return m.chat.MaxMediaPx() }, 1234)
+}
+
+// mediaOwner refuses every download and remembers which were asked for.
+type mediaOwner struct {
+	Owner
+	slots []domain.MediaSlot
+}
+
+func (o *mediaOwner) FetchMedia(_ context.Context, _ int64, _ int, slot domain.MediaSlot) (string, error) {
+	o.slots = append(o.slots, slot)
+	return "", &telerr.Error{Kind: telerr.NotFound}
+}
+
+func (o *mediaOwner) SaveMedia(_ context.Context, _ int64, _ int, slot domain.MediaSlot, _, _ string) (string, error) {
+	o.slots = append(o.slots, slot)
+	return "", &telerr.Error{Kind: telerr.NotFound}
+}
+
+// runAll runs cmd and every command it batches.
+func runAll(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if batch, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range batch {
+			runAll(c)
 		}
-		_, observed := liveObservations[e.Key]
-		assert.True(t, observed || readAtPointOfUse[e.Key],
-			"%s takes effect without a restart and nothing here checks that it does", e.Key)
-	}
-	for key := range liveObservations {
-		e, ok := config.Setting(key)
-		require.True(t, ok, "%s is observed here and is not a setting", key)
-		assert.NotEqual(t, settings.Startup, e.Applies, "%s is a startup setting; observing it after a reload proves nothing", key)
 	}
 }
 
-// Each live setting, changed in the file and reloaded, reaches the thing that
-// acts on it - not merely the config.
-func TestLiveSettings_TakeEffectOnReload(t *testing.T) {
-	for key, obs := range liveObservations {
-		t.Run(key, func(t *testing.T) {
-			m, store := applyModel(t, "")
-			require.NotEqual(t, obs.want, obs.observe(m), "%s already looks applied; the test proves nothing", key)
+func TestTakesHold_photos_eager_full_quality(t *testing.T) {
+	m, store := applyModel(t, "photos:\n  eager_full_quality: true\n")
+	owner := &mediaOwner{}
+	m.owner = owner
+	photo := []domain.Message{{ID: 10, ChatID: 1,
+		Photo: &domain.PhotoRef{ID: 321, FullThumbSize: "y"}}}
+	runAll(m.pendingDownloadCmds(photo))
+	require.Contains(t, owner.slots, domain.PhotoFull, "the full photo was not fetched while the setting was on")
 
-			require.NoError(t, store.Set(key, obs.value))
-			m, _ = m.reloadFromDisk()
+	require.NoError(t, store.Set("photos.eager_full_quality", false))
+	m, _ = m.reloadFromDisk()
+	owner.slots = nil
+	runAll(m.pendingDownloadCmds(photo))
 
-			assert.Equal(t, obs.want, obs.observe(m))
-		})
-	}
+	assert.NotContains(t, owner.slots, domain.PhotoFull, "the next chat opened still fetched the full photo")
 }
 
 // A person editing the file in another window gets the same result as a person

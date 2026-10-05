@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/proxy"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -23,6 +24,7 @@ type startup struct {
 	stateDir      string
 	sessionFile   string
 	sessionPinned bool
+	route         proxy.Route
 	// The cache budgets, in bytes. Zero keeps nothing between runs.
 	mediaCacheSize  int64
 	avatarCacheSize int64
@@ -31,19 +33,32 @@ type startup struct {
 
 // newStartup reads the startup values out of the config the process started
 // with, beside the app key it resolved.
-func newStartup(cfg *config.Config, key appkey.Key) startup {
+func newStartup(cfg *config.Config, key appkey.Key) (startup, error) {
+	// The route was already accepted when the config loaded. It is parsed
+	// again here rather than carried on Config, because a Route is cheap and a
+	// second field that has to be kept in step with the section is not.
+	route, err := proxy.Parse(cfg.Proxy)
+	if err != nil {
+		return startup{}, err
+	}
 	return startup{
 		key:             key,
 		stateDir:        cfg.StateDir,
 		sessionFile:     cfg.Telegram.SessionFile,
 		sessionPinned:   cfg.SessionPinned,
+		route:           route,
 		mediaCacheSize:  cfg.Photos.DiskCacheSize,
 		avatarCacheSize: cfg.Avatars.DiskCacheSize,
 		imageMode:       media.DetectMode(cfg.Photos.Mode, os.Getenv),
-	}
+	}, nil
 }
 
-// endpoint is what each connection is made with.
-func (s startup) endpoint() internaltg.Endpoint {
-	return internaltg.Endpoint{Key: s.key, SessionFile: s.sessionFile}
+// endpoint is what a connection is made with. Each connection is given a
+// resolver of its own, built from the one route the process started with.
+func (s startup) endpoint() (internaltg.Endpoint, error) {
+	resolver, err := proxy.Resolver(s.route)
+	if err != nil {
+		return internaltg.Endpoint{}, err
+	}
+	return internaltg.Endpoint{Key: s.key, SessionFile: s.sessionFile, Resolver: resolver}, nil
 }

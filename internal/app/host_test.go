@@ -61,7 +61,7 @@ func testHost(t *testing.T) (*App, chan tea.Msg, string) {
 // testHostWith is testHost with first as the first account's connection.
 func testHostWith(t *testing.T, first core.Connection) (*App, chan tea.Msg, string) {
 	t.Helper()
-	h := newTestHost(t, first, appkey.Key{})
+	h := newTestHost(t, first, appkey.Key{}, "ui:\n  history_limit: 30\n")
 	return h.app, h.delivered, h.app.startup.sessionFile
 }
 
@@ -72,26 +72,33 @@ type testHostRig struct {
 	delivered chan tea.Msg
 	// endpoints receives what each account's connection was made with.
 	endpoints chan internaltg.Endpoint
+	// path is the config file, and stateDir the platform state directory.
+	path     string
+	stateDir string
 }
 
-// newTestHost builds a host the way New does, over a config file that names no
-// app key, with key as the one the process resolved. Its first account's
+// newTestHost builds a host the way New does, over a config file that says
+// body, with key as the app key the process resolved. Its first account's
 // connection is first; every later one stays connected.
-func newTestHost(t *testing.T, first core.Connection, key appkey.Key) testHostRig {
+func newTestHost(t *testing.T, first core.Connection, key appkey.Key, body string) testHostRig {
 	t.Helper()
 	stateDir := t.TempDir()
-	path := filepath.Join(stateDir, "config.yml")
-	require.NoError(t, os.WriteFile(path, []byte("ui:\n  history_limit: 30\n"), 0o600))
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 	cfg, err := config.Load(path, stateDir)
 	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(cfg.StateDir, 0o700))
 	require.NoError(t, os.WriteFile(cfg.Telegram.SessionFile, []byte(`{}`), 0o600))
+	start, err := newStartup(cfg, key)
+	require.NoError(t, err)
 
-	h := testHostRig{delivered: make(chan tea.Msg, 64), endpoints: make(chan internaltg.Endpoint, 8)}
+	h := testHostRig{delivered: make(chan tea.Msg, 64), endpoints: make(chan internaltg.Endpoint, 8),
+		path: path, stateDir: stateDir}
 	var mu sync.Mutex
 	opened := 0
 	h.app = &App{
 		cfgStore: config.NewStoreOf(cfg, path, stateDir),
-		startup:  newStartup(cfg, key),
+		startup:  start,
 		log:      zap.NewNop(),
 		notifier: newNotifier(zap.NewNop()),
 		tmpDir:   t.TempDir(),
@@ -190,7 +197,7 @@ func TestHost_LeavingABannedAccountStartsTheNextOne(t *testing.T) {
 // reloaded in between from a file that names no key (#239).
 func TestHost_TheNextAccountConnectsWithTheBuiltInKeyAfterAReload(t *testing.T) {
 	builtIn := appkey.Key{ID: 4242, Hash: "built-in"}
-	h := newTestHost(t, &loggedOutConnection{updates: make(chan store.Event)}, builtIn)
+	h := newTestHost(t, &loggedOutConnection{updates: make(chan store.Event)}, builtIn, "ui:\n  history_limit: 30\n")
 	a := h.app
 	<-h.endpoints // the first account's
 	_, err := a.reloadConfig()

@@ -132,7 +132,7 @@ func (okInvoker) Invoke(context.Context, bin.Encoder, bin.Decoder) error { retur
 // A reply that came back is a message the clock check let through.
 func TestClockSkew_SuccessfulRPCClears(t *testing.T) {
 	r := &skewReports{}
-	c := NewGotdClient(zap.NewNop(), Endpoint{}, nil, false, nil)
+	c := NewGotdClient(zap.NewNop(), Endpoint{}, nil, false)
 	c.skew = newTestSkew(r)
 	logRejected(watchClockSkew(zap.NewNop(), c.skew), skewTestNow.Add(-8*time.Minute), "past")
 

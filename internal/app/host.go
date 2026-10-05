@@ -85,7 +85,7 @@ func (a *App) buildRoot(acct *account, first bool) ui.RootModel {
 	root := ui.NewRootModel(cfg.UI.HistoryLimit, a.verbose)
 	// The client attaches: the focus it reports belongs to it, everything else
 	// is the owner's (#192). It ends with the owner.
-	root = root.WithContext(acct.ctx).WithImageMode(a.startup.imageMode).WithConfig(cfg).WithKeyMap(a.keyMap).WithOwner(acct.owner.Attach()).
+	root = root.WithContext(acct.ctx).WithImageMode(acct.startup.imageMode).WithConfig(cfg).WithKeyMap(a.keyMap).WithOwner(acct.owner.Attach()).
 		WithLogger(a.log).WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore).WithLogPath(a.logPath)
 	root.SetLoginModel(screens.NewLoginModel(acct.owner.AuthFlow()))
 	root.SetTmpDir(acct.tmpDir)
@@ -183,7 +183,7 @@ func (a *App) endAccount(ctx context.Context, acct *account, epoch uint64, reaso
 	discarded := acct.owner.UnsentCount()
 	acct.stop()
 
-	if err := accountstate.End(a.startup.stateDir, a.startup.sessionFile); err != nil {
+	if err := accountstate.End(acct.startup.stateDir, acct.startup.sessionFile); err != nil {
 		a.log.Error("the account that ended could not be removed", zap.Error(err))
 		a.send(epoch, ui.ConnectFailedMsg{Err: fmt.Errorf("the account that ended could not be removed: %w", err)})
 		return

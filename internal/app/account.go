@@ -27,6 +27,9 @@ type account struct {
 	store *store.SQLiteStore
 	owner *core.Owner
 	log   *zap.Logger
+	// startup is what the process settled when it started, which the account
+	// was opened from and is drawn and removed by (#239).
+	startup startup
 	// tmpDir holds the account's scratch files, and its caches when nothing is
 	// to be kept between runs. Empty when there is none.
 	tmpDir string
@@ -61,12 +64,16 @@ type accountDeps struct {
 // openAccount builds an account over the state directory: the database, the
 // connection, the owner, the send queue and the caches. Nothing runs yet.
 func openAccount(d accountDeps) (*account, error) {
+	endpoint, err := d.startup.endpoint()
+	if err != nil {
+		return nil, err
+	}
 	statePath := filepath.Join(d.startup.stateDir, "state.db")
 	sqliteStore, err := store.NewSQLite(statePath, d.log)
 	if err != nil {
 		return nil, fmt.Errorf("open state DB: %w", err)
 	}
-	conn := d.connect(d.startup.endpoint(), internaltg.NewSQLiteStateStorage(sqliteStore.DB()))
+	conn := d.connect(endpoint, internaltg.NewSQLiteStateStorage(sqliteStore.DB()))
 	owner := core.New(d.cfg, d.log, state.New(sqliteStore), conn, d.notifier)
 	// The client finds a skewed clock in what gotd logs; the owner hands it on
 	// to whoever is drawing (#277).
@@ -98,7 +105,8 @@ func openAccount(d accountDeps) (*account, error) {
 		owner.SetOnAuth(d.onAuth)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &account{store: sqliteStore, owner: owner, log: d.log, tmpDir: d.tmpDir, ctx: ctx, cancel: cancel}, nil
+	return &account{store: sqliteStore, owner: owner, log: d.log, startup: d.startup, tmpDir: d.tmpDir,
+		ctx: ctx, cancel: cancel}, nil
 }
 
 // run connects and starts the owner's two loops, and alongside them the work

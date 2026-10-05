@@ -12,7 +12,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
-	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/telegram/updates"
 	"go.uber.org/zap"
 
@@ -159,29 +158,20 @@ func (a *App) reloadConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// openRoute settles how this process will reach Telegram, before anything is
-// drawn. Three things happen here and all three belong before the interface:
-// the route is named in the log, a declared proxy is dialled once so a server
-// nobody is listening on is a message on the terminal rather than an endless
-// reconnect, and the resolver is built for the client to hold.
-//
-// The route itself was already accepted when the config loaded - it is parsed
-// again here rather than carried, because a Route is cheap and a second field
-// on Config that has to be kept in step with the section is not.
-func openRoute(cfg *config.Config, path string, log *zap.Logger) (dcs.Resolver, error) {
-	route, err := proxy.Parse(cfg.Proxy)
-	if err != nil {
-		return nil, err
-	}
+// checkRoute settles how this process will reach Telegram, before anything is
+// drawn. Both things it does belong before the interface: the route is named in
+// the log, and a declared proxy is dialled once so a server nobody is listening
+// on is a message on the terminal rather than an endless reconnect.
+func checkRoute(route proxy.Route, path string, log *zap.Logger) error {
 	// One line, at Info so it shows without -e. It names the address, because a
 	// wrong port has to be visible in a log somebody pastes into an issue, and
 	// never the secret or the password.
 	log.Info("telegram route", zap.String("proxy", route.Describe()))
 
 	if err := proxy.Probe(context.Background(), route); err != nil {
-		return nil, fmt.Errorf("%w (set proxy.type: direct in %s to connect without a proxy)", err, path)
+		return fmt.Errorf("%w (set proxy.type: direct in %s to connect without a proxy)", err, path)
 	}
-	return proxy.Resolver(route)
+	return nil
 }
 
 // New builds the host over the config the process started with and the app key
@@ -189,9 +179,11 @@ func openRoute(cfg *config.Config, path string, log *zap.Logger) (dcs.Resolver, 
 // settled from the file and from how the binary was built, and the file alone
 // does not know the second (#239).
 func New(cfgStore *config.Store, key appkey.Key, log *zap.Logger, verbose bool, trace bool) (*App, error) {
-	cfg := cfgStore.Current()
-	resolver, err := openRoute(cfg, cfgStore.Path(), log)
+	start, err := newStartup(cfgStore.Current(), key)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkRoute(start.route, cfgStore.Path(), log); err != nil {
 		return nil, err
 	}
 
@@ -208,9 +200,9 @@ func New(cfgStore *config.Store, key appkey.Key, log *zap.Logger, verbose bool, 
 	a := &App{
 		cfgStore: cfgStore,
 		log:      log,
-		startup:  newStartup(cfg, key),
+		startup:  start,
 		connect: func(endpoint internaltg.Endpoint, stateStorage updates.StateStorage) core.Connection {
-			return internaltg.NewGotdClient(log, endpoint, stateStorage, trace, resolver)
+			return internaltg.NewGotdClient(log, endpoint, stateStorage, trace)
 		},
 		notifier: newNotifier(log),
 		tmpDir:   tmpDir,

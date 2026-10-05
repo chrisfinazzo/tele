@@ -13,6 +13,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
+	"github.com/sorokin-vladimir/tele/internal/proxy"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -40,7 +41,7 @@ func testAccount(t *testing.T) (*account, *heldConnection) {
 	conn := &heldConnection{updates: make(chan store.Event)}
 	acct, err := openAccount(accountDeps{
 		cfg:      &config.Config{},
-		startup:  startup{stateDir: t.TempDir()},
+		startup:  startup{stateDir: t.TempDir(), route: proxy.Route{Type: proxy.TypeDirect}},
 		log:      zap.NewNop(),
 		tmpDir:   t.TempDir(),
 		notifier: newNotifier(zap.NewNop()),

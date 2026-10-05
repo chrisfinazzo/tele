@@ -23,12 +23,15 @@ import (
 )
 
 // Endpoint is what a connection is made with that the process settles once,
-// when it starts: the app key and the session file. Handed to each connection
-// rather than read from the config, because the config is what the file says
-// now, and neither may change while the process runs (#239).
+// when it starts: the app key, the session file and the route. Handed to each
+// connection rather than read from the config, because the config is what the
+// file says now, and none of them may change while the process runs (#239).
 type Endpoint struct {
 	Key         appkey.Key
 	SessionFile string
+	// Resolver is how the connection reaches Telegram: directly, or through
+	// the proxy the config named when the process started.
+	Resolver dcs.Resolver
 }
 
 // GotdClient wraps the gotd telegram client and implements the Client interface
@@ -44,10 +47,6 @@ type GotdClient struct {
 	suppressMu   sync.Mutex
 	suppressIDs  map[int]struct{}
 	stateStorage updates.StateStorage
-	// resolver is how this client reaches Telegram: directly, or through the
-	// proxy the config named. Handed in rather than built here, because a proxy
-	// that cannot be reached has to stop the start before anything is drawn.
-	resolver dcs.Resolver
 	// senderNames remembers userID -> display name across updates and history
 	// fetches so a live update that omits the sender's entity still resolves the
 	// author instead of rendering "?" (#161).
@@ -70,7 +69,7 @@ type GotdClient struct {
 // messages get through again. It must not block. Set before Connect.
 func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
 
-func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.StateStorage, trace bool, resolver dcs.Resolver) *GotdClient {
+func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.StateStorage, trace bool) *GotdClient {
 	traceLog := zap.NewNop()
 	if trace {
 		traceLog = log
@@ -84,7 +83,6 @@ func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.Stat
 		traceLog:     traceLog,
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
-		resolver:     resolver,
 		senderNames:  newNameCache(),
 		skew:         newClockSkew(),
 	}
@@ -243,9 +241,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		SessionStorage: sess,
 		// One resolver for every data centre this client ever reaches, so a
 		// photo from a media DC takes the same route as the message it came
-		// with. It is built before the interface exists, from the proxy section
-		// of the config (ADR 0017).
-		Resolver: c.resolver,
+		// with. It is built from the proxy section the process started with
+		// (ADR 0017).
+		Resolver: c.endpoint.Resolver,
 		// The "v" field carries the application version on every line, so gotd's
 		// own stamp of the same name is dropped and reported once above instead.
 		// The clock-skew watch reads the entries gotd writes for the messages it
