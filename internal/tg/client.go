@@ -88,6 +88,11 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 // is closed; may be nil.
 func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
 	sess := NewFileSession(cfg.Telegram.SessionFile)
+	// Read before connecting, since gotd stores a fresh key as soon as it has
+	// one: whether there was a session decides whether a login has a log out
+	// to explain (#254).
+	stored, _ := sess.LoadSession(ctx)
+	hadSession := len(stored) > 0
 
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, c.mustDeliver, c.droppable, c.log, func(id int) bool {
@@ -257,23 +262,12 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	return tc.Run(ctx, func(ctx context.Context) error {
 		c.log.Debug("running auth flow")
 		// Our own login loop rather than gotd's auth.Flow, which gives up on
-		// the first mistyped code (#285). Asked only when the session is not
-		// already authorized, as auth.Client.IfNecessary does.
-		status, err := tc.Auth().Status(ctx)
+		// the first mistyped code (#285), and our own check of whether it is
+		// needed rather than auth.Client.Status, which sends a banned account
+		// into it too (#254).
+		self, err := af.authorize(ctx, tc.Self, tc.Auth(), hadSession)
 		if err != nil {
-			c.log.Error("auth status failed", zap.Error(err))
-			return err
-		}
-		if !status.Authorized {
-			if err := af.login(ctx, tc.Auth()); err != nil {
-				c.log.Error("auth failed", zap.Error(err))
-				return err
-			}
-		}
-
-		self, err := tc.Self(ctx)
-		if err != nil {
-			c.log.Error("Self() failed", zap.Error(err))
+			c.log.Error("auth failed", zap.Error(err))
 			return err
 		}
 		c.log.Info("authenticated", zap.Int64("user_id", self.ID))

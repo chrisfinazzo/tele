@@ -8,6 +8,8 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
+
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // The login is our own loop rather than gotd's auth.Flow, which asks for each
@@ -20,14 +22,51 @@ import (
 // The reasons a step is asked for again, shown under the field.
 const (
 	reasonNumberInvalid   = "That number is not valid. Include the country code, e.g. +44..."
+	reasonTooManyAttempts = "Too many login attempts for this number. Try again later."
 	reasonCodeInvalid     = "That code is not right. Try again."
 	reasonCodeExpired     = "That code has expired. A new one is on its way."
 	reasonPasswordInvalid = "That password is not right. Try again."
 )
 
-// login logs in through client, asking the person through af.
-func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient) error {
-	phone, sent, err := af.sendCode(ctx, client)
+// The reasons a person who had a session is asked for their number, shown
+// under the field: someone who was reading chats a moment ago should not have
+// to guess why they are logging in (#254).
+const (
+	reasonLoggedOut      = "This session was logged out. Log in again."
+	reasonAccountDeleted = "This Telegram account was deleted. Log in to start again."
+)
+
+// authorize returns the logged-in user, logging in first when the session has
+// been logged out.
+//
+// It stands in for gotd's auth.Client.Status, which reads every 401 as "not
+// logged in": a banned account was walked through number and code only to meet
+// the same ban (#254). Here the mapped kind decides, so only a log out leads
+// into the login, and a ban ends the start with its cause. hadSession tells a
+// first start, which has nothing to explain, from a log out.
+func (af *AuthFlow) authorize(ctx context.Context, self func(context.Context) (*tg.User, error),
+	client auth.FlowClient, hadSession bool) (*tg.User, error) {
+	user, err := self(ctx)
+	if telerr.Of(err) != telerr.Unauthorized {
+		return user, err
+	}
+	reason := ""
+	if hadSession {
+		reason = reasonLoggedOut
+		if tgerr.Is(err, "USER_DEACTIVATED") {
+			reason = reasonAccountDeleted
+		}
+	}
+	if err := af.login(ctx, client, reason); err != nil {
+		return nil, err
+	}
+	return self(ctx)
+}
+
+// login logs in through client, asking the person through af. reason is shown
+// under the number the first time it is asked, and is empty on a first start.
+func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient, reason string) error {
+	phone, sent, err := af.sendCode(ctx, client, reason)
 	if err != nil {
 		return err
 	}
@@ -51,8 +90,7 @@ func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient) error {
 }
 
 // sendCode asks for the number until Telegram accepts it and sends a code.
-func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient) (string, tg.AuthSentCodeClass, error) {
-	reason := ""
+func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient, reason string) (string, tg.AuthSentCodeClass, error) {
 	for {
 		phone, err := af.request(ctx, AuthRequest{Step: AuthStepPhone, Err: reason})
 		if err != nil {
@@ -61,6 +99,13 @@ func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient) (strin
 		sent, err := client.SendCode(ctx, phone, auth.SendCodeOptions{})
 		if tgerr.Is(err, "PHONE_NUMBER_INVALID") {
 			reason = reasonNumberInvalid
+			continue
+		}
+		// Telegram's limit on attempts carries no wait to count down, so the
+		// number is asked for again rather than the login ended: the person can
+		// try later without a restart (#254).
+		if tgerr.Is(err, "PHONE_NUMBER_FLOOD", "PHONE_PASSWORD_FLOOD") {
+			reason = reasonTooManyAttempts
 			continue
 		}
 		if err != nil {

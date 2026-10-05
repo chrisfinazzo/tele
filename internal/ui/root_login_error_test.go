@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -49,6 +50,30 @@ func TestLogin_ConnectFailureWithoutKindKeepsItsText(t *testing.T) {
 
 	assert.Contains(t, view, "Could not connect to Telegram")
 	assert.Contains(t, view, "connection refused")
+}
+
+// A ban is not a failure to connect, and it offers no login: the screen names
+// the ban and says why logging in again is no way out (#254). Which ban it is
+// follows from where it came: before any step it is the account's, on the
+// number step it is the number's.
+func TestLogin_ABannedAccountIsNamedAsSuch(t *testing.T) {
+	err := &telerr.Error{Kind: telerr.AccountBanned, Op: "users.getUsers", Detail: "USER_DEACTIVATED_BAN"}
+
+	view := withLoginStep(t, sizedLoginRoot(t), ui.ConnectFailedMsg{Err: err}).View().Content
+
+	assert.Contains(t, view, "This Telegram account is banned. Logging in again will not help.")
+	assert.NotContains(t, view, "Could not connect")
+	assert.Contains(t, view, testLogPath)
+}
+
+func TestLogin_ABannedNumberIsNamedAsSuch(t *testing.T) {
+	err := &telerr.Error{Kind: telerr.AccountBanned, Op: "auth.sendCode", Detail: "PHONE_NUMBER_BANNED"}
+	m := withLoginStep(t, sizedLoginRoot(t), screens.AuthRequestMsg{Step: internaltg.AuthStepPhone})
+
+	view := withLoginStep(t, m, ui.ConnectFailedMsg{Err: err}).View().Content
+
+	assert.Contains(t, view, "This phone number is banned by Telegram.")
+	assert.NotContains(t, view, "Could not connect")
 }
 
 // Quitting cancels the connection, and the cancellation is not news.

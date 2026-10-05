@@ -117,6 +117,16 @@ func (m RootModel) handleConnectFailed(msg ConnectFailedMsg) (RootModel, tea.Cmd
 		m.toasts.Add(components.ToastKindOf(sev), text)
 		return m, nil
 	}
+	// A ban is no failure to connect: Telegram answered, and the answer is
+	// that logging in cannot help (#254). Where it came from says whose ban
+	// it is - the account's before any step, the number's once one was given.
+	if telerr.Of(msg.Err) == telerr.AccountBanned {
+		cause := "This Telegram account is banned. Logging in again will not help."
+		if m.login.AskingNumber() {
+			cause = "This phone number is banned by Telegram."
+		}
+		return m.routeLoginError(m.loginErrorText(cause, msg.Err.Error()))
+	}
 	// An error with a kind has a phrase for it, and its own text goes underneath
 	// as the evidence. One without a kind has nothing to name beyond that text,
 	// so the cause stays plain and the text is said once.

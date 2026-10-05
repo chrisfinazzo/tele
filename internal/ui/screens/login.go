@@ -83,6 +83,10 @@ func (m LoginModel) CurrentStep() internaltg.AuthStep { return m.step }
 // this is not a sign test on the step.
 func (m LoginModel) Connecting() bool { return m.step == -1 }
 
+// AskingNumber reports whether the phone number is the step on screen, which
+// is also the step a failure just after it was entered arrived on.
+func (m LoginModel) AskingNumber() bool { return m.step == internaltg.AuthStepPhone }
+
 // Slow reports whether the connection is still being waited for past
 // SlowConnectAfter.
 func (m LoginModel) Slow() bool { return m.slow && m.Connecting() }

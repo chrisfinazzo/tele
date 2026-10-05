@@ -102,7 +102,7 @@ func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
 		{step: AuthStepCode, reason: reasonCodeInvalid, answer: "12345"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client))
+	require.NoError(t, af.login(context.Background(), client, ""))
 	assert.Equal(t, 1, client.sends)
 	assert.Equal(t, 2, client.signIns)
 }
@@ -117,7 +117,7 @@ func TestLogin_ExpiredCodeSendsANewOne(t *testing.T) {
 		{step: AuthStepCode, reason: reasonCodeExpired, answer: "22222"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client))
+	require.NoError(t, af.login(context.Background(), client, ""))
 	assert.Equal(t, 2, client.sends)
 }
 
@@ -130,7 +130,7 @@ func TestLogin_InvalidNumberIsAskedAgain(t *testing.T) {
 		{step: AuthStepCode, answer: "12345"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client))
+	require.NoError(t, af.login(context.Background(), client, ""))
 	assert.Equal(t, 2, client.sends)
 }
 
@@ -149,7 +149,7 @@ func TestLogin_WrongPasswordIsAskedAgain(t *testing.T) {
 		{step: AuthStepPassword, reason: reasonPasswordInvalid, answer: "right"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client))
+	require.NoError(t, af.login(context.Background(), client, ""))
 	assert.Equal(t, 2, client.passwords)
 }
 
@@ -164,8 +164,126 @@ func TestLogin_OtherRefusalEndsTheLogin(t *testing.T) {
 		{step: AuthStepCode, answer: "12345"},
 	})
 
-	err := af.login(context.Background(), client)
+	err := af.login(context.Background(), client, "")
 
 	require.Error(t, err)
 	assert.Equal(t, telerr.RateLimited, telerr.Of(err))
+}
+
+// Too many attempts on a number carry no wait to count down, so the number is
+// asked for again with the reason: the person may try later without a restart
+// (#254). One is a 400 and the other a 406, which is why neither is a kind.
+func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
+	for _, flood := range []error{refused(400, "PHONE_NUMBER_FLOOD"), refused(406, "PHONE_PASSWORD_FLOOD")} {
+		af := NewAuthFlow()
+		client := &scriptedLogin{sendCode: []error{flood}}
+		playScreen(t, af, []ask{
+			{step: AuthStepPhone, answer: "+10000000000"},
+			{step: AuthStepPhone, reason: reasonTooManyAttempts, answer: "+10000000000"},
+			{step: AuthStepCode, answer: "12345"},
+		})
+
+		require.NoError(t, af.login(context.Background(), client, ""))
+		assert.Equal(t, 2, client.sends)
+	}
+}
+
+// A banned number is not the person's typing: asking again meets the same ban,
+// so the login ends with the kind the login screen names it by (#254).
+func TestLogin_BannedNumberEndsTheLogin(t *testing.T) {
+	af := NewAuthFlow()
+	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_BANNED")}}
+	playScreen(t, af, []ask{{step: AuthStepPhone, answer: "+10000000000"}})
+
+	err := af.login(context.Background(), client, "")
+
+	require.Error(t, err)
+	assert.Equal(t, telerr.AccountBanned, telerr.Of(err))
+}
+
+// scriptedSelf answers the question "who is logged in" with the next error in
+// its script, and with the user once the script runs out.
+type scriptedSelf struct {
+	errs  []error
+	calls int
+}
+
+func (s *scriptedSelf) self(context.Context) (*tg.User, error) {
+	s.calls++
+	if err := next(s.errs, s.calls-1); err != nil {
+		return nil, err
+	}
+	return &tg.User{ID: 42}, nil
+}
+
+func TestAuthorize_ALoggedInSessionSkipsTheLogin(t *testing.T) {
+	af := NewAuthFlow()
+	self := &scriptedSelf{}
+	client := &scriptedLogin{}
+
+	user, err := af.authorize(context.Background(), self.self, client, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), user.ID)
+	assert.Zero(t, client.sends)
+}
+
+// A session that was logged out leads into the login, and the phone step says
+// why the person is there: someone who was reading chats a moment ago should
+// not have to guess (#254).
+func TestAuthorize_ALogOutLogsInWithTheCause(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		reason string
+	}{
+		{"terminated elsewhere", refused(401, "AUTH_KEY_UNREGISTERED"), reasonLoggedOut},
+		{"revoked", refused(401, "SESSION_REVOKED"), reasonLoggedOut},
+		{"telegram account deleted", refused(401, "USER_DEACTIVATED"), reasonAccountDeleted},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			af := NewAuthFlow()
+			self := &scriptedSelf{errs: []error{tt.err}}
+			playScreen(t, af, []ask{
+				{step: AuthStepPhone, reason: tt.reason, answer: "+10000000000"},
+				{step: AuthStepCode, answer: "12345"},
+			})
+
+			user, err := af.authorize(context.Background(), self.self, &scriptedLogin{}, true)
+
+			require.NoError(t, err)
+			assert.Equal(t, int64(42), user.ID)
+			assert.Equal(t, 2, self.calls, "the user is asked for again once logged in")
+		})
+	}
+}
+
+// With no session there was nothing to log out of: a first start says nothing.
+func TestAuthorize_NoSessionLogsInWithoutACause(t *testing.T) {
+	af := NewAuthFlow()
+	self := &scriptedSelf{errs: []error{refused(401, "AUTH_KEY_UNREGISTERED")}}
+	playScreen(t, af, []ask{
+		{step: AuthStepPhone, answer: "+10000000000"},
+		{step: AuthStepCode, answer: "12345"},
+	})
+
+	_, err := af.authorize(context.Background(), self.self, &scriptedLogin{}, false)
+
+	require.NoError(t, err)
+}
+
+// A banned account is offered no login: gotd's own status check read the ban
+// as "not logged in" and walked the person through number and code into the
+// same ban (#254).
+func TestAuthorize_ABannedAccountIsOfferedNoLogin(t *testing.T) {
+	af := NewAuthFlow()
+	self := &scriptedSelf{errs: []error{refused(401, "USER_DEACTIVATED_BAN")}}
+	client := &scriptedLogin{}
+
+	_, err := af.authorize(context.Background(), self.self, client, true)
+
+	require.Error(t, err)
+	assert.Equal(t, telerr.AccountBanned, telerr.Of(err))
+	assert.Zero(t, client.sends)
 }
