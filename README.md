@@ -341,7 +341,7 @@ every build carries one, and the login above works as it stands.
 Builds compiled from published source - homebrew-core, the Nix flake, a BSD
 port, your own `go build` - share a single key. Telegram can refuse a key it
 considers too widely shared, and then `tele` says `app key blocked by Telegram`
-rather than claiming your session expired. Two ways past it, take whichever is
+rather than claiming you were logged out. Two ways past it, take whichever is
 less trouble.
 
 Register a key of your own at [my.telegram.org](https://my.telegram.org) and put

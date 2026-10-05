@@ -9,8 +9,8 @@ every build carries one, and logging in works as it stands.
 Builds compiled from published source - homebrew-core, the Nix flake, a BSD
 port, your own `go build` - share a single key between everyone who builds
 `tele` that way. Telegram can refuse a key it considers too widely shared. If it
-does, `tele` says `app key blocked by Telegram` rather than claiming your
-session expired.
+does, `tele` says `app key blocked by Telegram` rather than claiming you were
+logged out.
 
 Two ways past it. Take whichever is less trouble.
 

@@ -11,6 +11,26 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- A banned Telegram account, or a banned phone number, is named as such on the
+  login screen, and no login is offered for it. tele used to walk the person
+  through number and code only to meet the same ban, which it then showed as
+  an expired session or a raw Telegram error (#254).
+- A session ended from another device or by Telegram leads into the login
+  with the reason under the number field, `This session was logged out` or
+  `This Telegram account was deleted`. While tele runs, the same log out says
+  `logged out, restart tele to log in again` instead of `session expired` and
+  a login that was not there (#254).
+- Too many login attempts for a number ask for the number again with the
+  reason, instead of ending the login on an expired session or a raw Telegram
+  error (#254).
+- A session Telegram invalidated because its key was used from two connections
+  at once is removed, and tele says so: what was removed, that the next start
+  also removes the account's local history and cached media, what stays, and
+  that a restart logs in. It used to end on `session expired`, and every
+  restart met the same dead session (#254).
+
 ## [1.11.10] - 2026-10-04
 
 ### Added
