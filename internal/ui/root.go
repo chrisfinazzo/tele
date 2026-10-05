@@ -120,6 +120,10 @@ type RootModel struct {
 	// by the alt-screen a moment later, so on their own those two amount to
 	// telling nobody.
 	configWarnings []config.Warning
+	// themeWarnings are what was wrong with the theme files when the process
+	// started, shown the same way. Handed in apart from the config, which is
+	// what the file says and is replaced by a reload (#239).
+	themeWarnings []string
 	// Pending one-time startup notices (#197). The head of the queue is shown
 	// above every screen, including login; noticeLeft counts down whole seconds
 	// of blocked dismissal.
@@ -369,7 +373,7 @@ const configWarningDuration = 15 * time.Second
 // is shown only until it has been seen once. The rest describe something still
 // broken and reappear every launch, because every launch they are still true.
 func (m RootModel) configWarningCmds() []tea.Cmd {
-	cmds := make([]tea.Cmd, 0, len(m.configWarnings))
+	cmds := make([]tea.Cmd, 0, len(m.configWarnings)+len(m.themeWarnings))
 	for _, w := range m.configWarnings {
 		if w.ID != "" && m.noticeSeen != nil {
 			if m.noticeSeen.IsSeen(w.ID) {
@@ -377,12 +381,29 @@ func (m RootModel) configWarningCmds() []tea.Cmd {
 			}
 			m.noticeSeen.MarkSeen(w.ID)
 		}
-		serial := m.toasts.Add(components.ToastWarning, w.Text)
-		cmds = append(cmds, tea.Tick(configWarningDuration, func(time.Time) tea.Msg {
-			return ClearStatusErrMsg{Serial: serial}
-		}))
+		cmds = append(cmds, m.warningToast(w.Text))
+	}
+	// A theme problem is still true next launch, so it carries no ID and is
+	// shown every time.
+	for _, w := range m.themeWarnings {
+		cmds = append(cmds, m.warningToast("theme: "+w))
 	}
 	return cmds
+}
+
+// WithThemeWarnings installs what was wrong with the theme files when the
+// process started, to be shown with the config warnings.
+func (m RootModel) WithThemeWarnings(warnings []string) RootModel {
+	m.themeWarnings = warnings
+	return m
+}
+
+// warningToast shows a startup warning and returns the timer that retires it.
+func (m RootModel) warningToast(text string) tea.Cmd {
+	serial := m.toasts.Add(components.ToastWarning, text)
+	return tea.Tick(configWarningDuration, func(time.Time) tea.Msg {
+		return ClearStatusErrMsg{Serial: serial}
+	})
 }
 
 // parseToastZone translates a zone name into a ToastZone. It decides nothing:

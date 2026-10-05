@@ -71,6 +71,9 @@ type App struct {
 	// stateMoved reports that startup migration relocated the account state, so
 	// the user can be told where it went.
 	stateMoved bool
+	// themeWarnings is what was wrong with the theme files when the process
+	// started. Kept apart from the config, which a reload replaces (#239).
+	themeWarnings []string
 	// logPath is this run's log file, known only to the caller that opened it.
 	logPath string
 	// selfMu guards the account identity: it arrives on the Telegram goroutine
@@ -79,6 +82,10 @@ type App struct {
 	selfID       int64
 	selfUsername string
 }
+
+// SetThemeWarnings records what was wrong with the theme files when the process
+// started, for the first model to show with the config warnings.
+func (a *App) SetThemeWarnings(warnings []string) { a.themeWarnings = warnings }
 
 // SetStateMoved records whether startup migration relocated the account state.
 func (a *App) SetStateMoved(moved bool) { a.stateMoved = moved }

@@ -93,6 +93,9 @@ func (a *App) buildRoot(acct *account, first bool) ui.RootModel {
 		// Seen-state is written on dismissal, so quitting before the countdown
 		// ends shows the notice again next time (#197).
 		root = root.WithNotices(notices.Pending(a.pendingNotices(), a.noticeSeen), a.noticeSeen)
+		// The themes loaded at startup may have been reloaded since, and a
+		// reload says what is wrong with them itself.
+		root = root.WithThemeWarnings(a.themeWarnings)
 	}
 	return root
 }

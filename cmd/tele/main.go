@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"go.uber.org/zap"
@@ -67,20 +68,22 @@ func main() {
 	}
 	cfg := cfgStore.Current()
 
-	// Themes are resolved here, before the TUI exists, so a bad theme file is an
-	// ordinary config warning rather than something the interface has to cope
-	// with. The TUI is handed the result and never sees the config.
+	// Themes are resolved here, before the TUI exists, so a bad theme file is
+	// reported like a config warning rather than something the interface has to
+	// cope with. The TUI is handed the result and never sees the config.
 	themesDir := cfg.ThemesDir
 	themes := theme.LoadSlots(themesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
-	// Theme problems repeat every launch: unlike a dead config key, they are
-	// still true next time.
-	for _, w := range themes.Warnings {
-		cfg.Warnings = append(cfg.Warnings, config.Warning{Text: "theme: " + w})
-	}
 	theme.SetSlots(themes.Slots())
+	// What is printed and logged at startup: the config's warnings and the
+	// themes'. Gathered here rather than written into the config, which is what
+	// the file says and is replaced by a reload (#239).
+	warnings := slices.Clone(cfg.Warnings)
+	for _, w := range themes.Warnings {
+		warnings = append(warnings, config.Warning{Text: "theme: " + w})
+	}
 
 	if themeCheck.set {
-		fmt.Print(themeReport(themesDir, themes, themeCheck.value, cfg.Warnings))
+		fmt.Print(themeReport(themesDir, themes, themeCheck.value, warnings))
 		os.Exit(0)
 	}
 	if themeDump.set {
@@ -139,7 +142,7 @@ func main() {
 
 	// The log keeps every warning on every run, including the ones the TUI shows
 	// only once: suppressing a toast must not lose the record.
-	for _, w := range cfg.Warnings {
+	for _, w := range warnings {
 		log.Warn("config: " + w.Text)
 		fmt.Fprintf(os.Stderr, "config: %s\n", w.Text)
 	}
@@ -185,6 +188,7 @@ func main() {
 		os.Exit(1)
 	}
 	a.SetStateMoved(stateMoved)
+	a.SetThemeWarnings(themes.Warnings)
 	a.SetLogPath(logPath)
 	if err := a.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

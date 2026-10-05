@@ -53,6 +53,20 @@ func TestRoot_ConfigWarnings_BecomeToasts(t *testing.T) {
 	assert.Contains(t, shown, "second problem")
 }
 
+// What was wrong with the theme files at startup is said the same way, and it
+// is handed in beside the config rather than written into it: the config is
+// what the file says, and a reload replaces it (#239).
+func TestRoot_ThemeWarnings_BecomeToasts(t *testing.T) {
+	m := warningModel(t, nil, config.Warning{Text: "config problem"}).
+		WithThemeWarnings([]string{"no base"})
+
+	require.NotNil(t, m.Init())
+
+	shown := onScreen(m)
+	assert.Contains(t, shown, "config problem")
+	assert.Contains(t, shown, "theme: no base")
+}
+
 // A clean config raises nothing: the toast is a signal, not a startup banner.
 func TestRoot_NoConfigWarnings_NoToast(t *testing.T) {
 	m := warningModel(t, nil)
