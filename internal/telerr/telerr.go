@@ -16,8 +16,14 @@ import (
 type Kind string
 
 const (
-	// Unauthorized means the session is invalid or missing. Needs auth.
+	// Unauthorized means the account was logged out: by the person, from
+	// another device, or by Telegram, including when the Telegram account
+	// behind it was deleted. Logging in again is the remedy.
 	Unauthorized Kind = "unauthorized"
+	// AccountBanned means Telegram closed the account for good, together with
+	// the phone number behind it. Unlike Unauthorized, logging in again meets
+	// the same refusal, so it is terminal and a login is never offered for it.
+	AccountBanned Kind = "account_banned"
 	// AppKeyBlocked means Telegram refused the app key this binary runs on,
 	// rather than the session it holds. Signing in again cannot help: the same
 	// key is offered every time. The remedy is a different key - the person's

@@ -35,10 +35,23 @@ func TestClassifyTgErr(t *testing.T) {
 		{"slowmode wait", &tgerr.Error{Code: 420, Type: "SLOWMODE_WAIT", Argument: 5}, telerr.RateLimited, 5 * time.Second, ""},
 		{"auth key unregistered", &tgerr.Error{Code: 401, Type: "AUTH_KEY_UNREGISTERED"}, telerr.Unauthorized, 0, ""},
 		{"auth key duplicated", &tgerr.Error{Code: 406, Type: "AUTH_KEY_DUPLICATED"}, telerr.Unauthorized, 0, ""},
+		{"session revoked", &tgerr.Error{Code: 401, Type: "SESSION_REVOKED"}, telerr.Unauthorized, 0, ""},
+		// A deleted account is a log out: logging in with the same number makes
+		// a new account, or meets the ban below if there is one.
+		{"user deleted", &tgerr.Error{Code: 401, Type: "USER_DEACTIVATED"}, telerr.Unauthorized, 0, ""},
 
-		// The app key, not the session. The published one is a 406, which the
-		// code table reads as Unauthorized, so the type has to win first or a
-		// blocked key becomes an endless invitation to sign in again.
+		// A ban is a dead end rather than a log out: logging in again with the
+		// same number is refused the same way (#254).
+		{"account banned", &tgerr.Error{Code: 401, Type: "USER_DEACTIVATED_BAN"}, telerr.AccountBanned, 0, ""},
+		{"number banned", &tgerr.Error{Code: 400, Type: "PHONE_NUMBER_BANNED"}, telerr.AccountBanned, 0, ""},
+
+		// A 406 is not about the session as a family: most of them are refusals
+		// raised while logging in (#254).
+		{"406 for a mistyped number", &tgerr.Error{Code: 406, Type: "PHONE_NUMBER_INVALID"}, telerr.Internal, 0, ""},
+		{"406 asking for an update", &tgerr.Error{Code: 406, Type: "UPDATE_APP_TO_LOGIN"}, telerr.Internal, 0, ""},
+
+		// The app key, not the session. Neither code says so on its own, so the
+		// type has to win first or a blocked key reads as an unexplained error.
 		{"published app key", &tgerr.Error{Code: 406, Type: "API_ID_PUBLISHED_FLOOD"}, telerr.AppKeyBlocked, 0, ""},
 		{"invalid app key", &tgerr.Error{Code: 400, Type: "API_ID_INVALID"}, telerr.AppKeyBlocked, 0, ""},
 

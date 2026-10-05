@@ -103,13 +103,27 @@ func opName(in bin.Encoder) string {
 // classifyTgErr maps one gotd error onto a kind, the reason behind a Rejected
 // one, and a wait for RateLimited. Codes decide first because they are stable;
 // types refine the 400s.
+//
+// 406 has no row of its own. Telegram uses it for refusals of every sort, most
+// of them raised while logging in (a mistyped number, too many attempts, a
+// client too old to log in), so as a family it says nothing about the session.
+// The 406s that are mapped are mapped by type; the rest stay Internal.
 func classifyTgErr(e *tgerr.Error) (telerr.Kind, telerr.Reason, time.Duration) {
-	// Ahead of the codes: a refused app key arrives as a 406, which the code
-	// table would otherwise read as an expired session and send the person into
-	// a login that offers the same key again.
+	// Ahead of the codes: a refused app key is not about the session, and it
+	// arrives as a 400 or a 406 that the codes alone cannot tell from any other
+	// refusal.
 	switch e.Type {
 	case "API_ID_PUBLISHED_FLOOD", "API_ID_INVALID":
 		return telerr.AppKeyBlocked, "", 0
+	// Ahead of the codes too: a ban on the session arrives as a 401, which the
+	// code table would read as a log out and answer with a login that meets
+	// the same ban. The number's ban is a 400 raised while logging in (#254).
+	case "USER_DEACTIVATED_BAN", "PHONE_NUMBER_BANNED":
+		return telerr.AccountBanned, "", 0
+	// The one 406 that is about the session: Telegram has already dropped it,
+	// and the key must be replaced before logging in again (#254).
+	case "AUTH_KEY_DUPLICATED":
+		return telerr.Unauthorized, "", 0
 	}
 
 	switch {
@@ -117,7 +131,9 @@ func classifyTgErr(e *tgerr.Error) (telerr.Kind, telerr.Reason, time.Duration) {
 		// FLOOD_WAIT, FLOOD_PREMIUM_WAIT and SLOWMODE_WAIT all carry the wait
 		// in Argument.
 		return telerr.RateLimited, "", time.Duration(e.Argument) * time.Second
-	case e.Code == 401 || e.Code == 406:
+	case e.Code == 401:
+		// Every other 401 is a log out, a deleted Telegram account included:
+		// logging in with the same number makes a new account.
 		return telerr.Unauthorized, "", 0
 	case e.Code == 403:
 		return telerr.Forbidden, "", 0

@@ -1737,6 +1737,7 @@ func TestOutboxReason_NamesTheFailureInPlainWords(t *testing.T) {
 	assert.Equal(t, "not allowed in this chat", components.OutboxReason(failed(telerr.Forbidden)))
 	assert.Equal(t, "chat is unreachable", components.OutboxReason(failed(telerr.PeerNotFound)))
 	assert.Equal(t, "app key blocked by Telegram", components.OutboxReason(failed(telerr.AppKeyBlocked)))
+	assert.Equal(t, "account banned by Telegram", components.OutboxReason(failed(telerr.AccountBanned)))
 	assert.Equal(t, "unexpected error", components.OutboxReason(failed(telerr.Internal)))
 }
 

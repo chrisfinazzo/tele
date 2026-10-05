@@ -273,6 +273,8 @@ func OutboxReason(e domain.OutboxEntry) string {
 		// One line, unlike the toast: this is the reminder that sits beside the
 		// message, and the remedies belong where there is room for them.
 		return "app key blocked by Telegram"
+	case telerr.AccountBanned:
+		return "account banned by Telegram"
 	default:
 		return "unexpected error"
 	}

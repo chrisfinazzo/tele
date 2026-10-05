@@ -22,9 +22,17 @@ func TestErrText_KindToTextAndSeverity(t *testing.T) {
 		wantSev components.Severity
 	}{
 		{
+			// A log out, whoever did it; the restart is the only way to the
+			// login screen while tele runs.
 			"unauthorized",
 			&telerr.Error{Kind: telerr.Unauthorized},
-			"mark read: session expired, log in again",
+			"mark read: logged out, restart tele to log in again",
+			components.SeverityError,
+		},
+		{
+			"a banned account offers no login",
+			&telerr.Error{Kind: telerr.AccountBanned, Detail: "USER_DEACTIVATED_BAN"},
+			"mark read: account banned by Telegram",
 			components.SeverityError,
 		},
 		{
