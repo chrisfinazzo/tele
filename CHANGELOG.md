@@ -11,25 +11,39 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Log out, on `g L`. It asks first, naming the account and what goes with it -
+  the session here and at Telegram, the local history, cached media and
+  avatars, and any messages still waiting to be sent - and what stays: the
+  config, the themes and the log. If Telegram cannot be reached, it says the
+  session will stay in your devices list until it expires or is ended there,
+  and asks whether to log out here anyway. The login screen follows at once,
+  with no restart (#297).
+
 ### Fixed
 
+- A session ended from another device, by Telegram, or by deleting the
+  Telegram account takes you back to the login while tele runs, with the
+  reason under the number field and how many unsent messages went with it.
+  tele used to keep failing with `session expired` until it was restarted. A
+  refusal from one of Telegram's media servers alone ends nothing: the session
+  is checked on the main one first (#254, #297).
+- Logging in again after a session was ended elsewhere starts with nothing of
+  the previous account on disk. Its history and cached media used to stay in
+  the local database next to the new account's, whoever logged in (#281, #297).
 - A banned Telegram account, or a banned phone number, is named as such on the
-  login screen, and no login is offered for it. tele used to walk the person
-  through number and code only to meet the same ban, which it then showed as
-  an expired session or a raw Telegram error (#254).
-- A session ended from another device or by Telegram leads into the login
-  with the reason under the number field, `This session was logged out` or
-  `This Telegram account was deleted`. While tele runs, the same log out says
-  `logged out, restart tele to log in again` instead of `session expired` and
-  a login that was not there (#254).
+  login screen, and no login is offered for that number; `Enter` logs in with
+  another one. tele used to walk the person through number and code only to
+  meet the same ban, which it then showed as an expired session or a raw
+  Telegram error (#254, #297).
 - Too many login attempts for a number ask for the number again with the
   reason, instead of ending the login on an expired session or a raw Telegram
   error (#254).
 - A session Telegram invalidated because its key was used from two connections
-  at once is removed, and tele says so: what was removed, that the next start
-  also removes the account's local history and cached media, what stays, and
-  that a restart logs in. It used to end on `session expired`, and every
-  restart met the same dead session (#254).
+  at once is removed with the account, and the login follows with the reason.
+  It used to end on `session expired`, and every restart met the same dead
+  session (#254, #297).
 
 ## [1.11.10] - 2026-10-04
 

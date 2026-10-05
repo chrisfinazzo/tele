@@ -396,6 +396,7 @@ More, including which Homebrew formula carries which key:
 | `space`             | Message context menu                              |
 | `0` / `1` / `2`     | Focus panes                                       |
 | `,`                 | Settings                                          |
+| `g L`               | Log out                                           |
 | `?`                 | Keyboard shortcuts                                |
 | `q`                 | Quit                                              |
 

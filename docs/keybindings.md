@@ -10,6 +10,10 @@
 | `q` / `Ctrl+Q` / `Ctrl+C` | Quit            |
 | `?`                       | Keyboard shortcuts |
 | `,`                       | Settings        |
+| `g L`                     | Log out         |
+
+`g L` asks first, naming what goes with the account: the session, the local
+history, cached media and avatars, and any messages still waiting to be sent.
 
 On the login screen only `Ctrl+Q` and `Ctrl+C` quit, at every step, including
 while tele is still connecting. A bare `q` is typed into the field. A quit you
@@ -148,6 +152,7 @@ These are the action names usable as YAML keys in the `keybindings:` section
 | `focus_prev`    | Focus the previous pane    |
 | `focus_next`    | Focus the next pane        |
 | `quit`          | Quit the app               |
+| `log_out`       | Log out of this account    |
 
 ### Navigation & scrolling - contexts `folders`, `chatlist`, `chat`, `context_menu`, `delete_submenu`, `search`
 
