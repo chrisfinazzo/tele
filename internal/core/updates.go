@@ -15,7 +15,7 @@ import (
 // Start connects to Telegram and runs until ctx is cancelled. The caller runs it
 // in its own goroutine; the update loop is started separately by RunUpdates.
 func (o *Owner) Start(ctx context.Context) error {
-	return o.client.Connect(ctx, o.Config(), o.authFlow, o.readyCh, func(userID int64, username string) {
+	return o.client.Connect(ctx, o.authFlow, o.readyCh, func(userID int64, username string) {
 		o.state.Store().SetOwnerID(userID)
 		o.onAuth(userID, username)
 	})

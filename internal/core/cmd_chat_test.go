@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -91,7 +90,7 @@ type stubClient struct {
 	uploadBlock chan struct{}
 }
 
-func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (s *stubClient) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
 	return nil
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -29,7 +30,7 @@ type loggedOutConnection struct {
 	updates chan store.Event
 }
 
-func (c *loggedOutConnection) Connect(context.Context, *config.Config, *internaltg.AuthFlow,
+func (c *loggedOutConnection) Connect(context.Context, *internaltg.AuthFlow,
 	chan<- struct{}, func(int64, string)) error {
 	return &telerr.Error{Kind: telerr.Unauthorized, LogOut: telerr.LogOutElsewhere}
 }
@@ -43,7 +44,7 @@ type bannedConnection struct {
 	updates chan store.Event
 }
 
-func (c *bannedConnection) Connect(context.Context, *config.Config, *internaltg.AuthFlow,
+func (c *bannedConnection) Connect(context.Context, *internaltg.AuthFlow,
 	chan<- struct{}, func(int64, string)) error {
 	return &telerr.Error{Kind: telerr.AccountBanned}
 }
@@ -60,21 +61,43 @@ func testHost(t *testing.T) (*App, chan tea.Msg, string) {
 // testHostWith is testHost with first as the first account's connection.
 func testHostWith(t *testing.T, first core.Connection) (*App, chan tea.Msg, string) {
 	t.Helper()
+	h := newTestHost(t, first, appkey.Key{})
+	return h.app, h.delivered, h.app.startup.sessionFile
+}
+
+// testHostRig is a host over a real config file and a fresh state directory,
+// with what its accounts were handed.
+type testHostRig struct {
+	app       *App
+	delivered chan tea.Msg
+	// endpoints receives what each account's connection was made with.
+	endpoints chan internaltg.Endpoint
+}
+
+// newTestHost builds a host the way New does, over a config file that names no
+// app key, with key as the one the process resolved. Its first account's
+// connection is first; every later one stays connected.
+func newTestHost(t *testing.T, first core.Connection, key appkey.Key) testHostRig {
+	t.Helper()
 	stateDir := t.TempDir()
-	cfg := &config.Config{StateDir: stateDir}
-	cfg.Telegram.SessionFile = filepath.Join(stateDir, "session.json")
+	path := filepath.Join(stateDir, "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte("ui:\n  history_limit: 30\n"), 0o600))
+	cfg, err := config.Load(path, stateDir)
+	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(cfg.Telegram.SessionFile, []byte(`{}`), 0o600))
 
-	delivered := make(chan tea.Msg, 64)
+	h := testHostRig{delivered: make(chan tea.Msg, 64), endpoints: make(chan internaltg.Endpoint, 8)}
 	var mu sync.Mutex
 	opened := 0
-	a := &App{
-		cfgStore: config.NewStoreOf(cfg, filepath.Join(stateDir, "config.yml"), stateDir),
+	h.app = &App{
+		cfgStore: config.NewStoreOf(cfg, path, stateDir),
+		startup:  newStartup(cfg, key),
 		log:      zap.NewNop(),
 		notifier: newNotifier(zap.NewNop()),
 		tmpDir:   t.TempDir(),
-		deliver:  func(msg tea.Msg) { delivered <- msg },
-		connect: func(updates.StateStorage) core.Connection {
+		deliver:  func(msg tea.Msg) { h.delivered <- msg },
+		connect: func(endpoint internaltg.Endpoint, _ updates.StateStorage) core.Connection {
+			h.endpoints <- endpoint
 			mu.Lock()
 			defer mu.Unlock()
 			opened++
@@ -84,9 +107,9 @@ func testHostWith(t *testing.T, first core.Connection) (*App, chan tea.Msg, stri
 			return &heldConnection{updates: make(chan store.Event)}
 		},
 	}
-	_, _, err := a.openNext()
+	_, _, err = h.app.openNext()
 	require.NoError(t, err)
-	return a, delivered, cfg.Telegram.SessionFile
+	return h
 }
 
 func waitForEnd(t *testing.T, delivered chan tea.Msg) ui.AccountEndedMsg {
@@ -159,6 +182,37 @@ func TestHost_LeavingABannedAccountStartsTheNextOne(t *testing.T) {
 	next, _ := a.current()
 	a.switching.Lock()
 	next.stop()
+	a.switching.Unlock()
+}
+
+// The app key a build carries is the process's, not the file's: an account
+// that starts after a log out connects with it even when the config was
+// reloaded in between from a file that names no key (#239).
+func TestHost_TheNextAccountConnectsWithTheBuiltInKeyAfterAReload(t *testing.T) {
+	builtIn := appkey.Key{ID: 4242, Hash: "built-in"}
+	h := newTestHost(t, &loggedOutConnection{updates: make(chan store.Event)}, builtIn)
+	a := h.app
+	<-h.endpoints // the first account's
+	_, err := a.reloadConfig()
+	require.NoError(t, err)
+
+	first, epoch := a.current()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.launch(ctx, first, epoch)
+	waitForEnd(t, h.delivered)
+
+	select {
+	case endpoint := <-h.endpoints:
+		assert.Equal(t, builtIn, endpoint.Key, "the next account connected without the key the build carries")
+	case <-time.After(3 * time.Second):
+		require.Fail(t, "the next account never connected")
+	}
+
+	cancel()
+	last, _ := a.current()
+	a.switching.Lock()
+	last.stop()
 	a.switching.Unlock()
 }
 

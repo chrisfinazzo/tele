@@ -51,6 +51,7 @@ func (a *App) openNext() (*account, uint64, error) {
 	}
 	acct, err := openAccount(accountDeps{
 		cfg:      cfg,
+		startup:  a.startup,
 		log:      a.log,
 		tmpDir:   tmpDir,
 		notifier: a.notifier,
@@ -58,7 +59,7 @@ func (a *App) openNext() (*account, uint64, error) {
 		// The account identity is needed both by the message list (own
 		// messages) and by the farewell banner on exit.
 		onAuth: func(userID int64, username string) {
-			if err := accountstate.Record(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
+			if err := accountstate.Record(a.startup.stateDir, a.startup.sessionFile); err != nil {
 				a.log.Error("record account identity", zap.Error(err))
 			}
 			components.SetSelfIdentity(userID, username)
@@ -84,7 +85,7 @@ func (a *App) buildRoot(acct *account, first bool) ui.RootModel {
 	root := ui.NewRootModel(cfg.UI.HistoryLimit, a.verbose)
 	// The client attaches: the focus it reports belongs to it, everything else
 	// is the owner's (#192). It ends with the owner.
-	root = root.WithContext(acct.ctx).WithConfig(cfg).WithKeyMap(a.keyMap).WithOwner(acct.owner.Attach()).
+	root = root.WithContext(acct.ctx).WithImageMode(a.startup.imageMode).WithConfig(cfg).WithKeyMap(a.keyMap).WithOwner(acct.owner.Attach()).
 		WithLogger(a.log).WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore).WithLogPath(a.logPath)
 	root.SetLoginModel(screens.NewLoginModel(acct.owner.AuthFlow()))
 	root.SetTmpDir(acct.tmpDir)
@@ -101,7 +102,7 @@ func (a *App) buildRoot(acct *account, first bool) ui.RootModel {
 // what that database says is carried over once, the first time the file is
 // made, so an upgrade shows nothing twice.
 func (a *App) openNoticeSeen(acct *account) notices.Seen {
-	seen, existed := notices.NewFileSeen(filepath.Join(a.cfg().StateDir, "notices.json"))
+	seen, existed := notices.NewFileSeen(filepath.Join(a.startup.stateDir, "notices.json"))
 	if !existed {
 		var ids []string
 		for _, n := range a.pendingNotices() {
@@ -182,8 +183,7 @@ func (a *App) endAccount(ctx context.Context, acct *account, epoch uint64, reaso
 	discarded := acct.owner.UnsentCount()
 	acct.stop()
 
-	cfg := a.cfg()
-	if err := accountstate.End(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
+	if err := accountstate.End(a.startup.stateDir, a.startup.sessionFile); err != nil {
 		a.log.Error("the account that ended could not be removed", zap.Error(err))
 		a.send(epoch, ui.ConnectFailedMsg{Err: fmt.Errorf("the account that ended could not be removed: %w", err)})
 		return

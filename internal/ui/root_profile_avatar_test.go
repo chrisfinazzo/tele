@@ -16,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
 // avatarPNG writes a decodable square image and returns its path, standing in
@@ -39,12 +40,10 @@ func avatarPNG(t *testing.T) string {
 // images. Avatars are only ever fetched there.
 func kittyRoot(t *testing.T) ui.RootModel {
 	t.Helper()
-	cfg := &config.Config{}
-	cfg.Photos.Mode = "kitty"
 	m := rootOnChatList(t, domain.Chat{
 		ID: 7, Title: "Ada", Peer: domain.Peer{ID: 7, Type: domain.PeerUser},
 	})
-	return m.WithConfig(cfg)
+	return m.WithImageMode(media.ModeKitty).WithConfig(&config.Config{})
 }
 
 // ada is the person the profile is opened on, with a picture.
@@ -92,11 +91,9 @@ func TestAvatar_NoAvatarIDIsNotFetched(t *testing.T) {
 // A terminal that cannot draw an image is never sent one: the monogram is what
 // it shows either way, so the download would buy nothing.
 func TestAvatar_BlocksModeFetchesNothing(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.Photos.Mode = "blocks"
 	m := rootOnChatList(t, domain.Chat{
 		ID: 7, Title: "Ada", Peer: domain.Peer{ID: 7, Type: domain.PeerUser},
-	}).WithConfig(cfg)
+	}).WithImageMode(media.ModeBlocks).WithConfig(&config.Config{})
 	o := ownerOf(t, m)
 	o.avatarPaths[avatarPathKey{userID: 7, avatarID: 4242}] = avatarPNG(t)
 

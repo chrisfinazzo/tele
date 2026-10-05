@@ -16,6 +16,7 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/notices"
@@ -31,6 +32,9 @@ type App struct {
 	// everything through one place.
 	cfgStore *config.Store
 	log      *zap.Logger
+	// startup is what the process settled when it started, handed to every
+	// account it opens in place of what the file says by then (#239).
+	startup startup
 
 	// The App is the host: it outlives the accounts that pass through the
 	// process and holds nothing of theirs (#297). acct is the one running now
@@ -48,7 +52,7 @@ type App struct {
 
 	// What the host needs to open each account: how to connect to Telegram and
 	// where desktop notifications go.
-	connect  func(updates.StateStorage) core.Connection
+	connect  func(internaltg.Endpoint, updates.StateStorage) core.Connection
 	notifier core.Notifier
 
 	// prog draws whichever account is running, and deliver hands it a message;
@@ -117,13 +121,13 @@ func (a *App) pendingNotices() []notices.Notice {
 			ID:    "state-dir-moved-v1.10",
 			Title: "Your data moved",
 			Delay: delay,
-			Body: "The session and local database now live in " + a.cfg().StateDir +
+			Body: "The session and local database now live in " + a.startup.stateDir +
 				", instead of next to the config file. They were moved for you and " +
 				"nothing was lost: you are still logged in. The old location is now empty " +
 				"and can be ignored.",
 		})
 	}
-	if a.cfg().SessionPinned {
+	if a.startup.sessionPinned {
 		out = append(out, notices.Notice{
 			ID:    "session-file-deprecated-v1.10",
 			Title: "session_file is going away",
@@ -180,7 +184,11 @@ func openRoute(cfg *config.Config, path string, log *zap.Logger) (dcs.Resolver, 
 	return proxy.Resolver(route)
 }
 
-func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*App, error) {
+// New builds the host over the config the process started with and the app key
+// it resolved. The key is handed in rather than read from the config: it is
+// settled from the file and from how the binary was built, and the file alone
+// does not know the second (#239).
+func New(cfgStore *config.Store, key appkey.Key, log *zap.Logger, verbose bool, trace bool) (*App, error) {
 	cfg := cfgStore.Current()
 	resolver, err := openRoute(cfg, cfgStore.Path(), log)
 	if err != nil {
@@ -200,8 +208,9 @@ func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*Ap
 	a := &App{
 		cfgStore: cfgStore,
 		log:      log,
-		connect: func(stateStorage updates.StateStorage) core.Connection {
-			return internaltg.NewGotdClient(log, stateStorage, trace, resolver)
+		startup:  newStartup(cfg, key),
+		connect: func(endpoint internaltg.Endpoint, stateStorage updates.StateStorage) core.Connection {
+			return internaltg.NewGotdClient(log, endpoint, stateStorage, trace, resolver)
 		},
 		notifier: newNotifier(log),
 		tmpDir:   tmpDir,

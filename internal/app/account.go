@@ -43,12 +43,17 @@ type account struct {
 // accountDeps is what the host hands an account it opens: its own things, which
 // last longer than any account, and how to reach Telegram.
 type accountDeps struct {
+	// cfg is the config the account starts on, for its live settings; startup
+	// is what the process settled when it started, which the account is opened
+	// from (#239).
 	cfg      *config.Config
+	startup  startup
 	log      *zap.Logger
 	tmpDir   string
 	notifier core.Notifier
-	// connect builds the connection over the account's update state storage.
-	connect func(updates.StateStorage) core.Connection
+	// connect builds the connection with the endpoint over the account's update
+	// state storage.
+	connect func(internaltg.Endpoint, updates.StateStorage) core.Connection
 	// onAuth is told who logged in, once the account knows.
 	onAuth func(userID int64, username string)
 }
@@ -56,12 +61,12 @@ type accountDeps struct {
 // openAccount builds an account over the state directory: the database, the
 // connection, the owner, the send queue and the caches. Nothing runs yet.
 func openAccount(d accountDeps) (*account, error) {
-	statePath := filepath.Join(d.cfg.StateDir, "state.db")
+	statePath := filepath.Join(d.startup.stateDir, "state.db")
 	sqliteStore, err := store.NewSQLite(statePath, d.log)
 	if err != nil {
 		return nil, fmt.Errorf("open state DB: %w", err)
 	}
-	conn := d.connect(internaltg.NewSQLiteStateStorage(sqliteStore.DB()))
+	conn := d.connect(d.startup.endpoint(), internaltg.NewSQLiteStateStorage(sqliteStore.DB()))
 	owner := core.New(d.cfg, d.log, state.New(sqliteStore), conn, d.notifier)
 	// The client finds a skewed clock in what gotd logs; the owner hands it on
 	// to whoever is drawing (#277).
@@ -79,12 +84,12 @@ func openAccount(d accountDeps) (*account, error) {
 	}
 	owner.SetOutbox(sendQueue)
 
-	if cache, cerr := openMediaCache(d.cfg, d.tmpDir, d.log); cerr != nil {
+	if cache, cerr := openMediaCache(d.startup, d.tmpDir, d.log); cerr != nil {
 		d.log.Warn("media cache unavailable; media will not be cached", zap.Error(cerr))
 	} else {
 		owner.SetMediaCache(cache)
 	}
-	if cache, cerr := openAvatarCache(d.cfg, d.tmpDir, d.log); cerr != nil {
+	if cache, cerr := openAvatarCache(d.startup, d.tmpDir, d.log); cerr != nil {
 		d.log.Warn("avatar cache unavailable; avatars will not be shown", zap.Error(cerr))
 	} else {
 		owner.SetAvatarCache(cache)

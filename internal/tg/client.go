@@ -16,14 +16,24 @@ import (
 	updhook "github.com/gotd/td/telegram/updates/hook"
 	"github.com/gotd/td/tg"
 
-	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
+// Endpoint is what a connection is made with that the process settles once,
+// when it starts: the app key and the session file. Handed to each connection
+// rather than read from the config, because the config is what the file says
+// now, and neither may change while the process runs (#239).
+type Endpoint struct {
+	Key         appkey.Key
+	SessionFile string
+}
+
 // GotdClient wraps the gotd telegram client and implements the Client interface
 type GotdClient struct {
+	endpoint     Endpoint
 	mu           sync.RWMutex
 	api          *tg.Client
 	mustDeliver  chan store.Event
@@ -60,12 +70,13 @@ type GotdClient struct {
 // messages get through again. It must not block. Set before Connect.
 func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
 
-func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace bool, resolver dcs.Resolver) *GotdClient {
+func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.StateStorage, trace bool, resolver dcs.Resolver) *GotdClient {
 	traceLog := zap.NewNop()
 	if trace {
 		traceLog = log
 	}
 	return &GotdClient{
+		endpoint:     endpoint,
 		mustDeliver:  make(chan store.Event, 256),
 		droppable:    make(chan store.Event, 64),
 		updates:      make(chan store.Event, 32),
@@ -95,8 +106,8 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 // Closes readyCh once auth is complete and the updates loop has started.
 // onAuth is called with the authenticated user ID and username before readyCh
 // is closed; may be nil.
-func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
-	sess := NewFileSession(cfg.Telegram.SessionFile)
+func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
+	sess := NewFileSession(c.endpoint.SessionFile)
 	// Read before connecting, since gotd stores a fresh key as soon as it has
 	// one: whether there was a session decides whether a 401 is a log out that
 	// ends the account or a start with nothing to log out of (#297).
@@ -227,7 +238,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 
 	c.log.Info("gotd client", zap.String("gotd", gotdVersion()))
 
-	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
+	tc := telegram.NewClient(c.endpoint.Key.ID, c.endpoint.Key.Hash, telegram.Options{
 		UpdateHandler:  arrivals,
 		SessionStorage: sess,
 		// One resolver for every data centre this client ever reaches, so a

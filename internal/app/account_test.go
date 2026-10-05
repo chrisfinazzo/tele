@@ -26,7 +26,7 @@ type heldConnection struct {
 	ended   atomic.Bool
 }
 
-func (c *heldConnection) Connect(ctx context.Context, _ *config.Config, _ *internaltg.AuthFlow,
+func (c *heldConnection) Connect(ctx context.Context, _ *internaltg.AuthFlow,
 	_ chan<- struct{}, _ func(int64, string)) error {
 	<-ctx.Done()
 	c.ended.Store(true)
@@ -37,14 +37,14 @@ func (c *heldConnection) Updates() <-chan store.Event { return c.updates }
 
 func testAccount(t *testing.T) (*account, *heldConnection) {
 	t.Helper()
-	cfg := &config.Config{StateDir: t.TempDir()}
 	conn := &heldConnection{updates: make(chan store.Event)}
 	acct, err := openAccount(accountDeps{
-		cfg:      cfg,
+		cfg:      &config.Config{},
+		startup:  startup{stateDir: t.TempDir()},
 		log:      zap.NewNop(),
 		tmpDir:   t.TempDir(),
 		notifier: newNotifier(zap.NewNop()),
-		connect:  func(updates.StateStorage) core.Connection { return conn },
+		connect:  func(internaltg.Endpoint, updates.StateStorage) core.Connection { return conn },
 	})
 	require.NoError(t, err)
 	return acct, conn

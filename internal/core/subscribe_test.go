@@ -41,7 +41,7 @@ func (s *stubConn) GetDialogs(context.Context) ([]domain.Chat, error) {
 	return s.dialogs, nil
 }
 
-func (s *stubConn) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (s *stubConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
 	return nil
 }
 

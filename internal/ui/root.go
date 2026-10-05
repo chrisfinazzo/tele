@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"image"
-	"os"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -302,22 +301,27 @@ func (m RootModel) debug(msg string, fields ...zap.Field) {
 	}
 }
 
-// WithConfig installs the config at startup. It does the two things that can
-// only be done once - choosing the image renderer and building the toast stack -
-// and then hands over to applyConfig, which is the same path a reload takes.
+// WithImageMode installs how images are drawn. photos.mode is a startup
+// setting: the renderer and everything already transmitted to the terminal are
+// chosen from it, so the host reads it once per process and every account's
+// model is handed the same mode rather than reading the file again (#239).
+func (m RootModel) WithImageMode(mode media.Mode) RootModel {
+	m.imageMode = mode
+	if mode == media.ModeKitty {
+		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
+	}
+	m.chat.SetImageMode(mode)
+	return m
+}
+
+// WithConfig installs the config when the model is built. It does the one thing
+// that can only be done once - building the toast stack - and then hands over
+// to applyConfig, which is the same path a reload takes.
 //
 // Splitting it this way is what keeps "which settings are live" honest. There is
 // one place where a config becomes running state, so a setting is live because
 // applyConfig touches it, not because somebody remembered to say so.
 func (m RootModel) WithConfig(cfg *config.Config) RootModel {
-	// photos.mode is a startup setting: the renderer and everything already
-	// transmitted to the terminal are chosen from it, so it is read here and
-	// nowhere else.
-	m.imageMode = media.DetectMode(cfg.Photos.Mode, os.Getenv)
-	if m.imageMode == media.ModeKitty {
-		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
-	}
-	m.chat.SetImageMode(m.imageMode)
 	w, h := m.width, m.height
 	if w == 0 {
 		w, h = 80, 24

@@ -158,7 +158,7 @@ func TestReload_PicksUpAnEditMadeOutsideTheApp(t *testing.T) {
 // terminal is not a setting taking effect, it is a mess.
 func TestReload_StartupSettingDoesNotChangeTheRunningApp(t *testing.T) {
 	m, store := applyModel(t, "photos:\n  mode: blocks\n")
-	require.Equal(t, media.ModeBlocks, m.imageMode)
+	m = m.WithImageMode(media.ModeBlocks)
 
 	require.NoError(t, store.Set("photos.mode", "kitty"))
 	m, _ = m.reloadFromDisk()

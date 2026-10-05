@@ -93,26 +93,18 @@ func main() {
 		os.Exit(0)
 	}
 
-	if cfg.Telegram.APIID == 0 {
-		if id, err := strconv.Atoi(buildAPIID); err == nil && id != 0 {
-			cfg.Telegram.APIID = id
-		}
-	}
-	if cfg.Telegram.APIHash == "" {
-		cfg.Telegram.APIHash = buildAPIHash
-	}
-
-	// Last resort: the key compiled into published source, which is what a build
-	// that came from anywhere but the release pipeline has. Taken as a pair and
-	// only when nothing above supplied either half, so it can never be spliced
-	// onto the id or the hash of another key.
-	if cfg.Telegram.APIID == 0 && cfg.Telegram.APIHash == "" {
-		if id, hash := appkey.Published(); id != 0 && hash != "" {
-			cfg.Telegram.APIID, cfg.Telegram.APIHash = id, hash
-		}
-	}
-
-	if cfg.Telegram.APIID == 0 || cfg.Telegram.APIHash == "" {
+	// The key is settled once, beside the config rather than in it: the config is
+	// what the file says, and a reload would lose a key written into it (#239).
+	injectedID, _ := strconv.Atoi(buildAPIID)
+	key, _, err := appkey.Resolve(
+		appkey.Key{ID: cfg.Telegram.APIID, Hash: cfg.Telegram.APIHash},
+		appkey.Key{ID: injectedID, Hash: buildAPIHash},
+	)
+	switch {
+	case errors.Is(err, appkey.ErrHalfKey):
+		fmt.Fprintf(os.Stderr, "config: set both telegram.api_id and telegram.api_hash in %s, or neither\n", *cfgPath)
+		os.Exit(1)
+	case err != nil:
 		fmt.Fprintf(os.Stderr, "config: set telegram.api_id and telegram.api_hash in %s\nGet credentials at https://my.telegram.org\n", *cfgPath)
 		os.Exit(1)
 	}
@@ -186,7 +178,7 @@ func main() {
 		log.Info("cleared local state before startup", zap.String("reason", string(cleanupReason)))
 	}
 
-	a, err := app.New(cfgStore, log, *verbose, *trace)
+	a, err := app.New(cfgStore, key, log, *verbose, *trace)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)

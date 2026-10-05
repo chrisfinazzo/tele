@@ -31,6 +31,41 @@ func TestPublishedIsStable(t *testing.T) {
 	assert.Equal(t, firstHash, secondHash)
 }
 
+func TestResolve(t *testing.T) {
+	user := Key{ID: 1, Hash: "user"}
+	injected := Key{ID: 2, Hash: "injected"}
+	publishedID, publishedHash := Published()
+	published := Key{ID: publishedID, Hash: publishedHash}
+
+	tests := []struct {
+		name     string
+		user     Key
+		injected Key
+		key      Key
+		source   Source
+		err      error
+	}{
+		{name: "the person's key outranks every built-in one", user: user, injected: injected, key: user, source: SourceUser},
+		{name: "an official build runs on its injected key", injected: injected, key: injected, source: SourceInjected},
+		{name: "a build from source runs on the published key", key: published, source: SourcePublished},
+		// Half a key is refused, never completed from a built-in one: an id
+		// without its hash identifies nothing.
+		{name: "an id without its hash", user: Key{ID: 1}, injected: injected, err: ErrHalfKey},
+		{name: "a hash without its id", user: Key{Hash: "user"}, injected: injected, err: ErrHalfKey},
+		// A half-injected key is a broken release, and is passed over whole.
+		{name: "half an injected key", injected: Key{ID: 2}, key: published, source: SourcePublished},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, source, err := Resolve(tt.user, tt.injected)
+
+			require.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.key, key)
+			assert.Equal(t, tt.source, source)
+		})
+	}
+}
+
 // A fragment lost or reordered has to be visible here rather than at a login
 // screen: the tests above check the assembled key, this one checks that the
 // assembly is what produced it.
