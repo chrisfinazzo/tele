@@ -43,6 +43,9 @@ type stubClient struct {
 	searchedFor   string
 	searchLimit   int
 
+	// loggedOut records each log out and whether Telegram was to be told.
+	loggedOut []bool
+
 	// fullUser is what GetUser answers with; userAddrs records how each call
 	// addressed the person.
 	fullUser  internaltg.FullUser

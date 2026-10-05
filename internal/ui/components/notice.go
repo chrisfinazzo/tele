@@ -17,15 +17,21 @@ import (
 // a pure function of its inputs. maxW bounds the total rendered width including
 // the border.
 func RenderNoticeBox(title, body string, remaining, maxW int) string {
+	footer := "press any key to continue"
+	if remaining > 0 {
+		footer = fmt.Sprintf("continue in %ds", remaining)
+	}
+	return RenderDialog(title, body, footer, maxW)
+}
+
+// RenderDialog renders a bordered box with a title, a wrapped body, and a faint
+// footer that says which keys answer it. maxW bounds the total rendered width
+// including the border.
+func RenderDialog(title, body, footer string, maxW int) string {
 	const padV, padH = 1, 2
 	innerW := maxW - 2 - 2*padH
 	if innerW < 10 {
 		innerW = 10
-	}
-
-	footer := "press any key to continue"
-	if remaining > 0 {
-		footer = fmt.Sprintf("continue in %ds", remaining)
 	}
 
 	wrapped := theme.S().Body.Width(innerW).Render(body)

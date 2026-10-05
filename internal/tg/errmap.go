@@ -40,7 +40,7 @@ func (c *GotdClient) mapError(op string, err error) error {
 		if te.Type == "AUTH_KEY_DUPLICATED" {
 			// Whichever request it came back on, the key is dead for all of
 			// them: the connection ends here rather than one failure at a time.
-			c.dropped.report()
+			c.loggedOut.report(telerr.LogOutKeyDropped)
 		}
 		if kind == telerr.Internal && c.log != nil {
 			// The kind set is closed, the mapping table is not. Unmapped types

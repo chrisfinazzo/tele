@@ -11,6 +11,10 @@ import (
 
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.statusBar.SetStatus("")
+	// A log out confirmation owns all keys while it is open (#297).
+	if next, cmd, handled := m.handleLogOutKey(msg); handled {
+		return next, cmd
+	}
 	// While the help modal is open it owns all keys.
 	if m.help != nil {
 		newHelp, open := m.help.Update(msg)
@@ -168,6 +172,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keys.ActionShowSettings:
 			return m.openSettings()
+		case keys.ActionLogOut:
+			return m.askLogOut()
 		case keys.ActionReloadConfig, keys.ActionReloadThemes:
 			return m.reloadFromDisk()
 		}

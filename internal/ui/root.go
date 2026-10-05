@@ -190,6 +190,9 @@ type RootModel struct {
 	logoTicking      bool
 	spinnerTicking   bool
 	toastAnimTicking bool
+
+	// logOut is the open log out confirmation, nil when none is (#297).
+	logOut *logOutDialog
 }
 
 // Image-cache capacities (entry counts). Thumbnails churn fast and are small;
@@ -556,6 +559,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardDone(msg)
 	case StatusErrMsg:
 		return m.handleStatusErr(msg)
+	case logOutPreviewMsg:
+		return m.handleLogOutPreview(msg)
+	case logOutDoneMsg:
+		return m.handleLogOutDone(msg)
 	case ConnectFailedMsg:
 		return m.handleConnectFailed(msg)
 	case core.ClockSkew:

@@ -161,6 +161,9 @@ func (m RootModel) View() tea.View {
 		if m.profile != nil {
 			content = overlayCenter(dimBackground(content), m.profile.View(), m.width, m.height)
 		}
+		if m.logOut != nil {
+			content = m.logOutView(content)
+		}
 		// Bottom-anchored toasts must clear the composer: a limit warning is
 		// useless on top of the field it is about (#126). The composer grows with
 		// the draft, so the inset is read per frame.

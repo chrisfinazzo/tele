@@ -23,6 +23,8 @@ func newMockClient() *mockClient {
 	return &mockClient{events: make(chan store.Event, 10)}
 }
 
+func (m *mockClient) LogOut(context.Context, bool) error { return nil }
+
 func (m *mockClient) GetDialogs(_ context.Context) ([]domain.Chat, error) {
 	return m.dialogs, nil
 }

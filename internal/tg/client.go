@@ -44,9 +44,9 @@ type GotdClient struct {
 	// skew watches for a local clock too far off for gotd to accept what
 	// Telegram sends (#277).
 	skew *clockSkew
-	// dropped ends the connection and removes the session when Telegram
-	// invalidates the key (#254).
-	dropped droppedKey
+	// loggedOut ends the connection as a log out: the person's, or a key
+	// Telegram invalidated (#254, #297).
+	loggedOut loggedOut
 }
 
 // SetOnClockSkew installs the function told about clock skew: the skew when it
@@ -261,12 +261,12 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle)},
 	})
 
-	// The connection runs under its own context so a key Telegram dropped can
-	// end it from whichever request saw it, and the session is removed only
-	// once gotd has stopped (#254).
+	// The connection runs under its own context so a log out - the person's,
+	// or a key Telegram dropped - can end it from wherever it is noticed, and
+	// the account is removed only once gotd has stopped (#254, #297).
 	runCtx, cancelRun := context.WithCancelCause(ctx)
 	defer cancelRun(nil)
-	c.dropped.arm(cancelRun)
+	c.loggedOut.arm(cancelRun)
 
 	c.log.Debug("connecting to telegram")
 	err := tc.Run(runCtx, func(ctx context.Context) error {
@@ -302,7 +302,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			},
 		})
 	})
-	return c.dropped.outcome(err)
+	return c.loggedOut.outcome(err)
 }
 
 func (c *GotdClient) Updates() <-chan store.Event {

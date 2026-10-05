@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 // it is named from a closed list rather than read off Telegram's errors (#297).
 func TestEndReasonOf_ALogOutEndsTheAccount(t *testing.T) {
 	for logOut, want := range map[telerr.LogOut]EndReason{
+		telerr.LogOutHere:       EndLoggedOutHere,
 		telerr.LogOutElsewhere:  EndLoggedOutElsewhere,
 		telerr.LogOutDeleted:    EndAccountDeleted,
 		telerr.LogOutKeyDropped: EndKeyInvalidated,
@@ -59,4 +61,38 @@ func TestUnsentCount_CountsWhatHasNotGoneOut(t *testing.T) {
 	require.NoError(t, q.Update(sent))
 
 	assert.Equal(t, 2, o.UnsentCount())
+}
+
+// The confirmation names who is being logged out and what is lost with them,
+// both of which only the owner knows.
+func TestLogOutPreview_NamesTheAccountAndWhatGoesWithIt(t *testing.T) {
+	o, _, _ := newTestOwner(t)
+	o.onAuth(42, "ada")
+
+	p := o.LogOutPreview()
+
+	assert.Equal(t, "@ada", p.Name)
+	assert.Zero(t, p.Unsent)
+}
+
+func TestLogOutPreview_AnAccountWithNoUsername(t *testing.T) {
+	o, _, _ := newTestOwner(t)
+	o.onAuth(42, "")
+
+	assert.Equal(t, "this account", o.LogOutPreview().Name)
+}
+
+func (s *stubClient) LogOut(_ context.Context, tellTelegram bool) error {
+	s.loggedOut = append(s.loggedOut, tellTelegram)
+	return s.err
+}
+
+// Logging out is the connection's to carry out: the owner hands it on.
+func TestLogOut_IsHandedToTheConnection(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+
+	require.NoError(t, o.LogOut(context.Background(), false))
+
+	assert.Equal(t, []bool{false}, c.loggedOut)
 }

@@ -12,6 +12,9 @@ import (
 // Client is the interface for all Telegram operations.
 // All callers (ui, app) depend on this interface, not on gotd directly.
 type Client interface {
+	// LogOut logs the account out, telling Telegram first when tellTelegram is
+	// set, and ends the connection as a log out made here (#297).
+	LogOut(ctx context.Context, tellTelegram bool) error
 	GetDialogs(ctx context.Context) ([]domain.Chat, error)
 	// SearchContacts queries Telegram (contacts.search) for users matching q,
 	// returning matches as domain.Chat with valid peers. Phase 1: users only.

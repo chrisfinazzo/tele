@@ -29,6 +29,9 @@ const (
 	// ActionShowSettings opens the settings overlay: everything tele can be
 	// configured with, in the order the config file has it.
 	ActionShowSettings Action = "show_settings"
+	// ActionLogOut logs out of the account, after a confirmation that names
+	// what goes with it (#297). A chord, so it is not pressed by accident.
+	ActionLogOut Action = "log_out"
 	// ActionReloadConfig re-reads the config file and the theme files and
 	// applies both. It ships with no default binding: it exists for the minutes
 	// someone spends writing a theme or editing the config in another window,
@@ -64,6 +67,7 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+x": ActionDismissToast,
 			"?":      ActionShowHelp,
 			",":      ActionShowSettings,
+			"g L":    ActionLogOut,
 		},
 		ContextFolders: {
 			"j":     ActionDown,

@@ -1,6 +1,10 @@
 package core
 
-import "github.com/sorokin-vladimir/tele/internal/telerr"
+import (
+	"context"
+
+	"github.com/sorokin-vladimir/tele/internal/telerr"
+)
 
 // EndReason is why an account ended while tele ran. The set is closed: it is
 // what a client tells the person on the way back to the login (#297).
@@ -40,6 +44,8 @@ func EndReasonOf(err error) (EndReason, bool) {
 		return "", false
 	}
 	switch e.LogOut {
+	case telerr.LogOutHere:
+		return EndLoggedOutHere, true
 	case telerr.LogOutElsewhere:
 		return EndLoggedOutElsewhere, true
 	case telerr.LogOutDeleted:
@@ -49,6 +55,29 @@ func EndReasonOf(err error) (EndReason, bool) {
 	default:
 		return "", false
 	}
+}
+
+// LogOutPreview is what a log out takes with it, for the person to confirm:
+// whose account it is and how many messages still waiting to be sent go too.
+type LogOutPreview struct {
+	Name   string
+	Unsent int
+}
+
+// LogOutPreview says what logging out now would take.
+func (o *Owner) LogOutPreview() LogOutPreview {
+	name := "this account"
+	if u := o.selfName.Load(); u != nil && *u != "" {
+		name = "@" + *u
+	}
+	return LogOutPreview{Name: name, Unsent: o.UnsentCount()}
+}
+
+// LogOut logs the account out, telling Telegram first when tellTelegram is
+// set. Once the connection has ended as a log out, the host ends the account
+// and starts the next one (#297).
+func (o *Owner) LogOut(ctx context.Context, tellTelegram bool) error {
+	return o.client.LogOut(ctx, tellTelegram)
 }
 
 // UnsentCount is how many messages in the send queue have not gone out yet:

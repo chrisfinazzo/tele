@@ -87,6 +87,8 @@ const (
 type LogOut string
 
 const (
+	// LogOutHere means the person logged out from this client.
+	LogOutHere LogOut = "here"
 	// LogOutElsewhere means the session was ended from another device or by
 	// Telegram.
 	LogOutElsewhere LogOut = "elsewhere"

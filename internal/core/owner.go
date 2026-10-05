@@ -62,6 +62,9 @@ type Owner struct {
 	resyncArmed atomic.Bool
 	readyCh     chan struct{}
 	onAuthFn    func(userID int64, username string)
+	// selfName is the logged-in user's username, once known: a log out names
+	// whose account it ends (#297).
+	selfName atomic.Pointer[string]
 
 	// ctx bounds the owner's background work (history backfill). It is stored
 	// rather than passed because that work is started by a subscription, which
@@ -205,6 +208,7 @@ func (o *Owner) Ready() <-chan struct{} { return o.readyCh }
 func (o *Owner) SetOnAuth(fn func(userID int64, username string)) { o.onAuthFn = fn }
 
 func (o *Owner) onAuth(userID int64, username string) {
+	o.selfName.Store(&username)
 	if o.onAuthFn != nil {
 		o.onAuthFn(userID, username)
 	}

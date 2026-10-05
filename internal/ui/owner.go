@@ -17,6 +17,11 @@ type Owner interface {
 	MoveWindow(id project.SubID, w project.Window)
 	Unsubscribe(id project.SubID)
 
+	// LogOutPreview says what logging out now would take, for the person to
+	// confirm; LogOut logs out, telling Telegram first when asked to (#297).
+	LogOutPreview() core.LogOutPreview
+	LogOut(ctx context.Context, tellTelegram bool) error
+
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.
 	SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error

@@ -19,6 +19,24 @@ func testMatcherMap() keys.KeyMap {
 	}
 }
 
+// The log out chord shares its first key with "g g" in the chat and the chat
+// list, and has to work from both, while "g g" still goes to the top (#297).
+func TestMatcher_LogOutChordWorksWhereGGIsBoundToo(t *testing.T) {
+	for _, ctx := range []keys.Context{keys.ContextChat, keys.ContextChatList, keys.ContextFolders} {
+		m := keys.NewMatcher(keys.DefaultKeyMap())
+
+		_, res := m.Resolve(ctx, "g")
+		assert.Equal(t, keys.MatchPending, res, ctx)
+		action, _ := m.Resolve(ctx, "L")
+		assert.Equal(t, keys.ActionLogOut, action, ctx)
+	}
+
+	m := keys.NewMatcher(keys.DefaultKeyMap())
+	m.Resolve(keys.ContextChat, "g")
+	action, _ := m.Resolve(keys.ContextChat, "g")
+	assert.Equal(t, keys.ActionGoTop, action)
+}
+
 func TestMatcher_SingleKey(t *testing.T) {
 	m := keys.NewMatcher(testMatcherMap())
 	action, res := m.Resolve(keys.ContextChat, "j")

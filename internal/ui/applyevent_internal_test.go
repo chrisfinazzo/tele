@@ -79,6 +79,24 @@ type ownerStub struct {
 	sentMedia []core.MediaSendRequest
 	retried   []string
 	discarded []string
+
+	// A log out (#297): what the confirmation is told, each log out asked for
+	// and whether Telegram was to be told, and what each one answers in turn.
+	logOutPreview core.LogOutPreview
+	loggedOut     []bool
+	logOutErrs    []error
+}
+
+func (o *ownerStub) LogOutPreview() core.LogOutPreview { return o.logOutPreview }
+
+func (o *ownerStub) LogOut(_ context.Context, tellTelegram bool) error {
+	o.loggedOut = append(o.loggedOut, tellTelegram)
+	if len(o.logOutErrs) > 0 {
+		err := o.logOutErrs[0]
+		o.logOutErrs = o.logOutErrs[1:]
+		return err
+	}
+	return nil
 }
 
 func (o *ownerStub) SetFocus(h domain.HistoryKey) {
