@@ -16,16 +16,13 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"go.uber.org/zap"
 
-	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/proxy"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
-	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
-	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
 type App struct {
@@ -34,12 +31,38 @@ type App struct {
 	// everything through one place.
 	cfgStore *config.Store
 	log      *zap.Logger
-	// acct is the account running in this process: its database, connection,
-	// owner and caches. The App is its host and outlives it (#297).
-	acct *account
+
+	// The App is the host: it outlives the accounts that pass through the
+	// process and holds nothing of theirs (#297). acct is the one running now
+	// and epoch the turn it has on screen; both change together, under mu,
+	// when an account ends and the next one starts.
+	mu    sync.Mutex
+	acct  *account
+	epoch uint64
+	// switching serialises the end of one account and the start of the next
+	// with the stop of whichever is running when the process exits.
+	switching sync.Mutex
+	// exitErr is what the last account's connection ended with, for the exit
+	// code.
+	exitErr error
+
+	// What the host needs to open each account: how to connect to Telegram and
+	// where desktop notifications go.
+	connect  func(updates.StateStorage) core.Connection
+	notifier core.Notifier
+
+	// prog draws whichever account is running, and deliver hands it a message;
+	// keyMap and noticeSeen are the person's and the machine's, so every
+	// account's model shares them.
+	prog       *tea.Program
+	deliver    func(tea.Msg)
+	keyMap     keys.KeyMap
+	noticeSeen notices.Seen
+
 	// tmpDir holds this run's scratch files: media saved for an external
 	// player, GIFs staged for decoding, and the media cache when the user asked
-	// for no persistent one. Removed on exit.
+	// for no persistent one. Each account works in a directory of its own
+	// inside it, removed when the account ends. Removed on exit.
 	tmpDir  string
 	verbose bool
 	// stateMoved reports that startup migration relocated the account state, so
@@ -127,7 +150,8 @@ func (a *App) reloadConfig() (*config.Config, error) {
 		return nil, err
 	}
 	cfg := a.cfg()
-	a.acct.owner.SetConfig(cfg)
+	acct, _ := a.current()
+	acct.owner.SetConfig(cfg)
 	return cfg, nil
 }
 
@@ -176,28 +200,14 @@ func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*Ap
 	a := &App{
 		cfgStore: cfgStore,
 		log:      log,
-		tmpDir:   tmpDir,
-		verbose:  verbose,
-	}
-	a.acct, err = openAccount(accountDeps{
-		cfg:      cfg,
-		log:      log,
-		tmpDir:   tmpDir,
-		notifier: newNotifier(log),
 		connect: func(stateStorage updates.StateStorage) core.Connection {
 			return internaltg.NewGotdClient(log, stateStorage, trace, resolver)
 		},
-		// The account identity is needed both by the message list (own
-		// messages) and by the farewell banner on exit.
-		onAuth: func(userID int64, username string) {
-			if err := accountstate.Record(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
-				log.Error("record account identity", zap.Error(err))
-			}
-			components.SetSelfIdentity(userID, username)
-			a.setSelf(userID, username)
-		},
-	})
-	if err != nil {
+		notifier: newNotifier(log),
+		tmpDir:   tmpDir,
+		verbose:  verbose,
+	}
+	if _, _, err := a.openNext(); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -206,137 +216,29 @@ func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*Ap
 func (a *App) Run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-
-	// Deferred in this order so they run in the other: the account stops and
-	// closes its database before the temp directory its caches may live in goes.
+	// Removed last: the account stopping below may still have caches in it.
 	defer os.RemoveAll(a.tmpDir) //nolint:errcheck
-	defer a.acct.stop()
 
-	owner := a.acct.owner
-	authFlow := owner.AuthFlow()
-	readyCh := owner.Ready()
-
-	// The owner holds the connection; this process also happens to render it.
-	// Start returns only when the connection is over. Its error is kept for the
-	// exit code and also shown while the program still runs: waiting for the
-	// exit to report it meant nobody saw it, on a screen nobody could quit (#283).
-	tgErr := make(chan error, 1)
-	startFailed := make(chan error, 1)
-	a.acct.run(ctx, func(err error) {
-		tgErr <- err
-		if err != nil && ctx.Err() == nil {
-			startFailed <- err
-		}
-	})
-
-	// Build bubbletea model
 	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg().KeybindingOverrides())
 	for _, w := range warns {
 		a.log.Warn("keybindings: " + w)
 	}
-	// The client attaches: the focus it reports and the detach that ends it
-	// belong to it, everything else is the owner's (#192).
-	att := owner.Attach()
-	defer att.Detach()
+	a.keyMap = km
+	acct, epoch := a.current()
+	a.noticeSeen = a.openNoticeSeen(acct)
 
-	root := ui.NewRootModel(a.cfg().UI.HistoryLimit, a.verbose)
-	root = root.WithContext(ctx).WithConfig(a.cfg()).WithKeyMap(km).WithOwner(att).WithLogger(a.log).
-		WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore).WithLogPath(a.logPath)
-	root.SetLoginModel(screens.NewLoginModel(authFlow))
-	root.SetTmpDir(a.tmpDir)
+	a.prog = tea.NewProgram(ui.NewShell(epoch, a.buildRoot(acct, true)))
+	a.deliver = a.prog.Send
+	a.launch(ctx, acct, epoch)
 
-	// One-time startup notices (#197). Seen-state is written on dismissal, so
-	// quitting before the countdown ends shows the notice again next time.
-	noticeSeen := notices.NewSQLiteSeen(a.acct.store.DB())
-	root = root.WithNotices(notices.Pending(a.pendingNotices(), noticeSeen), noticeSeen)
-
-	prog := tea.NewProgram(root)
-
-	go func() {
-		select {
-		case err := <-startFailed:
-			prog.Send(ui.ConnectFailedMsg{Err: err})
-		case <-ctx.Done():
-		}
-	}()
-
-	// Bridge: auth requests + ready signal → bubbletea
-	go func() {
-		var authOK bool
-		for {
-			cmd := screens.WaitForAuthRequest(authFlow, readyCh)
-			msg := cmd()
-			prog.Send(msg)
-			if req, isReq := msg.(screens.AuthRequestMsg); isReq {
-				a.log.Debug("auth step requested", zap.Int("step", int(req.Step)))
-			}
-			if _, done := msg.(screens.ConnectedMsg); done {
-				a.log.Info("connected, loading dialogs")
-				authOK = true
-				break
-			}
-			if errMsg, failed := msg.(screens.AuthErrorMsg); failed {
-				a.log.Error("auth error", zap.String("reason", errMsg.Text))
-				break
-			}
-		}
-		if !authOK {
-			return
-		}
-		// Connected: the owner loads the authoritative dialog list.
-		go func() {
-			if err := owner.Bootstrap(ctx); err != nil {
-				a.log.Error("GetDialogs failed", zap.Error(err))
-				return
-			}
-			prog.Send(screens.TransitionToMainMsg{})
-		}()
-
-		// Send cached folder filters immediately, then refresh from network
-		if cached := a.acct.store.FolderFilters(); len(cached) > 0 {
-			prog.Send(ui.FolderFiltersMsg{Filters: cached})
-		}
-		go func() {
-			filters, err := owner.LoadFolderFilters(ctx)
-			if err != nil {
-				a.log.Warn("GetDialogFilters failed", zap.Error(err))
-				return
-			}
-			if len(filters) == 0 {
-				return
-			}
-			prog.Send(ui.FolderFiltersMsg{Filters: filters})
-		}()
-	}()
-
-	// Bridge: projection deltas → bubbletea
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case d := <-owner.Deltas():
-				prog.Send(d)
-			case in := <-owner.Incoming():
-				prog.Send(in)
-			case n := <-owner.Notifications():
-				prog.Send(n)
-			case f := <-owner.Failures():
-				prog.Send(f)
-			case tp := <-owner.Typing():
-				prog.Send(tp)
-			case pr := <-owner.Progress():
-				prog.Send(pr)
-			case dp := <-owner.Downloads():
-				prog.Send(dp)
-			case sk := <-owner.ClockSkew():
-				prog.Send(sk)
-			}
-		}
-	}()
-
-	_, err := prog.Run()
+	_, err := a.prog.Run()
 	cancel()
+	// Whichever account is running when the program ends stops here, and not
+	// while another is taking its place.
+	a.switching.Lock()
+	last, _ := a.current()
+	last.stop()
+	a.switching.Unlock()
 
 	// Disable OS color-scheme reports (DEC mode 2031) enabled at startup, so the
 	// terminal stops emitting report sequences to the shell after tele exits
@@ -352,10 +254,8 @@ func (a *App) Run() error {
 		_, _ = fmt.Fprint(os.Stdout, a.farewell(home))
 	}
 
-	// Wait for tg client goroutine
-	tgClientErr := <-tgErr
-	if tgClientErr != nil && err == nil {
-		return fmt.Errorf("telegram: %w", tgClientErr)
+	if exitErr := a.lastExitErr(); exitErr != nil && err == nil {
+		return fmt.Errorf("telegram: %w", exitErr)
 	}
 	return err
 }

@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -37,10 +38,14 @@ func SlowConnectTick() tea.Cmd {
 	return tea.Tick(SlowConnectAfter, func(time.Time) tea.Msg { return SlowConnectMsg{} })
 }
 
-// WaitForAuthRequest returns a Cmd that blocks until AuthFlow sends a request, an error, or ready closes.
-func WaitForAuthRequest(af *internaltg.AuthFlow, ready <-chan struct{}) tea.Cmd {
+// WaitForAuthRequest returns a Cmd that blocks until AuthFlow sends a request,
+// an error, or ready closes. It gives up with nil when ctx ends: the account it
+// waits on is ending, and a login nobody finished must not hold that up (#297).
+func WaitForAuthRequest(ctx context.Context, af *internaltg.AuthFlow, ready <-chan struct{}) tea.Cmd {
 	return func() tea.Msg {
 		select {
+		case <-ctx.Done():
+			return nil
 		case req := <-af.Requests:
 			return AuthRequestMsg{Step: req.Step, Hint: req.Hint, Err: req.Err}
 		case <-ready:
@@ -57,9 +62,16 @@ type LoginModel struct {
 	step   internaltg.AuthStep
 	prompt string
 	err    string
+	// notice says why the person is at the login, under the number the first
+	// time it is asked for (#297).
+	notice string
 	// slow is set when SlowConnectMsg arrives while still connecting.
 	slow bool
 }
+
+// SetNotice sets what is said under the number the first time it is asked for:
+// why the person is back at the login.
+func (m *LoginModel) SetNotice(text string) { m.notice = text }
 
 func NewLoginModel(af *internaltg.AuthFlow) LoginModel {
 	ti := textinput.New()
@@ -106,6 +118,13 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AuthRequestMsg:
 		m.step = msg.Step
 		m.err = msg.Err
+		if msg.Step == internaltg.AuthStepPhone && m.notice != "" {
+			// Said once: a number asked for again has a reason of its own.
+			if m.err == "" {
+				m.err = m.notice
+			}
+			m.notice = ""
+		}
 		switch msg.Step {
 		case internaltg.AuthStepPhone:
 			m.prompt = "Enter phone number:"

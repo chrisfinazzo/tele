@@ -77,6 +77,20 @@ func Reconcile(stateDir, sessionFile string) (bool, CleanupReason, error) {
 	return true, reason, nil
 }
 
+// End removes an account that ended while tele ran: its session, the identity
+// recorded for it, and its footprint. The session goes first because the key
+// in it survives a log out, and a login made with it would bind to it and keep
+// the identity the footprint is told apart by (#297). Call only once nothing
+// holds the account's files open.
+func End(stateDir, sessionFile string) error {
+	for _, path := range []string{sessionFile, filepath.Join(stateDir, accountIDFile)} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+	}
+	return removeAccountFiles(stateDir)
+}
+
 // Record writes the current session identity after a successful sign-in.
 func Record(stateDir, sessionFile string) error {
 	id, err := sessionIdentity(sessionFile)

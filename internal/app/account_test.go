@@ -75,6 +75,23 @@ func TestAccount_StopEndsItsConnectionAndClosesItsDatabase(t *testing.T) {
 	assert.Error(t, acct.store.DB().Ping(), "the database is still open")
 }
 
+// The work the host runs for an account - the bridges to the client, the
+// dialog load after login - is the account's too: stop waits for it, since it
+// writes to the database stop is about to close (#297).
+func TestAccount_StopWaitsForTheWorkRunAlongside(t *testing.T) {
+	acct, _ := testAccount(t)
+	var finished atomic.Bool
+	acct.run(context.Background(), nil, func(ctx context.Context) {
+		<-ctx.Done()
+		time.Sleep(20 * time.Millisecond)
+		finished.Store(true)
+	})
+
+	acct.stop()
+
+	assert.True(t, finished.Load())
+}
+
 // The process ending stops the account the same way: the host's context is
 // the parent of the account's.
 func TestAccount_EndsWithTheHost(t *testing.T) {

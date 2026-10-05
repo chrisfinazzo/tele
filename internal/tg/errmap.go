@@ -49,7 +49,7 @@ func (c *GotdClient) mapError(op string, err error) error {
 			c.log.Warn("unmapped telegram error",
 				zap.String("op", op), zap.String("type", te.Type), zap.Int("code", te.Code))
 		}
-		return &telerr.Error{
+		mapped := &telerr.Error{
 			Kind:       kind,
 			Op:         op,
 			Detail:     te.Type,
@@ -58,6 +58,10 @@ func (c *GotdClient) mapError(op string, err error) error {
 			Transient:  kind == telerr.Network,
 			Cause:      err,
 		}
+		if kind == telerr.Unauthorized {
+			mapped.LogOut = logOutOf(te)
+		}
+		return mapped
 	}
 
 	var ne net.Error
@@ -170,6 +174,19 @@ func classifyTgErr(e *tgerr.Error) (telerr.Kind, telerr.Reason, time.Duration) {
 	}
 
 	return telerr.Internal, "", 0
+}
+
+// logOutOf says how an Unauthorized error logged the account out. Every 401 is
+// a log out, so anything not named here was ended elsewhere (#297).
+func logOutOf(e *tgerr.Error) telerr.LogOut {
+	switch e.Type {
+	case "USER_DEACTIVATED":
+		return telerr.LogOutDeleted
+	case "AUTH_KEY_DUPLICATED":
+		return telerr.LogOutKeyDropped
+	default:
+		return telerr.LogOutElsewhere
+	}
 }
 
 // rejectionReasons is the closed list of refusals we can explain. It is a list

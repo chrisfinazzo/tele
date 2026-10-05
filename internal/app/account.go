@@ -27,9 +27,15 @@ type account struct {
 	store *store.SQLiteStore
 	owner *core.Owner
 	log   *zap.Logger
+	// tmpDir holds the account's scratch files, and its caches when nothing is
+	// to be kept between runs. Empty when there is none.
+	tmpDir string
 
+	// ctx is the account's lifetime: it ends with stop, or with the host.
+	ctx    context.Context
 	cancel context.CancelFunc
-	// loops counts the connection and the two owner loops started by run.
+	// loops counts what run started: the connection, the two owner loops and
+	// the work the host runs alongside them.
 	loops    sync.WaitGroup
 	stopOnce sync.Once
 }
@@ -86,16 +92,22 @@ func openAccount(d accountDeps) (*account, error) {
 	if d.onAuth != nil {
 		owner.SetOnAuth(d.onAuth)
 	}
-	return &account{store: sqliteStore, owner: owner, log: d.log}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &account{store: sqliteStore, owner: owner, log: d.log, tmpDir: d.tmpDir, ctx: ctx, cancel: cancel}, nil
 }
 
-// run connects and starts the owner's two loops, all under a context of the
-// account's own that ends with stop or with parent. onEnd is told what the
-// connection ended with; it is called once, from the connection's goroutine.
-func (a *account) run(parent context.Context, onEnd func(error)) {
-	ctx, cancel := context.WithCancel(parent)
-	a.cancel = cancel
-	a.loops.Add(3)
+// run connects and starts the owner's two loops, and alongside them the work
+// the host runs for this account, all under the account's context, which ends
+// with stop or with parent. onEnd is told what the connection ended with; it
+// is called once, from the connection's goroutine, and must not wait for stop.
+func (a *account) run(parent context.Context, onEnd func(error), work ...func(context.Context)) {
+	ctx := a.ctx
+	stopWithHost := context.AfterFunc(parent, a.cancel)
+	go func() {
+		<-ctx.Done()
+		stopWithHost()
+	}()
+	a.loops.Add(3 + len(work))
 	go func() {
 		defer a.loops.Done()
 		err := a.owner.Start(ctx)
@@ -111,17 +123,21 @@ func (a *account) run(parent context.Context, onEnd func(error)) {
 		defer a.loops.Done()
 		a.owner.RunOutbox(ctx)
 	}()
+	for _, w := range work {
+		go func() {
+			defer a.loops.Done()
+			w(ctx)
+		}()
+	}
 }
 
-// stop ends the account and waits for it: the connection and the loops, then
-// the owner's own background work, then the database. Once it returns nothing
-// of the account is running and its files may be removed. Safe to call more
-// than once, and on an account that never ran.
+// stop ends the account and waits for it: what run started, then the owner's
+// own background work, then the database. Once it returns nothing of the
+// account is running and its files may be removed. Safe to call more than
+// once, and on an account that never ran.
 func (a *account) stop() {
 	a.stopOnce.Do(func() {
-		if a.cancel != nil {
-			a.cancel()
-		}
+		a.cancel()
 		a.loops.Wait()
 		a.owner.Stop()
 		if err := a.store.Close(); err != nil {

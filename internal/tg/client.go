@@ -92,8 +92,8 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
 	sess := NewFileSession(cfg.Telegram.SessionFile)
 	// Read before connecting, since gotd stores a fresh key as soon as it has
-	// one: whether there was a session decides whether a login has a log out
-	// to explain (#254).
+	// one: whether there was a session decides whether a 401 is a log out that
+	// ends the account or a start with nothing to log out of (#297).
 	stored, _ := sess.LoadSession(ctx)
 	hadSession := len(stored) > 0
 
@@ -302,7 +302,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			},
 		})
 	})
-	return c.dropped.outcome(err, sess, c.log)
+	return c.dropped.outcome(err)
 }
 
 func (c *GotdClient) Updates() <-chan store.Event {

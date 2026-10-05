@@ -28,47 +28,32 @@ const (
 	reasonPasswordInvalid = "That password is not right. Try again."
 )
 
-// The reasons a person who had a session is asked for their number, shown
-// under the field: someone who was reading chats a moment ago should not have
-// to guess why they are logging in (#254).
-const (
-	reasonLoggedOut      = "This session was logged out. Log in again."
-	reasonAccountDeleted = "This Telegram account was deleted. Log in to start again."
-)
-
-// authorize returns the logged-in user, logging in first when the session has
-// been logged out.
+// authorize returns the logged-in user, logging in first when there is no
+// session to speak of.
 //
 // It stands in for gotd's auth.Client.Status, which reads every 401 as "not
 // logged in": a banned account was walked through number and code only to meet
-// the same ban (#254). Here the mapped kind decides, so only a log out leads
-// into the login, and a ban ends the start with its cause. hadSession tells a
-// first start, which has nothing to explain, from a log out.
+// the same ban (#254). Here the mapped kind decides. A session that turns out
+// to be logged out is not logged in on either: the key in it survives the log
+// out, a login would bind to it, and the account's files would pass to whoever
+// logged in. The error goes up instead, and the host ends the account and
+// starts the next one with no session (#297). Only a start with no session -
+// the first, or the one after an account ended - leads into the login.
 func (af *AuthFlow) authorize(ctx context.Context, self func(context.Context) (*tg.User, error),
 	client auth.FlowClient, hadSession bool) (*tg.User, error) {
 	user, err := self(ctx)
-	// A key Telegram dropped cannot log in either; the connection is already
-	// ending, and the session goes with it.
-	if telerr.Of(err) != telerr.Unauthorized || tgerr.Is(err, "AUTH_KEY_DUPLICATED") {
+	if telerr.Of(err) != telerr.Unauthorized || hadSession {
 		return user, err
 	}
-	reason := ""
-	if hadSession {
-		reason = reasonLoggedOut
-		if tgerr.Is(err, "USER_DEACTIVATED") {
-			reason = reasonAccountDeleted
-		}
-	}
-	if err := af.login(ctx, client, reason); err != nil {
+	if err := af.login(ctx, client); err != nil {
 		return nil, err
 	}
 	return self(ctx)
 }
 
-// login logs in through client, asking the person through af. reason is shown
-// under the number the first time it is asked, and is empty on a first start.
-func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient, reason string) error {
-	phone, sent, err := af.sendCode(ctx, client, reason)
+// login logs in through client, asking the person through af.
+func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient) error {
+	phone, sent, err := af.sendCode(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -92,7 +77,8 @@ func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient, reason st
 }
 
 // sendCode asks for the number until Telegram accepts it and sends a code.
-func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient, reason string) (string, tg.AuthSentCodeClass, error) {
+func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient) (string, tg.AuthSentCodeClass, error) {
+	reason := ""
 	for {
 		phone, err := af.request(ctx, AuthRequest{Step: AuthStepPhone, Err: reason})
 		if err != nil {

@@ -3,8 +3,6 @@ package tg
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/gotd/td/tgerr"
@@ -38,44 +36,23 @@ func TestMapError_AnOrdinaryLogOutLeavesTheConnection(t *testing.T) {
 	assert.NoError(t, ctx.Err())
 }
 
-// The session file goes only once the connection is over, since gotd may still
-// write the dead key back while it runs. What is left to say is that it went.
-func TestDroppedKey_RemovesTheSessionOnceTheConnectionEnds(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0o600))
+// The connection ends with the account: what it ended with says the key went,
+// and the host takes the session with the rest of the account (#297).
+func TestDroppedKey_EndsTheConnectionAsALogOut(t *testing.T) {
 	c := testClient()
 	c.dropped.report()
 
-	err := c.dropped.outcome(context.Canceled, NewFileSession(path), c.log)
+	err := c.dropped.outcome(context.Canceled)
 
 	e, ok := telerr.As(err)
 	require.True(t, ok)
 	assert.Equal(t, telerr.Unauthorized, e.Kind)
-	assert.True(t, e.SessionRemoved)
-	assert.NoFileExists(t, path)
+	assert.Equal(t, telerr.LogOutKeyDropped, e.LogOut)
 }
 
 func TestDroppedKey_LeavesAnyOtherEndingAlone(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0o600))
 	c := testClient()
 	ended := errors.New("connection lost")
 
-	err := c.dropped.outcome(ended, NewFileSession(path), c.log)
-
-	assert.Same(t, ended, err)
-	assert.FileExists(t, path)
-}
-
-// A key Telegram has dropped cannot log in, so the login is not offered: the
-// connection is already ending (#254).
-func TestAuthorize_ADuplicatedKeyIsOfferedNoLogin(t *testing.T) {
-	af := NewAuthFlow()
-	self := &scriptedSelf{errs: []error{refused(406, "AUTH_KEY_DUPLICATED")}}
-	client := &scriptedLogin{}
-
-	_, err := af.authorize(context.Background(), self.self, client, true)
-
-	require.Error(t, err)
-	assert.Zero(t, client.sends)
+	assert.Same(t, ended, c.dropped.outcome(ended))
 }

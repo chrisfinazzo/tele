@@ -1,6 +1,7 @@
 package screens_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -107,6 +108,38 @@ func TestLogin_PasswordIsNotTrimmed(t *testing.T) {
 	m, _ := screens.NewLoginModel(af).Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPassword})
 
 	assert.Equal(t, " secret ", submit(t, af, typed(m.(screens.LoginModel), " secret ")))
+}
+
+// A notice says why the person is at the login. It is shown under the number
+// the first time the number is asked for, and gives way to a reason the number
+// is asked again (#297).
+func TestLogin_NoticeShowsUnderTheFirstNumberStep(t *testing.T) {
+	m := screens.NewLoginModel(internaltg.NewAuthFlow())
+	m.SetNotice("This session was logged out.")
+
+	first, _ := m.Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPhone})
+	assert.Contains(t, first.View().Content, "This session was logged out.")
+
+	again, _ := first.Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPhone, Err: "That number is not valid."})
+	assert.NotContains(t, again.View().Content, "This session was logged out.")
+	assert.Contains(t, again.View().Content, "That number is not valid.")
+}
+
+// The wait for the next login step ends with the account: a login nobody
+// finished must not hold the account's end up forever (#297).
+func TestWaitForAuthRequest_EndsWithTheAccount(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan tea.Msg, 1)
+	go func() { done <- screens.WaitForAuthRequest(ctx, internaltg.NewAuthFlow(), make(chan struct{}))() }()
+
+	select {
+	case msg := <-done:
+		assert.Nil(t, msg)
+	case <-time.After(time.Second):
+		require.Fail(t, "the wait outlived the account")
+	}
 }
 
 // ensure tea import is used (Blink cmd returns tea.Cmd)

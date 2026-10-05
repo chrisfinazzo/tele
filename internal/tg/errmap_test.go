@@ -121,6 +121,26 @@ func TestMapError_ARefusalCarriesItsReasonAndItsEvidence(t *testing.T) {
 	assert.False(t, e.Transient)
 }
 
+// Every log out says how it happened: that is what the person is told on the
+// way back to the login (#297).
+func TestMapError_ALogOutSaysHowItHappened(t *testing.T) {
+	for typ, want := range map[string]telerr.LogOut{
+		"AUTH_KEY_UNREGISTERED": telerr.LogOutElsewhere,
+		"SESSION_REVOKED":       telerr.LogOutElsewhere,
+		"SESSION_EXPIRED":       telerr.LogOutElsewhere,
+		"USER_DEACTIVATED":      telerr.LogOutDeleted,
+	} {
+		e, ok := telerr.As(testClient().mapError("users.getUsers", tgerr.New(401, typ)))
+		require.True(t, ok)
+		assert.Equal(t, want, e.LogOut, typ)
+	}
+	e, _ := telerr.As(testClient().mapError("users.getUsers", tgerr.New(406, "AUTH_KEY_DUPLICATED")))
+	assert.Equal(t, telerr.LogOutKeyDropped, e.LogOut)
+
+	e, _ = telerr.As(testClient().mapError("messages.sendMessage", tgerr.New(403, "CHAT_WRITE_FORBIDDEN")))
+	assert.Empty(t, e.LogOut, "only a log out carries one")
+}
+
 func TestMapError_NilStaysNil(t *testing.T) {
 	assert.NoError(t, testClient().mapError("messages.sendMessage", nil))
 }

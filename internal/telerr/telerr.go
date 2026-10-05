@@ -81,6 +81,22 @@ const (
 	ReasonMarkupTooLong Reason = "markup_too_long"
 )
 
+// LogOut refines Unauthorized: how the account was logged out. Closed, like
+// Reason, so what a person is told is decided against a fixed list rather than
+// by matching Telegram's error types.
+type LogOut string
+
+const (
+	// LogOutElsewhere means the session was ended from another device or by
+	// Telegram.
+	LogOutElsewhere LogOut = "elsewhere"
+	// LogOutDeleted means the Telegram account behind the session was deleted.
+	LogOutDeleted LogOut = "deleted"
+	// LogOutKeyDropped means Telegram invalidated the session's key because it
+	// was used from two connections at once.
+	LogOutKeyDropped LogOut = "key_dropped"
+)
+
 // Error is the only error shape that leaves internal/tg.
 //
 // The fields are exported and Kind is a string because in v2 this value is the
@@ -101,11 +117,9 @@ type Error struct {
 	RetryAfter time.Duration `json:"retry_after,omitempty"`
 	// Transient is set for Network only, and reports whether a retry may help.
 	Transient bool `json:"transient,omitempty"`
-	// SessionRemoved is set for Unauthorized only, when the owner removed the
-	// session itself because Telegram had invalidated its key and no login could
-	// use it. It reports what the owner did rather than what Telegram said: the
-	// next start begins a new account, and a client says so.
-	SessionRemoved bool `json:"session_removed,omitempty"`
+	// LogOut is set for Unauthorized only, and says how the account was logged
+	// out: it is what a person is told on the way back to the login (#297).
+	LogOut LogOut `json:"log_out,omitempty"`
 	// Cause is the underlying error. It is not serialisable and never crosses a
 	// process boundary, but it must be preserved in-process: gotd recognises
 	// its own errors through the unwrap chain.

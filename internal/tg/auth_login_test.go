@@ -102,7 +102,7 @@ func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
 		{step: AuthStepCode, reason: reasonCodeInvalid, answer: "12345"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client, ""))
+	require.NoError(t, af.login(context.Background(), client))
 	assert.Equal(t, 1, client.sends)
 	assert.Equal(t, 2, client.signIns)
 }
@@ -117,7 +117,7 @@ func TestLogin_ExpiredCodeSendsANewOne(t *testing.T) {
 		{step: AuthStepCode, reason: reasonCodeExpired, answer: "22222"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client, ""))
+	require.NoError(t, af.login(context.Background(), client))
 	assert.Equal(t, 2, client.sends)
 }
 
@@ -130,7 +130,7 @@ func TestLogin_InvalidNumberIsAskedAgain(t *testing.T) {
 		{step: AuthStepCode, answer: "12345"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client, ""))
+	require.NoError(t, af.login(context.Background(), client))
 	assert.Equal(t, 2, client.sends)
 }
 
@@ -149,7 +149,7 @@ func TestLogin_WrongPasswordIsAskedAgain(t *testing.T) {
 		{step: AuthStepPassword, reason: reasonPasswordInvalid, answer: "right"},
 	})
 
-	require.NoError(t, af.login(context.Background(), client, ""))
+	require.NoError(t, af.login(context.Background(), client))
 	assert.Equal(t, 2, client.passwords)
 }
 
@@ -164,7 +164,7 @@ func TestLogin_OtherRefusalEndsTheLogin(t *testing.T) {
 		{step: AuthStepCode, answer: "12345"},
 	})
 
-	err := af.login(context.Background(), client, "")
+	err := af.login(context.Background(), client)
 
 	require.Error(t, err)
 	assert.Equal(t, telerr.RateLimited, telerr.Of(err))
@@ -183,7 +183,7 @@ func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
 			{step: AuthStepCode, answer: "12345"},
 		})
 
-		require.NoError(t, af.login(context.Background(), client, ""))
+		require.NoError(t, af.login(context.Background(), client))
 		assert.Equal(t, 2, client.sends)
 	}
 }
@@ -195,7 +195,7 @@ func TestLogin_BannedNumberEndsTheLogin(t *testing.T) {
 	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_BANNED")}}
 	playScreen(t, af, []ask{{step: AuthStepPhone, answer: "+10000000000"}})
 
-	err := af.login(context.Background(), client, "")
+	err := af.login(context.Background(), client)
 
 	require.Error(t, err)
 	assert.Equal(t, telerr.AccountBanned, telerr.Of(err))
@@ -228,38 +228,38 @@ func TestAuthorize_ALoggedInSessionSkipsTheLogin(t *testing.T) {
 	assert.Zero(t, client.sends)
 }
 
-// A session that was logged out leads into the login, and the phone step says
-// why the person is there: someone who was reading chats a moment ago should
-// not have to guess (#254).
-func TestAuthorize_ALogOutLogsInWithTheCause(t *testing.T) {
+// A session found logged out ends its account rather than logging in on its
+// key: a login would bind to the same key, and the account's files would pass
+// to whoever logged in (#297). What it ends with says how it was logged out,
+// which is what the person is told on the way back to the login.
+func TestAuthorize_ALogOutEndsTheAccountRatherThanLoggingIn(t *testing.T) {
 	tests := []struct {
 		name   string
 		err    error
-		reason string
+		logOut telerr.LogOut
 	}{
-		{"terminated elsewhere", refused(401, "AUTH_KEY_UNREGISTERED"), reasonLoggedOut},
-		{"revoked", refused(401, "SESSION_REVOKED"), reasonLoggedOut},
-		{"telegram account deleted", refused(401, "USER_DEACTIVATED"), reasonAccountDeleted},
+		{"terminated elsewhere", refused(401, "AUTH_KEY_UNREGISTERED"), telerr.LogOutElsewhere},
+		{"revoked", refused(401, "SESSION_REVOKED"), telerr.LogOutElsewhere},
+		{"telegram account deleted", refused(401, "USER_DEACTIVATED"), telerr.LogOutDeleted},
+		{"key dropped", refused(406, "AUTH_KEY_DUPLICATED"), telerr.LogOutKeyDropped},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			af := NewAuthFlow()
-			self := &scriptedSelf{errs: []error{tt.err}}
-			playScreen(t, af, []ask{
-				{step: AuthStepPhone, reason: tt.reason, answer: "+10000000000"},
-				{step: AuthStepCode, answer: "12345"},
-			})
+			client := &scriptedLogin{}
 
-			user, err := af.authorize(context.Background(), self.self, &scriptedLogin{}, true)
+			_, err := af.authorize(context.Background(), (&scriptedSelf{errs: []error{tt.err}}).self, client, true)
 
-			require.NoError(t, err)
-			assert.Equal(t, int64(42), user.ID)
-			assert.Equal(t, 2, self.calls, "the user is asked for again once logged in")
+			e, ok := telerr.As(err)
+			require.True(t, ok)
+			assert.Equal(t, telerr.Unauthorized, e.Kind)
+			assert.Equal(t, tt.logOut, e.LogOut)
+			assert.Zero(t, client.sends, "no login on the old key")
 		})
 	}
 }
 
-// With no session there was nothing to log out of: a first start says nothing.
+// With no session there was nothing to log out of: a first start logs in.
 func TestAuthorize_NoSessionLogsInWithoutACause(t *testing.T) {
 	af := NewAuthFlow()
 	self := &scriptedSelf{errs: []error{refused(401, "AUTH_KEY_UNREGISTERED")}}

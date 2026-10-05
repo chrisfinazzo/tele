@@ -63,6 +63,44 @@ func TestReconcile_ChangedIdentityRemovesOnlyAccountOwnedFiles(t *testing.T) {
 	assertFileExists(t, filepath.Join(stateDir, "tele.lock"))
 }
 
+// An account that ends while tele runs takes everything of its own with it:
+// the session, whose key a new login would otherwise bind to, the identity
+// recorded for it, and its footprint. What belongs to the person or to the
+// state directory stays (#297).
+func TestEnd_RemovesTheSessionAndTheFootprintAndNothingElse(t *testing.T) {
+	stateDir := t.TempDir()
+	sessionFile := filepath.Join(stateDir, "session.json")
+	writeSession(t, sessionFile, []byte("account1"))
+	require.NoError(t, accountstate.Record(stateDir, sessionFile))
+	for _, name := range []string{"state.db", "state.db-wal", "state.db-shm"} {
+		writeFile(t, filepath.Join(stateDir, name), "private")
+	}
+	writeFile(t, filepath.Join(stateDir, "config.yml"), "kept")
+	writeFile(t, filepath.Join(stateDir, "tele.lock"), "kept")
+	mediaDir, avatarDir := seedCaches(t, stateDir)
+
+	require.NoError(t, accountstate.End(stateDir, sessionFile))
+
+	assert.NoFileExists(t, sessionFile)
+	assert.NoFileExists(t, filepath.Join(stateDir, "account.id"))
+	for _, name := range []string{"state.db", "state.db-wal", "state.db-shm"} {
+		assert.NoFileExists(t, filepath.Join(stateDir, name))
+	}
+	assert.NoDirExists(t, mediaDir)
+	assert.NoDirExists(t, avatarDir)
+	assertFileExists(t, filepath.Join(stateDir, "config.yml"))
+	assertFileExists(t, filepath.Join(stateDir, "tele.lock"))
+}
+
+// Ending an account that has no session left, such as one whose key Telegram
+// dropped and tele already removed, is not a failure.
+func TestEnd_WithNoSessionLeft(t *testing.T) {
+	stateDir := t.TempDir()
+	seedCaches(t, stateDir)
+
+	assert.NoError(t, accountstate.End(stateDir, filepath.Join(stateDir, "session.json")))
+}
+
 func TestReconcile_MissingOrUnreadableIdentityClearsUpgradeState(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
