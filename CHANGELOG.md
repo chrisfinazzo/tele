@@ -44,6 +44,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   at once is removed with the account, and the login follows with the reason.
   It used to end on `session expired`, and every restart met the same dead
   session (#254, #297).
+- A file attached to a reply no longer sits flush against the reply preview
+  in the composer, and the attachment line takes the theme's background
+  instead of showing the terminal's through it (#295).
 
 ## [1.11.10] - 2026-10-04
 
