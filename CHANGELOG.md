@@ -19,7 +19,21 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   config, the themes and the log. If Telegram cannot be reached, it says the
   session will stay in your devices list until it expires or is ended there,
   and asks whether to log out here anyway. The login screen follows at once,
-  with no restart (#297).
+  with no restart (#297). The settings tele reads at startup - the state
+  directory, the proxy, the cache sizes, the image mode and the app key - keep
+  the values it started with for whoever logs in next, whatever the config
+  says by then (#239).
+
+### Changed
+
+- A config that names only one of `telegram.api_id` and `telegram.api_hash`
+  stops tele at startup and says to set both or neither. The missing half used
+  to be taken from the key the build carries, which made a key nobody issued
+  (#239).
+- With no app key in the config, the settings overlay's API ID and API hash
+  rows say which built-in key is in force, `built-in (official build)` or
+  `built-in (published)`. They used to show the built-in key's id until the
+  first setting was changed, and `0` and `not set` after it (#239).
 
 ### Fixed
 
