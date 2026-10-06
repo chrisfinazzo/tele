@@ -211,8 +211,9 @@ const (
 // NewRootModel builds the TUI. It takes no Telegram client and no store: every
 // call a client makes goes through the Owner, and everything it shows arrives
 // from it, so nothing here can reach the connection or the data directly
-// (#198, #278).
-func NewRootModel(historyLimit int, verbose bool) RootModel {
+// (#198, #278). Settings arrive through WithConfig, the same path a reload
+// takes (#239).
+func NewRootModel(verbose bool) RootModel {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
@@ -237,7 +238,6 @@ func NewRootModel(historyLimit int, verbose bool) RootModel {
 		vimState:       keys.NewVimState(),
 		keyMap:         km,
 		matcher:        keys.NewMatcher(km),
-		historyLimit:   historyLimit,
 		verbose:        verbose,
 		imageCache:     imagecache.New(thumbCacheCap),
 		fullImageCache: imagecache.New(fullCacheCap),

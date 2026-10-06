@@ -12,7 +12,7 @@ import (
 
 func rootWithToastStack(t *testing.T) RootModel {
 	t.Helper()
-	m := NewRootModel(50, false).WithScreen(ScreenMain)
+	m := NewRootModel(false).WithScreen(ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return newM.(RootModel)
 }

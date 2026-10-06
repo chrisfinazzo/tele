@@ -173,13 +173,13 @@ func TestMarkReadFailure_UsesTheRenderer(t *testing.T) {
 }
 
 func TestHandleFileDownloadDone_EmptyTextRaisesNoToast(t *testing.T) {
-	m := NewRootModel(50, false)
+	m := NewRootModel(false)
 	m2, _ := m.handleFileDownloadDone(fileDownloadDoneMsg{serial: 1, text: ""})
 	assert.True(t, m2.toasts.Empty(), "a cancelled download must not raise an empty toast")
 }
 
 func TestHandleFileDownloadDone_TextStillRaisesToast(t *testing.T) {
-	m := NewRootModel(50, false)
+	m := NewRootModel(false)
 	m2, _ := m.handleFileDownloadDone(fileDownloadDoneMsg{serial: 1, text: "Saved to /tmp/x.jpg"})
 	assert.False(t, m2.toasts.Empty())
 }

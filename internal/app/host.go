@@ -82,7 +82,7 @@ func (a *App) openNext() (*account, uint64, error) {
 // to the start of the process, so only the first account's model has them.
 func (a *App) buildRoot(acct *account, first bool) ui.RootModel {
 	cfg := a.cfg()
-	root := ui.NewRootModel(cfg.UI.HistoryLimit, a.verbose)
+	root := ui.NewRootModel(a.verbose)
 	// The client attaches: the focus it reports belongs to it, everything else
 	// is the owner's (#192). It ends with the owner.
 	root = root.WithContext(acct.ctx).WithImageMode(acct.startup.imageMode).WithConfig(cfg).WithKeyMap(a.keyMap).WithOwner(acct.owner.Attach()).

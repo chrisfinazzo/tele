@@ -50,7 +50,7 @@ func TestAFullPhotoPrefetchAsksForNoProgress(t *testing.T) {
 }
 
 func TestDownloadProgressMovesTheIndicatorItBelongsTo(t *testing.T) {
-	m := NewRootModel(50, false)
+	m := NewRootModel(false)
 	m.statusBar.SetWidth(120)
 	serial := m.statusBar.StartDownload("downloading video…")
 
@@ -61,7 +61,7 @@ func TestDownloadProgressMovesTheIndicatorItBelongsTo(t *testing.T) {
 }
 
 func TestDownloadProgressForAnotherDownloadIsIgnored(t *testing.T) {
-	m := NewRootModel(50, false)
+	m := NewRootModel(false)
 	m.statusBar.SetWidth(120)
 	stale := m.statusBar.StartDownload("first")
 	m.statusBar.StartDownload("second")

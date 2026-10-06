@@ -14,7 +14,7 @@ import (
 )
 
 func nextAccountRoot() RootModel {
-	m := NewRootModel(50, false)
+	m := NewRootModel(false)
 	m.SetLoginModel(screens.NewLoginModel(internaltg.NewAuthFlow()))
 	return m
 }

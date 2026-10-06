@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
@@ -508,11 +509,22 @@ func (o *testOwner) drain(m ui.RootModel) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
+// testConfig is the config a model under test runs on: the given history limit
+// and the toast stack a model is built with, everything else left at zero as
+// the model's own defaults stand in for it.
+func testConfig(historyLimit int) *config.Config {
+	cfg := &config.Config{}
+	cfg.UI.HistoryLimit = historyLimit
+	cfg.UI.Toasts.ErrorZone, cfg.UI.Toasts.NotifyZone = "bottom-right", "top-right"
+	cfg.UI.Toasts.MaxVisible = 3
+	return cfg
+}
+
 // newRoot builds a model wired to a stand-in owner, the way app.Run wires the
 // real one. Tests that pass no store get no owner, matching a model that has not
 // reached the main screen.
 func newRoot(st store.Store, historyLimit int, verbose bool) ui.RootModel {
-	m := ui.NewRootModel(historyLimit, verbose)
+	m := ui.NewRootModel(verbose).WithConfig(testConfig(historyLimit))
 	if st != nil {
 		m = m.WithOwner(newTestOwner(st))
 	}

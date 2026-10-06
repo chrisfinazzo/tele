@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
@@ -479,7 +480,10 @@ func (o *ownerStub) drain(m RootModel) (tea.Model, tea.Cmd) {
 // newRootInternal builds a model wired to the stub owner, as app.Run wires the
 // real one.
 func newRootInternal(st store.Store, historyLimit int) RootModel {
-	m := NewRootModel(historyLimit, false)
+	cfg := &config.Config{}
+	cfg.UI.HistoryLimit = historyLimit
+	cfg.UI.Toasts.MaxVisible = 3
+	m := NewRootModel(false).WithConfig(cfg)
 	if st != nil {
 		m = m.WithOwner(newOwnerStub(st))
 	}
