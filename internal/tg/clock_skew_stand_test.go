@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -57,7 +58,6 @@ func TestStand_WithoutCalibrationASkewedClockHangs(t *testing.T) {
 	// The watch measures against the clock gotd checks with. In the app both are
 	// the system clock; here only gotd's is moved, so the watch is given it too.
 	skew.now = clk.Now
-	skew.SetReport(r.report)
 	client := telegram.NewClient(1, "hash", telegram.Options{
 		PublicKeys:     c.Keys(),
 		Resolver:       c.Resolver(),
@@ -68,16 +68,26 @@ func TestStand_WithoutCalibrationASkewedClockHangs(t *testing.T) {
 		Logger:         logzap.New(watchClockSkew(zap.NewNop(), skew)),
 	})
 
-	runCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+	// The window is counted from the first rejected message rather than from the
+	// start: the key exchange before it can take seconds under -race on a busy
+	// runner. Five seconds after it is time enough for a gotd that corrects its
+	// clock from that message to connect.
+	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
+	var once sync.Once
+	skew.SetReport(func(d time.Duration) {
+		r.report(d)
+		once.Do(func() { time.AfterFunc(5*time.Second, stop) })
+	})
 	var reached atomic.Bool
-	err := client.Run(runCtx, func(context.Context) error {
+	// gotd ends a cancelled run without an error, so what Run returns says
+	// nothing here: only whether the function was reached does.
+	_ = client.Run(runCtx, func(context.Context) error {
 		reached.Store(true)
 		return nil
 	})
 
 	assert.False(t, reached.Load(), "gotd connected with a skewed clock: it may correct for it now, see docs/gotd-workarounds.md")
-	assert.Error(t, err)
 	got := r.all()
 	require.NotEmpty(t, got, "gotd dropped messages without the entry the watch reads: its wording changed")
 	assert.InDelta(t, float64(ahead), float64(got[0]), float64(5*time.Second))
