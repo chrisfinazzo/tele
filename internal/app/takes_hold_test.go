@@ -65,12 +65,7 @@ func startNextAfterReload(t *testing.T, key appkey.Key, setting, before, after s
 		require.Fail(t, "the next account never connected")
 	}
 	next, _ := a.current()
-	t.Cleanup(func() {
-		cancel()
-		a.switching.Lock()
-		next.stop()
-		a.switching.Unlock()
-	})
+	t.Cleanup(cancel)
 	return afterReload{rig: h, first: first, next: next, firstDatabase: firstDatabase, endpoint: endpoint}
 }
 

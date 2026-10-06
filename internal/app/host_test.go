@@ -116,6 +116,14 @@ func newTestHost(t *testing.T, first core.Connection, key appkey.Key, body strin
 	}
 	_, _, err = h.app.openNext()
 	require.NoError(t, err)
+	// Runs before the temp directories are removed: an account's database
+	// still open then cannot be removed on Windows.
+	t.Cleanup(func() {
+		h.app.switching.Lock()
+		defer h.app.switching.Unlock()
+		last, _ := h.app.current()
+		last.stop()
+	})
 	return h
 }
 
@@ -160,11 +168,6 @@ func TestHost_ALogOutStartsTheNextAccountWithNothingOfTheLast(t *testing.T) {
 	var v string
 	err = next.store.DB().QueryRow(`SELECT value FROM metadata WHERE key = 'mark'`).Scan(&v)
 	assert.Error(t, err, "the next account found the last one's data")
-
-	cancel()
-	a.switching.Lock()
-	next.stop()
-	a.switching.Unlock()
 }
 
 // A banned account's connection is over before the person decides anything.
@@ -184,12 +187,6 @@ func TestHost_LeavingABannedAccountStartsTheNextOne(t *testing.T) {
 
 	assert.Equal(t, core.EndBanned, ended.Ended.Reason)
 	assert.NoError(t, a.lastExitErr())
-
-	cancel()
-	next, _ := a.current()
-	a.switching.Lock()
-	next.stop()
-	a.switching.Unlock()
 }
 
 // The app key a build carries is the process's, not the file's: an account
@@ -215,12 +212,6 @@ func TestHost_TheNextAccountConnectsWithTheBuiltInKeyAfterAReload(t *testing.T) 
 	case <-time.After(3 * time.Second):
 		require.Fail(t, "the next account never connected")
 	}
-
-	cancel()
-	last, _ := a.current()
-	a.switching.Lock()
-	last.stop()
-	a.switching.Unlock()
 }
 
 // Whatever the ended account's bridges still had to say is marked with its
