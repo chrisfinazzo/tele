@@ -35,13 +35,17 @@ var _ Attachment = (*core.Attachment)(nil)
 // Host is the host's own end of a connection: what it says of itself, and the
 // calls about it rather than about an account, answered with no owner seated
 // as well (#315).
+//
+// Restart answers, and says what to do once the answer is written: a host
+// that stopped first would leave the client that asked without it. What it
+// says must not block, since the connection is not done until it returns.
 type Host interface {
 	Hello() wire.Hello
 	Settings() wire.HostSettings
 	SetSetting(wire.SetParams) wire.SetResult
 	Reload() wire.ReloadResult
 	Status() wire.HostStatus
-	Restart() wire.RestartResult
+	Restart() (wire.RestartResult, func())
 	Uninstall() wire.UninstallResult
 }
 
@@ -206,7 +210,7 @@ func (c *served) read(ctx context.Context, dec *wire.Decoder, running *sync.Wait
 
 // request makes the call f asks for.
 func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGroup) error {
-	if answer, ok, err := c.hostCall(f); ok {
+	if answer, then, ok, err := c.hostCall(f); ok {
 		if err != nil {
 			return err
 		}
@@ -215,6 +219,9 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 			return c.fail(f.ID, err)
 		}
 		_ = c.enc.Encode(wire.Reply(f.ID, raw))
+		if then != nil {
+			then()
+		}
 		return nil
 	}
 	call, ok := protocol.Calls[f.Method]
@@ -264,29 +271,30 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 }
 
 // hostCall makes f when it is a call about the host, and reports whether it
-// was. These run on the reading goroutine, in the order they were asked: each
-// is a read or a write of one file, and a set followed by a reload must find
-// the set done.
-func (c *served) hostCall(f wire.Frame) (answer any, ok bool, err error) {
+// was, and what to do once it is answered. These run on the reading
+// goroutine, in the order they were asked: each is a read or a write of one
+// file, and a set followed by a reload must find the set done.
+func (c *served) hostCall(f wire.Frame) (answer any, then func(), ok bool, err error) {
 	switch f.Method {
 	case wire.MethodSettings:
-		return c.host.Settings(), true, nil
+		return c.host.Settings(), nil, true, nil
 	case wire.MethodReload:
-		return c.host.Reload(), true, nil
+		return c.host.Reload(), nil, true, nil
 	case wire.MethodStatus:
-		return c.host.Status(), true, nil
+		return c.host.Status(), nil, true, nil
 	case wire.MethodRestart:
-		return c.host.Restart(), true, nil
+		answer, then := c.host.Restart()
+		return answer, then, true, nil
 	case wire.MethodUninstall:
-		return c.host.Uninstall(), true, nil
+		return c.host.Uninstall(), nil, true, nil
 	case wire.MethodSet:
 		var p wire.SetParams
 		if err := json.Unmarshal(f.Params, &p); err != nil || p.Key == "" {
-			return nil, true, fmt.Errorf("%w: %s names no setting", wire.ErrProtocol, f.Method)
+			return nil, nil, true, fmt.Errorf("%w: %s names no setting", wire.ErrProtocol, f.Method)
 		}
-		return c.host.SetSetting(p), true, nil
+		return c.host.SetSetting(p), nil, true, nil
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }
 
 // reply answers request id with what call answered. A reply that cannot be

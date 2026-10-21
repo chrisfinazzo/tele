@@ -56,13 +56,17 @@ func restartingEnd(t *testing.T, kept wire.Keeper) (*HostEnd, *int) {
 }
 
 // A service restarts when a newer client asks: its service manager starts it
-// again, on the binary installed now (#183).
+// again, on the binary installed now (#183). It stops only once the client
+// asking has its answer.
 func TestHostEnd_AServiceRestartsWhenAsked(t *testing.T) {
 	e, restarts := restartingEnd(t, wire.KeptByService)
 
-	got := e.Restart()
+	got, then := e.Restart()
 
 	assert.Empty(t, got.Refused)
+	require.NotNil(t, then)
+	assert.Zero(t, *restarts, "not before the answer is written")
+	then()
 	assert.Equal(t, 1, *restarts)
 }
 
@@ -72,9 +76,10 @@ func TestHostEnd_OnlyAServiceRestarts(t *testing.T) {
 	for _, kept := range []wire.Keeper{wire.KeptByWindow, wire.KeptByDaemon} {
 		e, restarts := restartingEnd(t, kept)
 
-		got := e.Restart()
+		got, then := e.Restart()
 
 		assert.NotEmpty(t, got.Refused, kept)
+		assert.Nil(t, then, kept)
 		assert.Zero(t, *restarts, kept)
 	}
 }

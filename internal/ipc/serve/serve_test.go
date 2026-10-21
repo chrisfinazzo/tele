@@ -27,8 +27,24 @@ func (helloHost) Settings() wire.HostSettings              { return wire.HostSet
 func (helloHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetResult{} }
 func (helloHost) Reload() wire.ReloadResult                { return wire.ReloadResult{} }
 func (helloHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
-func (helloHost) Restart() wire.RestartResult              { return wire.RestartResult{} }
+func (helloHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (helloHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+
+// restartingHost is a service that, asked to restart, stops: it tells the
+// client so and waits until the connection is gone, as a host does when it
+// stops before the client has read the answer.
+type restartingHost struct {
+	helloHost
+	att  *core.Attachment
+	gone <-chan struct{}
+}
+
+func (h restartingHost) Restart() (wire.RestartResult, func()) {
+	return wire.RestartResult{}, func() {
+		h.att.Tell(core.HostStopping{Reason: core.StopRestart})
+		<-h.gone
+	}
+}
 
 // rawClient is a client the test plays by hand, against a host serving a
 // real attachment.
@@ -109,6 +125,34 @@ func TestAHostRefusesACallBeforeHello(t *testing.T) {
 	require.NoError(t, c.enc.Encode(wire.Request(1, "Chats", params)))
 
 	c.refused(t)
+}
+
+// A service asked to restart answers before it stops: the client that asked
+// hears that it agreed, then that it is stopping (#183).
+func TestAServiceAnswersARestartBeforeItStops(t *testing.T) {
+	client, conn := net.Pipe()
+	t.Cleanup(func() { _ = client.Close() })
+	gone := make(chan struct{})
+	att := core.NewAttachment()
+	go func() { _ = serve.Conn(context.Background(), conn, att, restartingHost{att: att, gone: gone}) }()
+	c := rawClient{conn: client, dec: wire.NewDecoder(client), enc: wire.NewEncoder(client)}
+	c.greet(t)
+
+	require.NoError(t, c.enc.Encode(wire.Request(2, wire.MethodRestart, json.RawMessage(`null`))))
+
+	var frames []wire.Frame
+	for {
+		f, err := c.dec.Decode()
+		if err != nil {
+			break
+		}
+		frames = append(frames, f)
+	}
+	close(gone)
+	require.Len(t, frames, 2, "%+v", frames)
+	assert.Equal(t, uint64(2), frames[0].ID, "the answer comes first")
+	assert.Nil(t, frames[0].Error)
+	assert.NotEmpty(t, frames[1].Event, "then the host says it is stopping")
 }
 
 // A subscription id that does not grow could be read as one already

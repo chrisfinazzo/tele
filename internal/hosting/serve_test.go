@@ -32,7 +32,7 @@ func (helloHost) Settings() wire.HostSettings              { return wire.HostSet
 func (helloHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetResult{} }
 func (helloHost) Reload() wire.ReloadResult                { return wire.ReloadResult{} }
 func (helloHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
-func (helloHost) Restart() wire.RestartResult              { return wire.RestartResult{} }
+func (helloHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (helloHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
 
 // noConn is a connection to Telegram nothing in these tests reaches.
