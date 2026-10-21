@@ -358,10 +358,11 @@ func (c *Config) resolveState(defaultStateDir string) {
 	c.Telegram.SessionFile = filepath.Join(c.StateDir, "session.json")
 }
 
-// ExpandTilde replaces a leading ~/ with the user home directory. Paths that do
-// not start with ~/ are returned unchanged.
+// ExpandTilde replaces a leading ~/ with the user home directory, and a ~
+// followed by the platform's own separator, which is ~\ on Windows. Other paths
+// are returned unchanged.
 func ExpandTilde(path string) string {
-	if !strings.HasPrefix(path, "~/") {
+	if !strings.HasPrefix(path, "~/") && !strings.HasPrefix(path, "~"+string(filepath.Separator)) {
 		return path
 	}
 	home, err := os.UserHomeDir()
