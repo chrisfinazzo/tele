@@ -111,6 +111,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   holds the connection, and a mention it has none for is sent as plain text
   (#208).
 
+### Fixed
+
+- On Windows, the default config file is read from and written to
+  `~\.config\tele\config.yml` in the home directory, rather than under a
+  directory named `~` in whichever directory tele was started from.
+
 ## [1.11.13] - 2026-10-13
 
 ### Fixed
