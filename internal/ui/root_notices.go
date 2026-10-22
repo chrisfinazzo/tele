@@ -61,6 +61,35 @@ func (m RootModel) handleNoticeKey() (RootModel, bool) {
 	return m, true
 }
 
+// handleNoticeAnswer consumes a key press while a notice that asks is up. Only
+// y, n and Esc answer it, and an answer dismisses it either way; every other
+// key is swallowed, since a question asked once must not be answered by a key
+// pressed out of habit. The bool reports whether the head of the queue asks.
+func (m RootModel) handleNoticeAnswer(msg tea.KeyPressMsg) (RootModel, tea.Cmd, bool) {
+	if !m.noticeActive() || !m.noticeQueue[0].Asks() {
+		return m, nil, false
+	}
+	var cmd tea.Cmd
+	switch msg.String() {
+	case "y":
+		ctx, yes := m.ctx, m.noticeQueue[0].Yes
+		cmd = func() tea.Msg {
+			_, _ = yes(ctx)
+			return nil
+		}
+	case "n", "esc":
+	default:
+		return m, nil, true
+	}
+	m.noticeSeen.MarkSeen(m.noticeQueue[0].ID)
+	m.noticeQueue = m.noticeQueue[1:]
+	m.noticeLeft = 0
+	if len(m.noticeQueue) > 0 {
+		m.noticeLeft = int(m.noticeQueue[0].Delay.Seconds())
+	}
+	return m, cmd, true
+}
+
 // noticeView renders the head of the queue centred over dimmed content.
 func (m RootModel) noticeView(content string) string {
 	n := m.noticeQueue[0]
@@ -72,5 +101,8 @@ func (m RootModel) noticeView(content string) string {
 		maxW = 24
 	}
 	box := components.RenderNoticeBox(n.Title, n.Body, m.noticeLeft, maxW)
+	if n.Asks() {
+		box = components.RenderDialog(n.Title, n.Body, "y / n", maxW)
+	}
 	return overlayCenter(dimBackground(content), box, m.width, m.height)
 }

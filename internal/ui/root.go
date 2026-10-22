@@ -781,7 +781,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// key input
 	case tea.KeyPressMsg:
 		// A startup notice swallows every key until its countdown ends, then
-		// consumes one more to dismiss itself.
+		// consumes one more to dismiss itself; one that asks waits for its answer.
+		if next, cmd, handled := m.handleNoticeAnswer(msg); handled {
+			return next, cmd
+		}
 		if next, handled := m.handleNoticeKey(); handled {
 			return next, nil
 		}
