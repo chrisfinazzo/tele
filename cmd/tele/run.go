@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -71,7 +72,10 @@ func (r run) host() error {
 	return r.runClient(att, app.ClientConfig{
 		// This window is one of the host's clients; the rest close with it.
 		OtherWindows: func() int { return max(h.clients.Count()-1, 0) },
-		Notices:      app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned, nil),
+		// Only a tele that hosts offers its service: one that only attaches
+		// is a window of a host that may be the service already (#208).
+		Notices: app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned,
+			systemInstaller(io.Discard).offer(options{cfgPath: r.cfgPath})),
 	})
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
@@ -33,7 +34,10 @@ type installer struct {
 
 // newInstaller is the installer of this system, saying what it does on cmd's
 // output.
-func newInstaller(cmd *cobra.Command) installer {
+func newInstaller(cmd *cobra.Command) installer { return systemInstaller(cmd.OutOrStdout()) }
+
+// systemInstaller is the installer of this system, saying what it does on out.
+func systemInstaller(out io.Writer) installer {
 	return installer{
 		manager: func() (service.Manager, error) {
 			home, err := os.UserHomeDir()
@@ -44,7 +48,7 @@ func newInstaller(cmd *cobra.Command) installer {
 		},
 		executable: os.Executable,
 		versionOf:  versionOf,
-		out:        cmd.OutOrStdout(),
+		out:        out,
 	}
 }
 
@@ -139,11 +143,52 @@ func (in installer) install(ctx context.Context, o options, given string) error 
 		return fmt.Errorf("installing the service: %w", err)
 	}
 	_, _ = fmt.Fprintf(in.out, "Installed the service %s: it runs %s at every login, and now.\n", u.Name, entry)
-	if held && holder.Kept != wire.KeptByService {
+	switch {
+	case !held || holder.Kept == wire.KeptByService:
+	case holder.PID == os.Getpid():
+		// Installed from the window of the tele that hosts (#208).
+		_, _ = fmt.Fprintln(in.out, "The service takes over when this tele quits.")
+	default:
 		_, _ = fmt.Fprintf(in.out, "tele %s (pid %d) holds %s now; the service takes over when it quits.\n",
 			holder.Binary, holder.PID, cfg.StateDir)
 	}
 	return nil
+}
+
+// offer is the service of o's config for a tele that hosts to offer, or nil
+// where a yes could not install it: with no service manager, with another tele
+// on the PATH, which only `--path` could name, or with the service installed
+// already (#208). A yes installs it as `tele daemon install` would, and says
+// what that would print.
+func (in installer) offer(o options) *app.ServiceOffer {
+	m, err := in.manager()
+	if err != nil {
+		return nil
+	}
+	running, err := in.executable()
+	if err != nil {
+		return nil
+	}
+	if _, err := service.EntryPoint(appName, running, ""); err != nil {
+		return nil
+	}
+	s, err := newSetup(o.cfgPath)
+	if err != nil {
+		return nil
+	}
+	u, err := unitOf(s, "")
+	if err != nil {
+		return nil
+	}
+	if _, installed, err := m.Installed(u.Name); err != nil || installed {
+		return nil
+	}
+	return &app.ServiceOffer{App: appName, Install: func(ctx context.Context) (string, error) {
+		var said strings.Builder
+		in.out = &said
+		err := in.install(ctx, o, "")
+		return strings.TrimSpace(said.String()), err
+	}}
 }
 
 // uninstall tells the service of o's config it is being uninstalled, so it

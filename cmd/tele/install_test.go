@@ -275,3 +275,69 @@ func serveHeld(t *testing.T, stateDir string, hello wire.Hello) {
 		r.Close()
 	})
 }
+
+// A tele that hosts offers to install its service where installing would
+// succeed, and a yes installs it, saying what it did (#208).
+func TestOffer_AServiceThatCanBeInstalledIsOffered(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, onPath := teleOnPath(t)
+	m := &managed{}
+
+	offer := installing(m, running, &bytes.Buffer{}).offer(options{cfgPath: cfg})
+
+	if offer == nil {
+		t.Fatal("nothing offered")
+	}
+	if offer.App != appName {
+		t.Errorf("offered as %q", offer.App)
+	}
+	text, err := offer.Install(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.installed) != 1 {
+		t.Fatalf("installed %d units", len(m.installed))
+	}
+	assertSays(t, text, "Installed", onPath)
+}
+
+// Nothing is offered that a yes could not install, nor what is installed
+// already.
+func TestOffer_NothingThatCannotBeInstalled(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, onPath := teleOnPath(t)
+	elsewhere := filepath.Join(t.TempDir(), "tele")
+	if err := os.WriteFile(elsewhere, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := installing(&managed{}, running, &bytes.Buffer{})
+	unsupported.manager = func() (service.Manager, error) { return nil, service.ErrUnsupported }
+
+	for name, in := range map[string]installer{
+		"no service manager":       unsupported,
+		"another tele on the PATH": installing(&managed{}, elsewhere, &bytes.Buffer{}),
+		"the service installed":    installing(&managed{runs: onPath}, running, &bytes.Buffer{}),
+	} {
+		if offer := in.offer(options{cfgPath: cfg}); offer != nil {
+			t.Errorf("%s: offered", name)
+		}
+	}
+}
+
+// Installed from the window of the tele that holds the state directory, the
+// service waits for that very tele, and is said to.
+func TestOffer_TheServiceTakesOverFromTheTeleThatInstalledIt(t *testing.T) {
+	stateDir, cfg := isolatedHome(t)
+	running, _ := teleOnPath(t)
+	serveHeld(t, stateDir, wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0", PID: os.Getpid(), Kept: wire.KeptByWindow})
+
+	text, err := installing(&managed{}, running, &bytes.Buffer{}).offer(options{cfgPath: cfg}).Install(context.Background())
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSays(t, text, "takes over when this tele quits")
+	if strings.Contains(text, "pid") {
+		t.Errorf("names its own pid:\n%s", text)
+	}
+}
