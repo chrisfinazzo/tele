@@ -71,7 +71,7 @@ func (r run) host() error {
 	return r.runClient(att, app.ClientConfig{
 		// This window is one of the host's clients; the rest close with it.
 		OtherWindows: func() int { return max(h.clients.Count()-1, 0) },
-		Notices:      app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned),
+		Notices:      app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned, nil),
 	})
 }
 
@@ -193,7 +193,7 @@ func (r run) client() error {
 		return errors.New(reachFailure(err, r.cfgStore.Current().StateDir))
 	}
 	return r.runClient(att, app.ClientConfig{
-		Notices: app.StartupNotices(r.cfgStore.Current().StateDir, false, false),
+		Notices: app.StartupNotices(r.cfgStore.Current().StateDir, false, false, nil),
 	})
 }
 
