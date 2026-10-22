@@ -16,12 +16,15 @@ import (
 //
 // A notice with Yes asks rather than tells: it is answered yes or no, and only
 // an answer dismisses it. Yes is what a yes does, and says what came of it.
+// AfterLogin keeps a notice back until the account is logged in, for one that
+// means nothing to a person who has not got that far.
 type Notice struct {
-	ID    string
-	Title string
-	Body  string
-	Delay time.Duration
-	Yes   func(context.Context) (string, error)
+	ID         string
+	Title      string
+	Body       string
+	Delay      time.Duration
+	Yes        func(context.Context) (string, error)
+	AfterLogin bool
 }
 
 // Asks reports whether n is a question to answer rather than a message to read.

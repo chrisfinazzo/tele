@@ -116,7 +116,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.subscribeChatList()
 		// The spinner loop is (re)started by ensureAnimationTicks when an actual
 		// spinner is active (e.g. chats still loading); no unconditional start.
-		return m, nil
+		return m, m.noticeAfterLoginCmd()
 
 	case screens.CloseSearchMsg:
 		m.searchModel = nil

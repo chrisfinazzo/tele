@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/notices"
+	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
 // askingNotice is a notice that asks, and counts how often it was told yes.
@@ -90,4 +91,36 @@ func TestNoticeAsk_OtherKeysDoNotAnswer(t *testing.T) {
 	out := xansi.Strip(m.View().Content)
 	require.Contains(t, out, "Install it?", "the question stays up")
 	assert.Contains(t, out, "y / n", "and says how to answer it")
+}
+
+func TestNoticeAfterLogin_WaitsForTheMainScreen(t *testing.T) {
+	yes := 0
+	n := askingNotice(&yes)
+	n.AfterLogin = true
+	seen := notices.NewMemorySeen()
+	m := NewRootModel(false).WithNotices([]notices.Notice{n}, seen)
+	m.width, m.height = 100, 30
+
+	assert.NotContains(t, xansi.Strip(m.View().Content), "Install it?", "not over the login screen")
+	m, cmd := pressKey(t, m, tea.KeyPressMsg{Code: 'y', Text: "y"})
+	runCmd(cmd)
+	assert.Zero(t, yes, "nor answered from there")
+	assert.False(t, seen.IsSeen("asks"))
+
+	next, _ := m.Update(screens.TransitionToMainMsg{})
+	m = next.(RootModel)
+
+	assert.Contains(t, xansi.Strip(m.View().Content), "Install it?", "it comes up once logged in")
+}
+
+// A notice that waits for the login holds back none that do not.
+func TestNoticeAfterLogin_OthersShowOnTheLoginScreenMeanwhile(t *testing.T) {
+	yes := 0
+	asks := askingNotice(&yes)
+	asks.AfterLogin = true
+	tells := notices.Notice{ID: "tells", Title: "Your data moved", Body: "body"}
+	m := NewRootModel(false).WithNotices([]notices.Notice{asks, tells}, notices.NewMemorySeen())
+	m.width, m.height = 100, 30
+
+	assert.Contains(t, xansi.Strip(m.View().Content), "Your data moved")
 }

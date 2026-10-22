@@ -14,17 +14,43 @@ type noticeTickMsg struct{}
 
 // WithNotices seeds the pending one-time notices. Seen-state is written on
 // dismissal, not on display, so quitting early shows the notice again.
+// The ones that wait for the login go last, so they hold back none that do
+// not.
 func (m RootModel) WithNotices(pending []notices.Notice, seen notices.Seen) RootModel {
-	m.noticeQueue = pending
+	queue := make([]notices.Notice, 0, len(pending))
+	for _, n := range pending {
+		if !n.AfterLogin {
+			queue = append(queue, n)
+		}
+	}
+	for _, n := range pending {
+		if n.AfterLogin {
+			queue = append(queue, n)
+		}
+	}
+	m.noticeQueue = queue
 	m.noticeSeen = seen
 	m.noticeLeft = 0
-	if len(pending) > 0 {
-		m.noticeLeft = int(pending[0].Delay.Seconds())
+	if len(queue) > 0 {
+		m.noticeLeft = int(queue[0].Delay.Seconds())
 	}
 	return m
 }
 
-func (m RootModel) noticeActive() bool { return len(m.noticeQueue) > 0 }
+// noticeActive reports whether a notice is up: there is one, and it is not
+// one still waiting for the login.
+func (m RootModel) noticeActive() bool {
+	return len(m.noticeQueue) > 0 && (!m.noticeQueue[0].AfterLogin || m.screen != ScreenLogin)
+}
+
+// noticeAfterLoginCmd starts the countdown of a notice that has waited for the
+// login, which nothing was counting down while it waited.
+func (m RootModel) noticeAfterLoginCmd() tea.Cmd {
+	if m.noticeActive() && m.noticeQueue[0].AfterLogin && m.noticeLeft > 0 {
+		return noticeTickCmd()
+	}
+	return nil
+}
 
 func (m RootModel) noticeRemaining() int { return m.noticeLeft }
 
