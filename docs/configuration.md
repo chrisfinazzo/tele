@@ -249,6 +249,14 @@ which is how to point it at a `tele` that moved.
 If a `tele` holds the state directory when you install, the service waits and
 takes over when that one quits.
 
+The first `tele` you log in to that holds the account asks once whether to
+install the service: `y` installs it there and then, and the service takes
+over when that `tele` quits; `n` or Esc leaves it. Either answer is kept, so
+the question is not asked again. It is asked only where `install` would
+succeed as it is, so not with no service manager, not when the `PATH` finds
+another `tele`, and not when the service is installed already. A window that
+joins another `tele` never asks.
+
 After an upgrade the service keeps running the old version until a newer
 window joins it: the window asks it to restart, and the service manager starts
 the version installed now. Until then `tele daemon status` says the two

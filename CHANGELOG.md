@@ -32,6 +32,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   stops and removes it, leaving state and config alone (#182).
 - `tele daemon status` warns when the installed service runs a command that is
   gone, or another version than yours (#182).
+- Once logged in, a `tele` that holds the account asks once whether to install
+  the service: `y` installs it, `n` or Esc leaves it, and the question names
+  `tele daemon install` for later. It is not asked where installing could not
+  succeed, nor when the service is installed already (#208).
 - A window joined to a service waits for it through a restart: the status bar
   says it is reconnecting, Enter keeps the text instead of sending it, and the
   window carries on once the service is back. After thirty seconds, ninety on
