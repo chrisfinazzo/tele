@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -30,16 +32,22 @@ func pressKey(t *testing.T, m RootModel, k tea.KeyPressMsg) (RootModel, tea.Cmd)
 	return next.(RootModel), cmd
 }
 
-// runCmd executes cmd and every command it batches, as the program would.
-func runCmd(cmd tea.Cmd) {
+// runCmd executes cmd and every command it batches, as the program would, and
+// returns the messages they produced.
+func runCmd(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
-		return
+		return nil
 	}
-	if batch, ok := cmd().(tea.BatchMsg); ok {
-		for _, c := range batch {
-			runCmd(c)
-		}
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
 	}
+	var out []tea.Msg
+	for _, c := range batch {
+		out = append(out, runCmd(c)...)
+	}
+	return out
 }
 
 func TestNoticeAsk_YesRunsTheAnswerAndIsSeen(t *testing.T) {
@@ -91,6 +99,37 @@ func TestNoticeAsk_OtherKeysDoNotAnswer(t *testing.T) {
 	out := xansi.Strip(m.View().Content)
 	require.Contains(t, out, "Install it?", "the question stays up")
 	assert.Contains(t, out, "y / n", "and says how to answer it")
+}
+
+// answeredYes is m with a notice whose yes answers with text or err, after y
+// was pressed and what the answer said was handed back, as the program would.
+func answeredYes(t *testing.T, text string, err error) RootModel {
+	t.Helper()
+	cfg := &config.Config{}
+	cfg.UI.Toasts.MaxVisible = 3
+	n := notices.Notice{ID: "asks", Title: "Install it?", Body: "body",
+		Yes: func(context.Context) (string, error) { return text, err }}
+	m := NewRootModel(false).WithConfig(cfg).WithNotices([]notices.Notice{n}, notices.NewMemorySeen())
+	m.width, m.height = 100, 30
+
+	m, cmd := pressKey(t, m, tea.KeyPressMsg{Code: 'y', Text: "y"})
+	for _, msg := range runCmd(cmd) {
+		next, _ := m.Update(msg)
+		m = next.(RootModel)
+	}
+	return m
+}
+
+func TestNoticeAsk_WhatAYesCameToIsSaid(t *testing.T) {
+	m := answeredYes(t, "Installed the service tele.", nil)
+
+	assert.Contains(t, xansi.Strip(onScreen(m)), "Installed the service")
+}
+
+func TestNoticeAsk_AYesThatFailedSaysWhy(t *testing.T) {
+	m := answeredYes(t, "", errors.New("launchctl bootstrap: exit status 5"))
+
+	assert.Contains(t, xansi.Strip(onScreen(m)), "exit status 5")
 }
 
 func TestNoticeAfterLogin_WaitsForTheMainScreen(t *testing.T) {

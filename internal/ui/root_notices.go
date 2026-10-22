@@ -99,9 +99,13 @@ func (m RootModel) handleNoticeAnswer(msg tea.KeyPressMsg) (RootModel, tea.Cmd, 
 	switch msg.String() {
 	case "y":
 		ctx, yes := m.ctx, m.noticeQueue[0].Yes
+		// What the yes came to is said as a toast, a failure as an error.
 		cmd = func() tea.Msg {
-			_, _ = yes(ctx)
-			return nil
+			text, err := yes(ctx)
+			if err != nil {
+				return StatusErrMsg{Text: err.Error(), Sev: components.SeverityError}
+			}
+			return StatusErrMsg{Text: text, Sev: components.SeverityInfo}
 		}
 	case "n", "esc":
 	default:
