@@ -46,12 +46,25 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   is never restarted from outside (#183).
 - A log out, or a banned account, with no window open is told to the desktop
   once, whatever `ui.notifications.desktop` says (#211).
+- `tele daemon status --json` prints the same answer as one JSON object, for
+  scripts. [docs/cli.md](docs/cli.md) describes it, with the exit codes and
+  the rules commands are named by (#213).
+- `-c` is short for `--config` (#213).
 
 ### Changed
 
 - **Breaking:** flags take two dashes. `-version`, `-config`, `-theme-dump`
   and `-theme-check` no longer work; use `--version`, `--config` and so on.
   `-e` stays, and is also `--debug` (#208).
+- The version and the theme tools are commands: `tele version`,
+  `tele theme check [NAME]` and `tele theme dump [NAME]`. `--version`,
+  `--theme-check` and `--theme-dump` still work but are no longer offered.
+  A command line `tele` cannot read exits 2 instead of 1 (#213).
+- `tele daemon status` counts windows and commands apart, and says when
+  Telegram asked `tele` to wait. A command asking `tele` something no longer
+  counts as a window: a log out while one runs is still told to the desktop,
+  and quitting a window does not count it among the windows it would close
+  (#213, #212).
 - Every call to Telegram, from every window joined to the same `tele`, comes
   out of one budget, spread out ahead of time instead of each call waiting on
   its own. A flood wait holds only the kind of call that earned it, so a wait

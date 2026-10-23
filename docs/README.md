@@ -4,6 +4,8 @@ Installation and a quick tour live in the [root README](../README.md).
 
 ## Using tele
 
+- [Commands](commands.md) - every command and its flags
+- [Command line](cli.md) - what commands exit with, their JSON, and how they are named
 - [Configuration](configuration.md) - the config file, the settings overlay, Telegram's limits, notifications, photo and avatar caches
 - [Keybindings](keybindings.md) - every key by context, and how to rebind them
 - [Themes](themes.md) - theme slots, writing your own, every color token
