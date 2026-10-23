@@ -17,6 +17,9 @@ import (
 // holds every later call of the same method until the wait is over: Telegram
 // scopes a flood wait to the method that earned it, and a caller that asked
 // again meanwhile would only earn a longer one.
+//
+// Ahead of any flood wait, every call takes a token from one bucket, so a
+// burst of calls is spread out before Telegram has to complain about it.
 type throttle struct {
 	now   func() time.Time
 	sleep func(context.Context, time.Duration) error
@@ -24,10 +27,38 @@ type throttle struct {
 	mu sync.Mutex
 	// held is when each method held by a flood wait may be called again.
 	held map[string]time.Time
+	// tokens is what the bucket holds as of filled. It goes below zero while
+	// calls wait their turn: each one has taken the token it waits for.
+	tokens float64
+	filled time.Time
 }
 
+// The bucket's rate and size. Telegram publishes no limits, so these are a
+// guess: enough to open a chat with its avatars and thumbnails at once, too
+// few for a script sending in a loop to earn a flood wait. Constants rather
+// than a setting, since nobody could know what to set them to.
+const (
+	throttleRate  = 20 // calls a second
+	throttleBurst = 40
+)
+
 func newThrottle(now func() time.Time, sleep func(context.Context, time.Duration) error) *throttle {
-	return &throttle{now: now, sleep: sleep, held: map[string]time.Time{}}
+	return &throttle{now: now, sleep: sleep, held: map[string]time.Time{}, tokens: throttleBurst, filled: now()}
+}
+
+// take takes a token from the bucket, waiting its turn when there is none.
+func (th *throttle) take(ctx context.Context) error {
+	th.mu.Lock()
+	now := th.now()
+	th.tokens = min(throttleBurst, th.tokens+now.Sub(th.filled).Seconds()*throttleRate)
+	th.filled = now
+	th.tokens--
+	short := -th.tokens
+	th.mu.Unlock()
+	if short <= 0 {
+		return nil
+	}
+	return th.sleep(ctx, time.Duration(short*float64(time.Second)/throttleRate))
 }
 
 // sleepCtx waits for d or until ctx ends, whichever comes first.
@@ -49,6 +80,9 @@ func (th *throttle) middleware() telegram.Middleware {
 		return func(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
 			op := opName(input)
 			if err := th.wait(ctx, op); err != nil {
+				return err
+			}
+			if err := th.take(ctx); err != nil {
 				return err
 			}
 			err := next.Invoke(ctx, input, output)

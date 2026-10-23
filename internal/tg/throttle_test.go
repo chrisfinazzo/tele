@@ -117,6 +117,47 @@ func TestThrottle_AWaitTooLongToSitOutIsRefusedWithoutAsking(t *testing.T) {
 	assert.Equal(t, []string{getHistory}, tg.reached)
 }
 
+// A burst goes straight to Telegram up to the bucket's size; past it each call
+// waits its turn at the bucket's rate (#212).
+func TestThrottle_ABurstPastTheBucketWaitsItsTurn(t *testing.T) {
+	tg := &telegramFake{}
+	clock, inv := throttled(t, tg)
+
+	for range throttleBurst {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	assert.Empty(t, clock.waits, "a burst the bucket holds is not held")
+
+	require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+
+	assert.Equal(t, []time.Duration{50 * time.Millisecond, 50 * time.Millisecond}, clock.waits,
+		"twenty a second is one every 50ms")
+	assert.Len(t, tg.reached, throttleBurst+2)
+}
+
+// An idle bucket fills again at its rate, and no fuller than its size.
+func TestThrottle_TheBucketFillsAgainWhileIdle(t *testing.T) {
+	tg := &telegramFake{}
+	clock, inv := throttled(t, tg)
+
+	for range throttleBurst {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	clock.now = clock.now.Add(time.Second)
+	for range 20 {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	assert.Empty(t, clock.waits, "a second idle is twenty calls")
+
+	clock.now = clock.now.Add(time.Hour)
+	for range throttleBurst {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	assert.Equal(t, []time.Duration{50 * time.Millisecond}, clock.waits, "an hour idle is still only the bucket's size")
+}
+
 func TestThrottle_AWaitThatIsOverHoldsNothing(t *testing.T) {
 	tg := &telegramFake{answer: floodOnce(getHistory, 30*time.Second)}
 	clock, inv := throttled(t, tg)
