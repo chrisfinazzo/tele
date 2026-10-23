@@ -282,7 +282,12 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// sendMessage, sendMedia) and nowhere else, until an unrelated pts gap
 		// forces a getDifference. Without this hook a forward stayed invisible
 		// until the other side happened to read it (#198).
-		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle)},
+		//
+		// The throttle is outermost, so every call of this client goes through
+		// one budget and the flood waits it reads are already mapped (#212).
+		Middlewares: []telegram.Middleware{
+			newThrottle(time.Now, sleepCtx).middleware(), c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle),
+		},
 	})
 
 	// The connection runs under its own context so a log out - the person's,
