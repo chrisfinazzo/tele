@@ -1,6 +1,6 @@
 # tele documentation
 
-[🇷🇺 Русский](ru/README.md)
+[🇷🇺 Русский](ru/README.md) · [🇨🇳 简体中文](zh-CN/README.md)
 
 Installation and a quick tour live in the [root README](../README.md).
 

@@ -37,7 +37,7 @@ var translated = []string{
 var indexes = []string{"README.md", "docs/README.md"}
 
 // languages lists the translations by the code their files are named with.
-var languages = []string{"ru"}
+var languages = []string{"ru", "zh-CN"}
 
 // translation is where a language keeps its copy of an English document.
 func translation(english, lang string) string {

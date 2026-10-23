@@ -10,7 +10,7 @@
 
 > A terminal-native Telegram client built for keyboard-driven workflows.
 
-<p align="center"><a href="README.ru.md">🇷🇺 Русский</a></p>
+<p align="center"><a href="README.ru.md">🇷🇺 Русский</a> · <a href="README.zh-CN.md">🇨🇳 简体中文</a></p>
 
 [![Go](https://img.shields.io/badge/go-1.26+-blue)](https://go.dev)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
