@@ -4,7 +4,7 @@ Installation and a quick tour live in the [root README](../README.md).
 
 ## Using tele
 
-- [Configuration](configuration.md) - the config file, the settings overlay, notifications, photo and avatar caches
+- [Configuration](configuration.md) - the config file, the settings overlay, Telegram's limits, notifications, photo and avatar caches
 - [Keybindings](keybindings.md) - every key by context, and how to rebind them
 - [Themes](themes.md) - theme slots, writing your own, every color token
 - [Media](media.md) - inline photos, voice playback, video, GIFs, sending files

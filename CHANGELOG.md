@@ -52,6 +52,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - **Breaking:** flags take two dashes. `-version`, `-config`, `-theme-dump`
   and `-theme-check` no longer work; use `--version`, `--config` and so on.
   `-e` stays, and is also `--debug` (#208).
+- Every call to Telegram, from every window joined to the same `tele`, comes
+  out of one budget, spread out ahead of time instead of each call waiting on
+  its own. A flood wait holds only the kind of call that earned it, so a wait
+  on loading history no longer holds sending, and is not asked again until
+  it is over. Work nobody waits on, such as eager full-size photos, yields to
+  what you are doing. A wait something you are waiting on runs into is
+  counted down in the status bar. Telegram does not publish its limits, so
+  the budget is a guess: if `tele` often has you waiting, please report it
+  (#212).
 
 - The first step towards tele 2.0, where one process holds the Telegram
   connection and the terminal interface and the command line attach to it.
