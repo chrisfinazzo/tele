@@ -17,6 +17,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ipc/protocol"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -250,6 +251,9 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 		return c.reply(f.ID, call, outs)
 	}
 	callCtx, stop := context.WithCancel(ctx)
+	if f.Background {
+		callCtx = priority.InBackground(callCtx)
+	}
 	c.mu.Lock()
 	c.calls[f.ID] = stop
 	c.mu.Unlock()

@@ -9,6 +9,7 @@ import (
 	"github.com/gotd/td/telegram"
 	gotdtg "github.com/gotd/td/tg"
 
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -46,22 +47,6 @@ const (
 	throttleReserve = throttleBurst / 3
 )
 
-// backgroundKey marks a context whose calls nobody is waiting on.
-type backgroundKey struct{}
-
-// InBackground marks ctx's calls to Telegram as background work: what tele
-// does ahead of time or on its own, such as fetching full-size photos nobody
-// opened or closing a gap in a history. Such calls yield to the ones a person
-// or a command is waiting on (#212).
-func InBackground(ctx context.Context) context.Context {
-	return context.WithValue(ctx, backgroundKey{}, true)
-}
-
-func isBackground(ctx context.Context) bool {
-	b, _ := ctx.Value(backgroundKey{}).(bool)
-	return b
-}
-
 func newThrottle(now func() time.Time, sleep func(context.Context, time.Duration) error) *throttle {
 	return &throttle{now: now, sleep: sleep, held: map[string]time.Time{}, tokens: throttleBurst, filled: now()}
 }
@@ -79,7 +64,7 @@ func newThrottle(now func() time.Time, sleep func(context.Context, time.Duration
 // after it, and otherwise waits for the bucket to fill above the reserve; it
 // never queues in debt, so it is never ahead of a call someone waits on.
 func (th *throttle) take(ctx context.Context) error {
-	background := isBackground(ctx)
+	background := priority.IsBackground(ctx)
 	for {
 		th.mu.Lock()
 		now := th.now()
@@ -149,7 +134,7 @@ func (th *throttle) wait(ctx context.Context, op string) error {
 	if left <= 0 {
 		return nil
 	}
-	if left > rateLimitBudget && !isBackground(ctx) {
+	if left > rateLimitBudget && !priority.IsBackground(ctx) {
 		return &telerr.Error{Kind: telerr.RateLimited, Op: op, RetryAfter: left}
 	}
 	return th.sleep(ctx, left)

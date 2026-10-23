@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -163,7 +164,7 @@ func TestThrottle_TheBucketFillsAgainWhileIdle(t *testing.T) {
 func TestThrottle_BackgroundLeavesTheReserveToInteractiveCalls(t *testing.T) {
 	tg := &telegramFake{}
 	clock, inv := throttled(t, tg)
-	background := InBackground(context.Background())
+	background := priority.InBackground(context.Background())
 
 	for range throttleBurst - throttleReserve - 1 {
 		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
@@ -187,7 +188,7 @@ func TestThrottle_BackgroundLeavesTheReserveToInteractiveCalls(t *testing.T) {
 func TestThrottle_BackgroundSitsOutAFloodWaitWhole(t *testing.T) {
 	tg := &telegramFake{answer: floodOnce("upload.getFile", 10*time.Minute)}
 	clock, inv := throttled(t, tg)
-	background := InBackground(context.Background())
+	background := priority.InBackground(context.Background())
 
 	require.Error(t, inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil))
 	clock.now = clock.now.Add(time.Minute)
