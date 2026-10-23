@@ -495,13 +495,9 @@ minor lines (`v1.11`, `v2.0`, …); patch releases ship incrementally within a l
 | Release             | Focus                                                                                                                                                                                                                                    |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.11` _(done)_    | Settings & people - in-app settings overlay, user profile overlay, avatars, themes shipped inside the binary, plus the distribution and audit gaps left behind                                                                            |
-| `v2.0` _(in work)_  | Single owner of the Telegram connection - a resident daemon with attachable TUI and CLI clients, headless scripting, background notifications                                                                                             |
+| `v2.0` _(done)_     | Single owner of the Telegram connection - windows that join one `tele`, a service that keeps it running at login, notifications with no window open, one budget for calls to Telegram                                                    |
+| `v2.1`              | Scripting - commands that list chats and topics, read a chat and send to it, with JSON output; then rich messages                                                                                                                        |
 | `Backlog`           | Power-user & platform - search (full-text history, command palette, in-chat grep), voice and round-video messages, scheduled sending, bot commands & inline keyboards, secret chats, polls, extended vim motions, notification click routing |
-
-> [!NOTE]
-> `v2.0` is in work now. Until it ships, every other issue and open pull request
-> is on hold: v2.0 changes how the interface gets its data, and work started
-> beside it would have to be redone after it.
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.

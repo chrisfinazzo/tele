@@ -9,7 +9,19 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 - Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased]
+## [Unreleased] — One tele for the account, and a service to keep it
+
+### Upgrading from 1.11
+
+- A second `tele` on the same account no longer exits: it joins the first as
+  another window and shares its connection.
+- Once you are logged in, `tele` offers once to install itself as a service,
+  so the account is held and notifications arrive with no window open. `n`
+  keeps things as they were; `tele daemon install` does it later.
+- Flags take two dashes, and the version and the theme tools are commands:
+  `tele version`, `tele theme check`, `tele theme dump`. `-e` stays.
+- 1.11 and 2.0 cannot hold the same account at once: quit 1.11 before
+  starting 2.0.
 
 ### Added
 
@@ -54,8 +66,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 ### Changed
 
 - **Breaking:** flags take two dashes. `-version`, `-config`, `-theme-dump`
-  and `-theme-check` no longer work; use `--version`, `--config` and so on.
-  `-e` stays, and is also `--debug` (#208).
+  and `-theme-check` no longer work; use `--config`, and the commands below
+  for the rest. `-e` stays, and is also `--debug` (#208).
 - The version and the theme tools are commands: `tele version`,
   `tele theme check [NAME]` and `tele theme dump [NAME]`. `--version`,
   `--theme-check` and `--theme-dump` still work but are no longer offered.
@@ -74,14 +86,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   counted down in the status bar. Telegram does not publish its limits, so
   the budget is a guess: if `tele` often has you waiting, please report it
   (#212).
-
-- The first step towards tele 2.0, where one process holds the Telegram
-  connection and the terminal interface and the command line attach to it.
-  The interface now reaches the account only the way another process will:
+- The interface reaches the account only the way another process would:
   through one link that outlives a log out, with everything it is told -
   messages, notifications, progress, the login - on one stream in the order
-  it happened. Nothing should look different; anything that does is a bug
-  worth reporting (#309).
+  it happened (#309).
 - The login is followed by tele itself rather than by the screen, so the
   step being asked, a clock that is off and a connection that failed are
   shown to whatever attaches, whenever it attaches. A login answer meant for
@@ -91,12 +99,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Logging out finishes any request still under way as cancelled, instead of
   letting it fail on whatever the log out closed under it. A request to end
   an account that has already ended no longer touches the next one (#309).
-- Groundwork for the next step: everything the interface asks of the account
-  and is told by it can now cross a local socket, after the two sides check
-  that they speak the same protocol (#205, #206, #209).
-- The interface now reaches the account through that socket even when it runs
-  in the same process: every `tele` starts by looking for the one that holds
-  the state directory, and becomes it when there is none (#208).
+- Everything the interface asks of the account and is told by it crosses a
+  local socket, after the two sides check that they speak the same protocol,
+  even when they run in the same process: every `tele` starts by looking for
+  the one that holds the state directory, and becomes it when there is none
+  (#205, #206, #209, #208).
 - A second `tele` on the same account no longer exits. It joins the first as
   another window, sharing its connection, and closes when the first one quits.
   The first one asks before quitting while others are joined to it, whatever
@@ -119,8 +126,6 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   (#315).
 - Two `tele` processes changing settings in one config file at the same
   moment no longer lose one of the changes (#315).
-- A window and the `tele` it joins must both be this beta or later: an
-  earlier 2.0 beta is named and not joined (#315).
 - A window that joined another `tele` logs to `tele-client.log`, with its
   process id on every line (#208).
 - A `tele` that cannot be joined - 1.11, an earlier 2.0 beta, or one speaking

@@ -46,9 +46,9 @@ it among the windows it would close.
 | 6    | A message could not be sent, and trying again will not change that              |
 | 75   | Gave up waiting while a message was still queued, or Telegram asked to wait; it may work later |
 
-4, 5, 6 and 75 are answered by the commands that act on the account, which
-are on their way in the 2.0 betas. A script can tell 75, worth trying again
-later, from 6, which is not.
+4, 5, 6 and 75 are reserved for the commands that act on the account -
+listing chats, reading and sending - which come in a later release. A script
+will be able to tell 75, worth trying again later, from 6, which is not.
 
 ## JSON
 
