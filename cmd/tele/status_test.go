@@ -160,7 +160,7 @@ func TestStatus_WarnsOfAnInstalledServiceWithNoHost(t *testing.T) {
 	in := installing(&managed{runs: "/opt/old/tele"}, "", &out)
 	in.versionOf = reportedVersions(nil)
 
-	err := in.status(context.Background(), options{cfgPath: cfg})
+	err := in.status(context.Background(), options{cfgPath: cfg}, false, &bytes.Buffer{})
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != noHostCode {
