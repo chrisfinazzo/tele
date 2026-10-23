@@ -68,6 +68,20 @@ func TestStatusText_SaysWhatIsNotThereYet(t *testing.T) {
 	assertSays(t, text, "window", "Windows: 0, commands: 0", "logging in", "not connected yet", "Last update: none", "0 waiting")
 }
 
+// A wait Telegram asked for is said with what is left of it and the call it
+// holds (#212).
+func TestStatusText_SaysAWaitTelegramAskedFor(t *testing.T) {
+	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", Kept: wire.KeptByService}
+	status := wire.HostStatus{Since: statusNow, Account: &wire.AccountStatus{
+		Phase: wire.PhaseReady, Link: wire.LinkUp,
+		Throttle: &wire.Throttle{Method: "messages.getHistory", Until: statusNow.Add(32 * time.Second)},
+	}}
+
+	text := statusText("/s", host, status, nil, host, statusNow)
+
+	assertSays(t, text, "Telegram asks to wait: 32s, on messages.getHistory")
+}
+
 // Between one account and the next there is no account to tell of.
 func TestStatusText_BetweenAccounts(t *testing.T) {
 	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", Kept: wire.KeptByDaemon}

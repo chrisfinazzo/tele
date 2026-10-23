@@ -161,6 +161,9 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 		fmt.Fprintf(&b, "Last update: %s ago\n", since(a.LastUpdate, now))
 	}
 	fmt.Fprintf(&b, "Outbox: %d waiting\n", a.Outbox)
+	if t := a.Throttle; t != nil && t.Until.After(now) {
+		fmt.Fprintf(&b, "Telegram asks to wait: %s, on %s\n", t.Until.Sub(now).Round(time.Second), t.Method)
+	}
 	return b.String()
 }
 

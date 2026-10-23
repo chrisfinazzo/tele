@@ -77,6 +77,15 @@ type AccountStatus struct {
 	LastUpdate time.Time `json:"last_update,omitzero"`
 	// Outbox is how many sends have not gone out yet.
 	Outbox int `json:"outbox"`
+	// Throttle is the flood wait somebody's call ran into, nil when there is
+	// none or it is over (#212).
+	Throttle *Throttle `json:"throttle,omitempty"`
+}
+
+// Throttle is a method Telegram asked to wait for, and until when.
+type Throttle struct {
+	Method string    `json:"method"`
+	Until  time.Time `json:"until"`
 }
 
 // Phase is where the account stands.

@@ -132,6 +132,24 @@ func TestHost_SaysHowItsAccountIsDoing(t *testing.T) {
 	assert.False(t, got.LinkSince.IsZero())
 }
 
+// A flood wait somebody's call ran into is told while it lasts, and not once
+// it is over (#212).
+func TestHost_SaysAWaitTelegramAskedForWhileItLasts(t *testing.T) {
+	h := testHostWith(t, &heldConnection{updates: make(chan store.Event)})
+	acct := h.host.current()
+	until := time.Now().Add(time.Minute)
+
+	acct.owner.SetThrottle("messages.getHistory", until)
+	got := h.host.AccountStatus()
+	require.NotNil(t, got.Throttle)
+	assert.Equal(t, "messages.getHistory", got.Throttle.Method)
+	assert.True(t, got.Throttle.Until.Equal(until))
+
+	over := testHostWith(t, &heldConnection{updates: make(chan store.Event)})
+	over.host.current().owner.SetThrottle("messages.getHistory", time.Now().Add(-time.Second))
+	assert.Nil(t, over.host.AccountStatus().Throttle, "a wait that is over holds nothing")
+}
+
 // A connection that ended says why.
 func TestHost_SaysWhatTheConnectionEndedWith(t *testing.T) {
 	h := testHostWith(t, &bannedConnection{updates: make(chan store.Event)})
