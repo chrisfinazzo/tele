@@ -52,8 +52,10 @@ type RestartResult struct {
 type HostStatus struct {
 	// Since is when the host started.
 	Since time.Time `json:"since"`
-	// Clients is how many clients are attached, the one asking left out.
-	Clients int `json:"clients"`
+	// Windows and Commands are how many of each are attached, the command
+	// asking left out (#213).
+	Windows  int `json:"windows"`
+	Commands int `json:"commands"`
 	// Account is how the account is doing, nil between one account and the
 	// next.
 	Account *AccountStatus `json:"account,omitempty"`

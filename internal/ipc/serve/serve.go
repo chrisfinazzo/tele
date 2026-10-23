@@ -33,6 +33,12 @@ type Attachment interface {
 
 var _ Attachment = (*core.Attachment)(nil)
 
+// Greeter is an attachment that wants the client's hello: whoever serves it
+// learns from it what kind of client is on the other end (#213).
+type Greeter interface {
+	Greeted(wire.Hello)
+}
+
 // Host is the host's own end of a connection: what it says of itself, and the
 // calls about it rather than about an account, answered with no owner seated
 // as well (#315).
@@ -115,6 +121,9 @@ func (c *served) greet(dec *wire.Decoder, host wire.Hello) error {
 	var client wire.Hello
 	if err := json.Unmarshal(f.Params, &client); err != nil {
 		return fmt.Errorf("%w: hello: %v", wire.ErrProtocol, err)
+	}
+	if g, ok := c.att.(Greeter); ok {
+		g.Greeted(client)
 	}
 	raw, err := json.Marshal(host)
 	if err != nil {

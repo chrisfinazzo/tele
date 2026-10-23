@@ -111,7 +111,7 @@ func askHost(ctx context.Context, s setup, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("reaching the tele that hosts %s: %w", stateDir, err)
 	}
-	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Config: s.cfgPath}
+	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Config: s.cfgPath, Kind: wire.KindCommand}
 	host, status, err := dial.AskStatus(ctx, conn, mine)
 	var mismatch *dial.Mismatch
 	if err != nil && !errors.As(err, &mismatch) {
@@ -147,7 +147,7 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "Clients: %s\n", windows(status.Clients))
+	fmt.Fprintf(&b, "Windows: %d, commands: %d\n", status.Windows, status.Commands)
 	a := status.Account
 	if a == nil {
 		b.WriteString("Account: none, the next one is opening\n")
@@ -191,17 +191,6 @@ func versions(mine, host wire.Hello) string {
 		return this + " and cannot attach to it: the two speak different protocols."
 	default:
 		return this + "."
-	}
-}
-
-func windows(n int) string {
-	switch n {
-	case 0:
-		return "no windows"
-	case 1:
-		return "1 window"
-	default:
-		return fmt.Sprintf("%d windows", n)
 	}
 }
 

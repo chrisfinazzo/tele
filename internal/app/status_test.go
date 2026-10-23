@@ -16,15 +16,16 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// The host counts the clients attached to it, leaving out the one asking: a
-// `tele daemon status` is not a window (#208).
-func TestHostEnd_StatusCountsTheClientsButTheOneAsking(t *testing.T) {
+// The host counts its windows apart from its commands, leaving out the one
+// asking: `tele daemon status` is a command itself (#208, #213).
+func TestHostEnd_StatusCountsWindowsAndCommandsButTheOneAsking(t *testing.T) {
 	e, _, _ := hostEndAt(t, "")
-	e.StatusFrom(func() int { return 3 }, func() *wire.AccountStatus { return nil })
+	e.StatusFrom(func() int { return 2 }, func() int { return 3 }, func() *wire.AccountStatus { return nil })
 
 	got := e.Status()
 
-	assert.Equal(t, 2, got.Clients)
+	assert.Equal(t, 2, got.Windows)
+	assert.Equal(t, 2, got.Commands)
 	assert.False(t, got.Since.IsZero(), "the host says when it started")
 	assert.Nil(t, got.Account, "between accounts there is no account to tell of")
 }
@@ -35,7 +36,8 @@ func TestHostEnd_StatusBeforeTheHostHasClients(t *testing.T) {
 
 	got := e.Status()
 
-	assert.Equal(t, 0, got.Clients)
+	assert.Zero(t, got.Windows)
+	assert.Zero(t, got.Commands)
 	assert.Nil(t, got.Account)
 }
 

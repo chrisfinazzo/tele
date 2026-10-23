@@ -35,8 +35,9 @@ func TestStatusText_SaysHowTheHostIsDoing(t *testing.T) {
 	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.9", PID: 4242, Kept: wire.KeptByService}
 	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.9"}
 	status := wire.HostStatus{
-		Since:   statusNow.Add(-3 * time.Hour),
-		Clients: 2,
+		Since:    statusNow.Add(-3 * time.Hour),
+		Windows:  2,
+		Commands: 1,
 		Account: &wire.AccountStatus{
 			Phase: wire.PhaseReady, User: "ada",
 			Link: wire.LinkUp, LinkSince: statusNow.Add(-time.Hour),
@@ -48,7 +49,7 @@ func TestStatusText_SaysHowTheHostIsDoing(t *testing.T) {
 	text := statusText("/state/tele", host, status, nil, mine, statusNow)
 
 	assertSays(t, text, "tele 2.0.0-beta.9", "pid 4242", "/state/tele", "service", "3h0m0s",
-		"2 windows", "ready", "@ada", "up", "1h0m0s ago", "12s ago", "1 waiting")
+		"Windows: 2, commands: 1", "ready", "@ada", "up", "1h0m0s ago", "12s ago", "1 waiting")
 	if strings.Contains(text, "This tele") {
 		t.Errorf("the same version is not compared:\n%s", text)
 	}
@@ -64,7 +65,7 @@ func TestStatusText_SaysWhatIsNotThereYet(t *testing.T) {
 
 	text := statusText("/s", host, status, nil, host, statusNow)
 
-	assertSays(t, text, "window", "no windows", "logging in", "not connected yet", "Last update: none", "0 waiting")
+	assertSays(t, text, "window", "Windows: 0, commands: 0", "logging in", "not connected yet", "Last update: none", "0 waiting")
 }
 
 // Between one account and the next there is no account to tell of.
