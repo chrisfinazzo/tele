@@ -1,5 +1,7 @@
 # tele documentation
 
+[🇷🇺 Русский](ru/README.md)
+
 Installation and a quick tour live in the [root README](../README.md).
 
 ## Using tele
@@ -16,3 +18,4 @@ Installation and a quick tour live in the [root README](../README.md).
 
 - [Development](development.md) - building from source, the Nix flake, upgrading gotd
 - [gotd workarounds](gotd-workarounds.md) - defects in gotd tele works around, and what retires each one
+- [Translating](translating.md) - how the translations are kept, and the words they use

@@ -37,7 +37,7 @@ var translated = []string{
 var indexes = []string{"README.md", "docs/README.md"}
 
 // languages lists the translations by the code their files are named with.
-var languages = []string{}
+var languages = []string{"ru"}
 
 // translation is where a language keeps its copy of an English document.
 func translation(english, lang string) string {
@@ -88,6 +88,20 @@ func TestATranslationNamesItsOriginalAndCommit(t *testing.T) {
 				}
 			}
 			assert.True(t, found, "%s does not name %s and the commit it was translated at", path, original)
+		}
+	}
+}
+
+// A translation keeps every section the English document has under the same
+// anchor, so a link into one language works in any other.
+func TestATranslationKeepsEveryEnglishAnchor(t *testing.T) {
+	for _, lang := range languages {
+		for _, english := range translated {
+			path := translation(english, lang)
+			have := anchors(read(t, path))
+			for _, anchor := range anchors(read(t, english))[1:] {
+				assert.Contains(t, have, anchor, "%s has no section under %q, which %s has", path, anchor, english)
+			}
 		}
 	}
 }
