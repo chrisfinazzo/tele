@@ -37,28 +37,72 @@ type throttle struct {
 // guess: enough to open a chat with its avatars and thumbnails at once, too
 // few for a script sending in a loop to earn a flood wait. Constants rather
 // than a setting, since nobody could know what to set them to.
+//
+// throttleReserve is the part of the bucket background work never takes, so a
+// call someone is waiting on always finds a token close at hand.
 const (
-	throttleRate  = 20 // calls a second
-	throttleBurst = 40
+	throttleRate    = 20 // calls a second
+	throttleBurst   = 40
+	throttleReserve = throttleBurst / 3
 )
+
+// backgroundKey marks a context whose calls nobody is waiting on.
+type backgroundKey struct{}
+
+// InBackground marks ctx's calls to Telegram as background work: what tele
+// does ahead of time or on its own, such as fetching full-size photos nobody
+// opened or closing a gap in a history. Such calls yield to the ones a person
+// or a command is waiting on (#212).
+func InBackground(ctx context.Context) context.Context {
+	return context.WithValue(ctx, backgroundKey{}, true)
+}
+
+func isBackground(ctx context.Context) bool {
+	b, _ := ctx.Value(backgroundKey{}).(bool)
+	return b
+}
 
 func newThrottle(now func() time.Time, sleep func(context.Context, time.Duration) error) *throttle {
 	return &throttle{now: now, sleep: sleep, held: map[string]time.Time{}, tokens: throttleBurst, filled: now()}
 }
 
 // take takes a token from the bucket, waiting its turn when there is none.
+//
+// A call whose context ends while it waits keeps the token it took: it is not
+// given back, so each call queued behind it waits one turn (1/throttleRate)
+// longer than it had to. Giving it back would mean tracking every waiting
+// call's place in the queue; for a few cancelled calls the cost is tens of
+// milliseconds. If calls are ever reported slow after many cancellations (a
+// chat left mid-load, a scrolled-past image), this is the place to look.
+//
+// Background work takes a token only while the reserve would still be left
+// after it, and otherwise waits for the bucket to fill above the reserve; it
+// never queues in debt, so it is never ahead of a call someone waits on.
 func (th *throttle) take(ctx context.Context) error {
-	th.mu.Lock()
-	now := th.now()
-	th.tokens = min(throttleBurst, th.tokens+now.Sub(th.filled).Seconds()*throttleRate)
-	th.filled = now
-	th.tokens--
-	short := -th.tokens
-	th.mu.Unlock()
-	if short <= 0 {
-		return nil
+	background := isBackground(ctx)
+	for {
+		th.mu.Lock()
+		now := th.now()
+		th.tokens = min(throttleBurst, th.tokens+now.Sub(th.filled).Seconds()*throttleRate)
+		th.filled = now
+		var short float64
+		if background {
+			short = throttleReserve + 1 - th.tokens
+			if short <= 0 {
+				th.tokens--
+			}
+		} else {
+			th.tokens--
+			short = -th.tokens
+		}
+		th.mu.Unlock()
+		if short <= 0 {
+			return nil
+		}
+		if err := th.sleep(ctx, time.Duration(short*float64(time.Second)/throttleRate)); err != nil || !background {
+			return err
+		}
 	}
-	return th.sleep(ctx, time.Duration(short*float64(time.Second)/throttleRate))
 }
 
 // sleepCtx waits for d or until ctx ends, whichever comes first.
@@ -96,7 +140,8 @@ func (th *throttle) middleware() telegram.Middleware {
 
 // wait sits out what is left of op's flood wait, when a call would sit it out
 // anyway. A longer one is refused at once with what is left of it, the same
-// answer Telegram would give, without asking Telegram again.
+// answer Telegram would give, without asking Telegram again. Background work
+// sits out any wait whole: nobody is waiting on it to be told.
 func (th *throttle) wait(ctx context.Context, op string) error {
 	th.mu.Lock()
 	left := th.held[op].Sub(th.now())
@@ -104,7 +149,7 @@ func (th *throttle) wait(ctx context.Context, op string) error {
 	if left <= 0 {
 		return nil
 	}
-	if left > rateLimitBudget {
+	if left > rateLimitBudget && !isBackground(ctx) {
 		return &telerr.Error{Kind: telerr.RateLimited, Op: op, RetryAfter: left}
 	}
 	return th.sleep(ctx, left)

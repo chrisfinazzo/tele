@@ -158,6 +158,45 @@ func TestThrottle_TheBucketFillsAgainWhileIdle(t *testing.T) {
 	assert.Equal(t, []time.Duration{50 * time.Millisecond}, clock.waits, "an hour idle is still only the bucket's size")
 }
 
+// Background work leaves the last third of the bucket to the calls someone is
+// waiting on: it takes a token only while that much would be left (#212).
+func TestThrottle_BackgroundLeavesTheReserveToInteractiveCalls(t *testing.T) {
+	tg := &telegramFake{}
+	clock, inv := throttled(t, tg)
+	background := InBackground(context.Background())
+
+	for range throttleBurst - throttleReserve - 1 {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	require.NoError(t, inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil))
+	assert.Empty(t, clock.waits, "with more than the reserve left, background goes")
+
+	require.NoError(t, inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil))
+	assert.Equal(t, []time.Duration{50 * time.Millisecond}, clock.waits,
+		"with only the reserve left, it waits for a token above it")
+
+	clock.waits = nil
+	for range throttleReserve {
+		require.NoError(t, call(inv, &gotdtg.MessagesSendMessageRequest{}))
+	}
+	assert.Empty(t, clock.waits, "the reserve is the interactive calls' own")
+}
+
+// Nobody is waiting on background work, so a flood wait is sat out whole
+// rather than refused.
+func TestThrottle_BackgroundSitsOutAFloodWaitWhole(t *testing.T) {
+	tg := &telegramFake{answer: floodOnce("upload.getFile", 10*time.Minute)}
+	clock, inv := throttled(t, tg)
+	background := InBackground(context.Background())
+
+	require.Error(t, inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil))
+	clock.now = clock.now.Add(time.Minute)
+	require.NoError(t, inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil))
+
+	assert.Equal(t, []time.Duration{9 * time.Minute}, clock.waits)
+	assert.Len(t, tg.reached, 2)
+}
+
 func TestThrottle_AWaitThatIsOverHoldsNothing(t *testing.T) {
 	tg := &telegramFake{answer: floodOnce(getHistory, 30*time.Second)}
 	clock, inv := throttled(t, tg)
