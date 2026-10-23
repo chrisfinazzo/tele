@@ -32,7 +32,7 @@
 
 ![tele demo](./assets/demo.gif)
 
-> **Status:** Active development - already usable for daily messaging (private chats, groups, replies, reactions, forwarding, drafts). Some Telegram features are still in progress.
+> **Status:** A full Telegram client for the terminal, used every day by its author: chats, groups, channels and forums, media, reactions, folders, and notifications that arrive with no window open. What it does not do yet is on the [roadmap](#roadmap).
 
 ---
 
@@ -73,6 +73,7 @@ no chain of optional helper programs to install before the app is fully usable.
 | Packaging        | brew, apt, dnf, zypper, apk, nix, scoop, winget, signed deb/rpm  | crates.io, AUR, nix, Docker                                                                                     | PyPI, AUR, Docker                                                                                                         |
 | Inline photos    | Kitty graphics protocol at full quality, ANSI block-art fallback | `chafa` block art, behind an optional build feature                                                             | handed to an external viewer via mailcap                                                                                  |
 | Windows          | binary, Scoop, winget                                            | supported                                                                                                       | not practical                                                                                                             |
+| With no window   | a service from login; notifications with no window open          | runs only while its terminal is open; no desktop notifications listed                                           | runs only while its terminal is open; notifies through an external command (`terminal-notifier`, `dunst`)                 |
 | Release cadence  | weekly stable releases plus a separate beta channel              | latest release is `v1.0.0-rc1`; most recent commits are dependency bumps                                        | `tg` ships in bursts months apart; `tuigram` is a fork of a fork                                                          |
 
 Beyond packaging, `tele` covers parts of modern Telegram that none of the three
@@ -103,6 +104,12 @@ deprecated, last touched in 2022), `arigram` (archived), `tg-tui` (2018),
   movable per-message cursor (`j/k`) that steps bubble-by-bubble and is the
   target for the context menu and per-message actions. Mouse support is
   optional: click a chat or a pane, scroll with the wheel.
+- **Notifications with no window open** - `tele daemon install` keeps `tele`
+  running from login (launchd, a systemd user unit or Task Scheduler), so the
+  account stays connected and desktop notifications keep coming after you close
+  the window. Open `tele` again and it joins the running one instead of
+  connecting a second time; open it in two terminals and both show the same
+  account: [docs/configuration.md](docs/configuration.md#running-without-a-window)
 - **Full Telegram support** - private chats, groups, channels, forum topics,
   replies, reactions, edits, forwarding, and per-chat drafts synced with
   Telegram.
@@ -331,6 +338,28 @@ Then prompts for:
 - phone number
 - SMS code
 - optional 2FA password
+
+Once you are logged in, `tele` asks once whether to keep running in the
+background as a service. Say `y` and the account stays connected after you
+close the window, with notifications still arriving; say `n` or press Esc and
+`tele` runs only while a window is open, as before. You can change your mind
+later with `tele daemon install` or `tele daemon uninstall`. The question is not
+asked where a service cannot be installed, or when one already is.
+
+### Upgrading from 1.11
+
+- Opening `tele` while another is running no longer fails: the second one
+  joins the first as another window on the same account.
+- After you log in, `tele` asks once about running as a service, as described
+  above.
+- Flags take two dashes now (`--config`, `--debug`); the short `-e` still
+  works.
+  The version and the theme tools became commands: `tele version`,
+  `tele theme check`, `tele theme dump`.
+- 1.11 and 2.0 cannot use the same account at the same time: quit 1.11 before
+  starting 2.0.
+
+Everything that changed: [CHANGELOG.md](CHANGELOG.md)
 
 ### App key
 
