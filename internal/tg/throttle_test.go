@@ -198,6 +198,55 @@ func TestThrottle_BackgroundSitsOutAFloodWaitWhole(t *testing.T) {
 	assert.Len(t, tg.reached, 2)
 }
 
+// reported is what the throttle said it holds, in order.
+func reported(th *throttle) *[]Throttled {
+	var got []Throttled
+	th.SetReport(func(t Throttled) { got = append(got, t) })
+	return &got
+}
+
+// A call somebody waits on that runs into a flood wait is said, so that the
+// wait shows rather than looking like a freeze (#212).
+func TestThrottle_AnInteractiveCallHeldIsSaid(t *testing.T) {
+	tg := &telegramFake{answer: floodOnce(getHistory, 10*time.Minute)}
+	clock := &throttleClock{now: time.Unix(1_700_000_000, 0)}
+	th := newThrottle(clock.Now, clock.Sleep)
+	got := reported(th)
+	inv := th.middleware().Handle(tg)
+
+	require.Error(t, call(inv, &gotdtg.MessagesGetHistoryRequest{}))
+	until := clock.now.Add(10 * time.Minute)
+	require.Error(t, call(inv, &gotdtg.MessagesGetHistoryRequest{}))
+	require.Error(t, call(inv, &gotdtg.MessagesGetHistoryRequest{}))
+
+	assert.Equal(t, []Throttled{{Method: getHistory, Until: until}}, *got,
+		"said once a call ran into it, and not again for the same wait")
+}
+
+// A wait too short to notice, and one only background work runs into, are
+// not said: nobody would see anything frozen.
+func TestThrottle_AShortWaitOrABackgroundOneIsNotSaid(t *testing.T) {
+	tg := &telegramFake{answer: func(op string) error {
+		d := time.Second
+		if op == "upload.getFile" {
+			d = 10 * time.Minute
+		}
+		return floodOnce(op, d)(op)
+	}}
+	clock := &throttleClock{now: time.Unix(1_700_000_000, 0)}
+	th := newThrottle(clock.Now, clock.Sleep)
+	got := reported(th)
+	inv := th.middleware().Handle(tg)
+	background := priority.InBackground(context.Background())
+
+	_ = call(inv, &gotdtg.MessagesGetHistoryRequest{})
+	_ = call(inv, &gotdtg.MessagesGetHistoryRequest{})
+	_ = inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil)
+	_ = inv.Invoke(background, &gotdtg.UploadGetFileRequest{}, nil)
+
+	assert.Empty(t, *got)
+}
+
 func TestThrottle_AWaitThatIsOverHoldsNothing(t *testing.T) {
 	tg := &telegramFake{answer: floodOnce(getHistory, 30*time.Second)}
 	clock, inv := throttled(t, tg)

@@ -32,6 +32,29 @@ type throttle struct {
 	// calls wait their turn: each one has taken the token it waits for.
 	tokens float64
 	filled time.Time
+	// report is told of a wait somebody runs into; said is, per method, the
+	// last wait it was told of.
+	report func(Throttled)
+	said   map[string]time.Time
+}
+
+// Throttled is a flood wait a call somebody waits on has run into: the method
+// Telegram holds, and until when. Once Until has passed it holds nothing, so
+// nothing has to say that it ended.
+type Throttled struct {
+	Method string
+	Until  time.Time
+}
+
+// throttleShown is how long a wait has to be for anybody to notice it.
+const throttleShown = 2 * time.Second
+
+// SetReport installs the function told of a wait somebody runs into. It must
+// not block: it is called on the way to Telegram.
+func (th *throttle) SetReport(report func(Throttled)) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.report = report
 }
 
 // The bucket's rate and size. Telegram publishes no limits, so these are a
@@ -48,7 +71,10 @@ const (
 )
 
 func newThrottle(now func() time.Time, sleep func(context.Context, time.Duration) error) *throttle {
-	return &throttle{now: now, sleep: sleep, held: map[string]time.Time{}, tokens: throttleBurst, filled: now()}
+	return &throttle{
+		now: now, sleep: sleep, held: map[string]time.Time{}, tokens: throttleBurst, filled: now(),
+		report: func(Throttled) {}, said: map[string]time.Time{},
+	}
 }
 
 // take takes a token from the bucket, waiting its turn when there is none.
@@ -127,14 +153,28 @@ func (th *throttle) middleware() telegram.Middleware {
 // anyway. A longer one is refused at once with what is left of it, the same
 // answer Telegram would give, without asking Telegram again. Background work
 // sits out any wait whole: nobody is waiting on it to be told.
+//
+// A call somebody waits on that runs into a wait long enough to notice has it
+// said, once per wait, so that the wait shows rather than looking like a
+// freeze.
 func (th *throttle) wait(ctx context.Context, op string) error {
+	background := priority.IsBackground(ctx)
 	th.mu.Lock()
-	left := th.held[op].Sub(th.now())
+	until := th.held[op]
+	left := until.Sub(th.now())
+	var say func(Throttled)
+	if !background && left >= throttleShown && until.After(th.said[op]) {
+		th.said[op] = until
+		say = th.report
+	}
 	th.mu.Unlock()
+	if say != nil {
+		say(Throttled{Method: op, Until: until})
+	}
 	if left <= 0 {
 		return nil
 	}
-	if left > rateLimitBudget && !priority.IsBackground(ctx) {
+	if left > rateLimitBudget && !background {
 		return &telerr.Error{Kind: telerr.RateLimited, Op: op, RetryAfter: left}
 	}
 	return th.sleep(ctx, left)
