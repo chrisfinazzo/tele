@@ -98,12 +98,27 @@ func TestUsage_AMistakeExitsTwo(t *testing.T) {
 		{"no-such-command"},
 		{"version", "extra"},
 		{"daemon", "status", "--no-such-flag"},
+		{"chats", "extra"},
 	} {
 		out, code := runBuilt(t, args...)
 		if code != usageCode {
 			t.Errorf("tele %v exited %d:\n%s", args, code, out)
 		}
 	}
+}
+
+// A command that acts on the account asks the tele holding it and never
+// starts one: with none, it exits 3 and says how to get one (#181).
+func TestChats_WithNoTeleExitsThree(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "work-state")
+	cfg := configAt(t, stateDir)
+
+	out, code := runBuilt(t, "-c", cfg, "chats")
+
+	if code != noHostCode {
+		t.Errorf("exited %d:\n%s", code, out)
+	}
+	assertSays(t, out, stateDir, "tele daemon install")
 }
 
 // -c is --config, the one flag typed by hand often enough for a short form
