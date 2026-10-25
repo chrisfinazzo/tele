@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -14,20 +15,24 @@ import (
 
 // newChatsCmd is `tele chats`: the chats of the account, a line each (#181).
 func newChatsCmd(o *options) *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "chats",
 		Short: "List the chats",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return askAccount(cmd.Context(), *o, func(ctx context.Context, acc accountSurface) error {
-				return listChats(ctx, acc, cmd.OutOrStdout())
+				return listChats(ctx, acc, cmd.OutOrStdout(), asJSON)
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print a JSON object a chat, as docs/cli.md describes")
+	return cmd
 }
 
-// listChats prints the chats of the main list, in its order.
-func listChats(ctx context.Context, acc accountSurface, out io.Writer) error {
+// listChats prints the chats of the main list, in its order: as text, or as
+// JSON Lines.
+func listChats(ctx context.Context, acc accountSurface, out io.Writer, asJSON bool) error {
 	all, err := acc.Chats(ctx)
 	if err != nil {
 		return err
@@ -38,8 +43,45 @@ func listChats(ctx context.Context, acc accountSurface, out io.Writer) error {
 			rows = append(rows, c)
 		}
 	}
+	if asJSON {
+		return chatsJSON(out, rows)
+	}
 	_, err = io.WriteString(out, chatsText(rows))
 	return err
+}
+
+// chatJSON is a chat as `tele chats --json` prints it. Its fields are a
+// contract kept within a major version (docs/cli.md), so it is its own type
+// rather than ChatRow with tags.
+type chatJSON struct {
+	ID       int64            `json:"id"`
+	Title    string           `json:"title"`
+	Username string           `json:"username,omitempty"`
+	Kind     project.ChatKind `json:"kind"`
+	// Unread is a forum's topics with unread, as its badge counts them.
+	Unread     int  `json:"unread"`
+	Mentions   int  `json:"mentions"`
+	Reactions  int  `json:"reactions"`
+	UnreadMark bool `json:"unread_mark"`
+	Muted      bool `json:"muted"`
+	Archived   bool `json:"archived"`
+	Forum      bool `json:"forum"`
+}
+
+// chatsJSON writes rows to out as JSON Lines, an object a chat.
+func chatsJSON(out io.Writer, rows []project.ChatRow) error {
+	enc := json.NewEncoder(out)
+	for _, c := range rows {
+		err := enc.Encode(chatJSON{
+			ID: c.ID, Title: c.Title, Username: c.Username, Kind: c.Kind,
+			Unread: c.Unread, Mentions: c.Mentions, Reactions: c.Reactions,
+			UnreadMark: c.UnreadMark, Muted: c.Muted, Archived: c.Archived, Forum: c.IsForum,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // chatsText is a line per chat: its id, its title and its badges, in columns.

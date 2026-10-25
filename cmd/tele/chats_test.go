@@ -144,7 +144,7 @@ func TestChats_ListsTheMainListWithBadges(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,6 +153,28 @@ func TestChats_ListsTheMainListWithBadges(t *testing.T) {
 		"7    Work     2 reactions, muted\n" +
 		"300  Gophers  forum, 1 topic unread, marked unread\n" +
 		"5    Bob\n"
+	if out.String() != want {
+		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// As JSON a chat is an object a line, in the list's order. Every field is there
+// whatever its value, except a username the chat does not have (#181).
+func TestChats_PrintsJSONLines(t *testing.T) {
+	acc := newFakeAccount()
+	acc.chats = []project.ChatRow{
+		{ID: 42, Title: "Alice", Username: "alice", Kind: project.ChatKindUser, IsUser: true, Unread: 3, Mentions: 1},
+		{ID: 300, Title: "Gophers", Kind: project.ChatKindGroup, IsForum: true, Unread: 1, Reactions: 2, UnreadMark: true, Muted: true},
+	}
+	var out bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, true); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "" +
+		`{"id":42,"title":"Alice","username":"alice","kind":"user","unread":3,"mentions":1,"reactions":0,"unread_mark":false,"muted":false,"archived":false,"forum":false}` + "\n" +
+		`{"id":300,"title":"Gophers","kind":"group","unread":1,"mentions":0,"reactions":2,"unread_mark":true,"muted":true,"archived":false,"forum":true}` + "\n"
 	if out.String() != want {
 		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
 	}
