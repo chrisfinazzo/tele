@@ -117,6 +117,10 @@ type Owner struct {
 	// worker goroutine, read by whichever goroutine serves the discard.
 	uploadMu      sync.Mutex
 	uploadCancels map[string]context.CancelFunc
+	// outboxMove is closed when a send goes, fails, is put off or is
+	// discarded, for whoever waits on one (#181). Nil until somebody does.
+	outboxMoveMu sync.Mutex
+	outboxMove   chan struct{}
 }
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {

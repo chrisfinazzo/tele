@@ -174,6 +174,10 @@ func (r *recorder) SendMedia(_ context.Context, req core.MediaSendRequest) error
 }
 func (r *recorder) RetryOutbox(ref string) error   { return r.took("RetryOutbox", ref) }
 func (r *recorder) DiscardOutbox(ref string) error { return r.took("DiscardOutbox", ref) }
+func (r *recorder) AwaitSend(_ context.Context, ref string, within time.Duration) (core.SendOutcome, error) {
+	err := r.took("AwaitSend", ref, within)
+	return result[core.SendOutcome](r, "AwaitSend", 0), err
+}
 func (r *recorder) SearchContacts(_ context.Context, q string, limit int) ([]project.ChatRow, error) {
 	err := r.took("SearchContacts", q, limit)
 	return result[[]project.ChatRow](r, "SearchContacts", 0), err

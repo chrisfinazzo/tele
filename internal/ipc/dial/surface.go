@@ -2,6 +2,7 @@ package dial
 
 import (
 	"context"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
@@ -56,6 +57,9 @@ func (a *Attachment) RetryOutbox(ref string) error {
 }
 func (a *Attachment) DiscardOutbox(ref string) error {
 	return do(a, context.Background(), "DiscardOutbox", ref)
+}
+func (a *Attachment) AwaitSend(ctx context.Context, ref string, within time.Duration) (core.SendOutcome, error) {
+	return ask[core.SendOutcome](a, ctx, "AwaitSend", ref, within)
 }
 func (a *Attachment) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
 	a.tell("InvalidateMedia", chatID, msgID, slot)

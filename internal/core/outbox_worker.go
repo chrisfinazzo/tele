@@ -132,6 +132,7 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 	if uerr := o.outbox.Update(e); uerr != nil {
 		o.log.Error("outbox: could not record a failure", zap.Error(uerr))
 	}
+	o.outboxMoved()
 	o.Refresh()
 }
 
@@ -202,6 +203,7 @@ func (o *Owner) dropSent(e domain.OutboxEntry) {
 		o.log.Error("outbox: could not drop an entry", zap.Error(err))
 		return
 	}
+	o.outboxMoved()
 	o.wakeOutbox()
 }
 

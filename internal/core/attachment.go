@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -371,6 +372,10 @@ func (a *Attachment) RetryOutbox(ref string) error {
 
 func (a *Attachment) DiscardOutbox(ref string) error {
 	return do(a, context.Background(), func(_ context.Context, s *seat) error { return s.DiscardOutbox(ref) })
+}
+
+func (a *Attachment) AwaitSend(ctx context.Context, ref string, within time.Duration) (SendOutcome, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (SendOutcome, error) { return s.AwaitSend(ctx, ref, within) })
 }
 
 func (a *Attachment) SearchContacts(ctx context.Context, q string, limit int) ([]project.ChatRow, error) {

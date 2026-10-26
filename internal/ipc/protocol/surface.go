@@ -38,6 +38,7 @@ var surface = map[string]any{
 	"SendMedia":        core.Surface.SendMedia,
 	"RetryOutbox":      core.Surface.RetryOutbox,
 	"DiscardOutbox":    core.Surface.DiscardOutbox,
+	"AwaitSend":        core.Surface.AwaitSend,
 	"SearchContacts":   core.Surface.SearchContacts,
 	"Chats":            core.Surface.Chats,
 	"Topics":           core.Surface.Topics,

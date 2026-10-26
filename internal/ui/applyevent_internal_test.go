@@ -379,6 +379,11 @@ func (o *ownerStub) DiscardOutbox(ref string) error {
 	return o.err
 }
 
+// AwaitSend is for commands; a window watches its sends in the projection.
+func (o *ownerStub) AwaitSend(context.Context, string, time.Duration) (core.SendOutcome, error) {
+	return core.SendOutcome{}, o.err
+}
+
 func (o *ownerStub) Forward(_ context.Context, fromChatID int64, target domain.HistoryKey, _ []int, _ string) error {
 	toChatID := target.ChatID
 	o.calls = append(o.calls, cmdCall{name: "Forward", chatID: fromChatID})

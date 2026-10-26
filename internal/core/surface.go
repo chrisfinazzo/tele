@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -65,6 +66,10 @@ type Surface interface {
 	SendMedia(ctx context.Context, req MediaSendRequest) error
 	RetryOutbox(ref string) error
 	DiscardOutbox(ref string) error
+	// AwaitSend waits up to within for a send to become a message or fail,
+	// and answers with where it stands then; a command waits on its send this
+	// way, a window watches the projection (#181).
+	AwaitSend(ctx context.Context, ref string, within time.Duration) (SendOutcome, error)
 
 	// Queries. One-off answers nobody subscribes to. They take a context and
 	// may fail because in v2 each is a round trip to another process, and the

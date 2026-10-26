@@ -385,6 +385,11 @@ func (o *testOwner) DiscardOutbox(ref string) error {
 	return o.cmdErr
 }
 
+// AwaitSend is for commands; a window watches its sends in the projection.
+func (o *testOwner) AwaitSend(context.Context, string, time.Duration) (core.SendOutcome, error) {
+	return core.SendOutcome{}, o.cmdErr
+}
+
 // ownerDraft is one SaveDraft the UI issued, replacing what used to be recorded
 // on the mock tg.Client (#198).
 type ownerDraft struct {
