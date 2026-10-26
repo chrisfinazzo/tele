@@ -401,6 +401,10 @@ func (a *Attachment) ResolveChat(ctx context.Context, name ChatName) (project.Ch
 	return call(a, ctx, func(ctx context.Context, s *seat) (project.ChatRow, error) { return s.ResolveChat(ctx, name) })
 }
 
+func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) { return s.History(ctx, h, before, limit) })
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.FolderFilter, error) { return s.FolderFilters(ctx) })
 }

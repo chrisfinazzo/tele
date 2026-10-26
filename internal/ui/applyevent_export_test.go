@@ -229,9 +229,14 @@ func (o *testOwner) Chats(_ context.Context) ([]project.ChatRow, error) {
 	return rows, o.cmdErr
 }
 
-// ResolveChat is for commands; no window names a chat this way.
+// ResolveChat and History are for commands; a window names a chat by id and
+// subscribes to its history.
 func (o *testOwner) ResolveChat(context.Context, core.ChatName) (project.ChatRow, error) {
 	return project.ChatRow{}, nil
+}
+
+func (o *testOwner) History(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
+	return nil, nil
 }
 
 func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {

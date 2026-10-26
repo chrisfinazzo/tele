@@ -100,7 +100,7 @@ type stubClient struct {
 	uploadBlock chan struct{}
 }
 
-func (s *stubClient) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (s *stubClient) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 

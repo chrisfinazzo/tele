@@ -29,6 +29,12 @@ type fakeAccount struct {
 	byName map[core.ChatName]project.ChatRow
 	named  []core.ChatName
 	topics map[int64][]project.TopicRow
+	// history is what History answers with; historyAsked and markedRead are
+	// what was asked of it.
+	history      []domain.Message
+	historyAsked []historyAsk
+	markedRead   []historyAsk
+	markErr      error
 }
 
 func newFakeAccount() *fakeAccount {
@@ -82,7 +88,7 @@ func TestAwaitReady_AnAccountWaitingOnALoginExitsFour(t *testing.T) {
 	acc.say(1, project.AccountConnecting)
 	acc.say(1, project.AccountLoggingIn)
 
-	err := awaitReady(shortCtx(t), acc)
+	_, err := awaitReady(shortCtx(t), acc)
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != notLoggedInCode {
@@ -101,7 +107,7 @@ func TestAwaitReady_WaitsThroughAnAccountEnding(t *testing.T) {
 	acc.say(2, project.AccountConnecting)
 	acc.say(2, project.AccountReady)
 
-	if err := awaitReady(shortCtx(t), acc); err != nil {
+	if _, err := awaitReady(shortCtx(t), acc); err != nil {
 		t.Fatal(err)
 	}
 	if len(acc.subs) != 2 {
@@ -116,7 +122,7 @@ func TestAwaitReady_AHostGoneExitsThree(t *testing.T) {
 	acc.say(1, project.AccountConnecting)
 	close(acc.stream)
 
-	err := awaitReady(shortCtx(t), acc)
+	_, err := awaitReady(shortCtx(t), acc)
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != noHostCode {
@@ -134,7 +140,7 @@ func TestAwaitReady_AConnectionThatEndedIsSaid(t *testing.T) {
 		Ended: &telerr.Error{Kind: telerr.AppKeyBlocked},
 	}}}
 
-	err := awaitReady(shortCtx(t), acc)
+	_, err := awaitReady(shortCtx(t), acc)
 
 	if err == nil || errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("got %v, want what the connection ended with", err)
@@ -151,7 +157,7 @@ func TestAwaitReady_ALogOutIsWaitedThrough(t *testing.T) {
 	acc.stream <- core.AccountEnded{Reason: core.EndLoggedOutElsewhere}
 	acc.say(2, project.AccountReady)
 
-	if err := awaitReady(shortCtx(t), acc); err != nil {
+	if _, err := awaitReady(shortCtx(t), acc); err != nil {
 		t.Fatal(err)
 	}
 	if len(acc.subs) != 2 {

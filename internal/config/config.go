@@ -103,6 +103,14 @@ type PhotosConfig struct {
 // avatar is bounded in size, belongs to a person, and is fetched over and over
 // for the same handful of people, so it gets its own budget rather than
 // competing with scrolled-past video thumbnails (#223, ADR 0007).
+// CLIConfig is how the commands print what they answer with (#181).
+type CLIConfig struct {
+	// SenderWidth is how many columns `tele show` gives a sender's name before
+	// cutting it short, so one long name does not push everybody's text to
+	// the right.
+	SenderWidth int `mapstructure:"sender_width"`
+}
+
 type AvatarsConfig struct {
 	// DiskCacheSize bounds the on-disk avatar cache in bytes. An avatar is
 	// fetched at Telegram's big size (ADR 0011), around a hundred kilobytes, so
@@ -124,6 +132,7 @@ type Config struct {
 	UI          UIConfig                  `mapstructure:"ui"`
 	Photos      PhotosConfig              `mapstructure:"photos"`
 	Avatars     AvatarsConfig             `mapstructure:"avatars"`
+	CLI         CLIConfig                 `mapstructure:"cli"`
 	Keybindings map[string]map[string]any `mapstructure:"keybindings"`
 
 	// StateDir holds one account's state: the session, the SQLite database and

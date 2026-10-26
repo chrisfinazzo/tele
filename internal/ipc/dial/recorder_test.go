@@ -193,6 +193,10 @@ func (r *recorder) ResolveChat(_ context.Context, name core.ChatName) (project.C
 	err := r.took("ResolveChat", name)
 	return result[project.ChatRow](r, "ResolveChat", 0), err
 }
+func (r *recorder) History(_ context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
+	err := r.took("History", h, before, limit)
+	return result[[]domain.Message](r, "History", 0), err
+}
 func (r *recorder) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	err := r.took("FolderFilters")
 	return result[[]domain.FolderFilter](r, "FolderFilters", 0), err

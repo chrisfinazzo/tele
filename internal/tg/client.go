@@ -17,6 +17,7 @@ import (
 	"github.com/gotd/td/tg"
 
 	"github.com/sorokin-vladimir/tele/internal/appkey"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
@@ -117,9 +118,9 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 
 // Connect starts the gotd client. Call in a goroutine — blocks until ctx is cancelled.
 // Closes readyCh once auth is complete and the updates loop has started.
-// onAuth is called with the authenticated user ID and username before readyCh
-// is closed; may be nil.
-func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
+// onAuth is called with the authenticated user (id, username and name) before
+// readyCh is closed; may be nil.
+func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- struct{}, onAuth func(domain.User)) error {
 	sess := NewFileSession(c.endpoint.SessionFile)
 	// Read before connecting, since gotd stores a fresh key as soon as it has
 	// one: whether there was a session decides whether a 401 is a log out that
@@ -321,7 +322,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		c.authorized.Store(true)
 
 		if onAuth != nil {
-			onAuth(self.ID, self.Username)
+			onAuth(domain.User{ID: self.ID, Username: self.Username, FirstName: self.FirstName, LastName: self.LastName})
 		}
 
 		c.mu.Lock()

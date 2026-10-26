@@ -17,6 +17,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/hosting"
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
@@ -34,7 +35,7 @@ type loggedOutConnection struct {
 }
 
 func (c *loggedOutConnection) Connect(context.Context, *internaltg.AuthFlow,
-	chan<- struct{}, func(int64, string)) error {
+	chan<- struct{}, func(domain.User)) error {
 	return &telerr.Error{Kind: telerr.Unauthorized, LogOut: telerr.LogOutElsewhere}
 }
 
@@ -48,7 +49,7 @@ type bannedConnection struct {
 }
 
 func (c *bannedConnection) Connect(context.Context, *internaltg.AuthFlow,
-	chan<- struct{}, func(int64, string)) error {
+	chan<- struct{}, func(domain.User)) error {
 	return &telerr.Error{Kind: telerr.AccountBanned}
 }
 

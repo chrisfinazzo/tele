@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/hosting"
@@ -60,9 +61,18 @@ func reachAccount(ctx context.Context, s setup) (*dial.Attachment, error) {
 	return att, nil
 }
 
+// heldAccount is the account a command asks, once it is ready: its surface,
+// who it is logged in as, and the command's own config, since a client's
+// settings are read by the client (#181).
+type heldAccount struct {
+	accountSurface
+	me  project.LoggedInUser
+	cfg *config.Config
+}
+
 // askAccount runs ask against the account held for the config o names, once
 // it is ready. Reaching it, waiting and asking share readyTimeout.
-func askAccount(ctx context.Context, o options, ask func(context.Context, accountSurface) error) error {
+func askAccount(ctx context.Context, o options, ask func(context.Context, heldAccount) error) error {
 	s, err := newSetup(o.cfgPath)
 	if err != nil {
 		return err
@@ -74,10 +84,11 @@ func askAccount(ctx context.Context, o options, ask func(context.Context, accoun
 		return err
 	}
 	defer func() { _ = att.Close() }()
-	if err := awaitReady(ctx, att); err != nil {
+	acct, err := awaitReady(ctx, att)
+	if err != nil {
 		return err
 	}
-	return ask(ctx, att)
+	return ask(ctx, heldAccount{accountSurface: att, me: acct.LoggedInUser, cfg: s.store.Current()})
 }
 
 // firstDelta subscribes to w and returns what the subscription is answered
@@ -114,15 +125,15 @@ const notFoundCode = 5
 // awaitReady returns once the account is ready to be asked: its chat list is
 // loaded. Connecting and loading pass by themselves and are waited for; a
 // login waits on a person, and ends the command.
-func awaitReady(ctx context.Context, acc accountSurface) error {
+func awaitReady(ctx context.Context, acc accountSurface) (project.AccountContents, error) {
 	sub := acc.Subscribe(project.AccountWindow{})
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("the account was not ready in time: %w", ctx.Err())
+			return project.AccountContents{}, fmt.Errorf("the account was not ready in time: %w", ctx.Err())
 		case msg, ok := <-acc.Stream():
 			if !ok {
-				return &exitCode{code: noHostCode, msg: "The tele that holds the account went away."}
+				return project.AccountContents{}, &exitCode{code: noHostCode, msg: "The tele that holds the account went away."}
 			}
 			if _, ended := msg.(core.AccountEnded); ended {
 				// The subscription ended with its owner; the next owner is
@@ -140,13 +151,13 @@ func awaitReady(ctx context.Context, acc accountSurface) error {
 					// next one after it.
 					continue
 				}
-				return fmt.Errorf("the account's connection ended: %w", ended)
+				return project.AccountContents{}, fmt.Errorf("the account's connection ended: %w", ended)
 			}
 			switch d.Account.Contents.Phase {
 			case project.AccountReady:
-				return nil
+				return d.Account.Contents, nil
 			case project.AccountLoggingIn:
-				return &exitCode{code: notLoggedInCode, msg: "The account is not logged in. Run tele to log in."}
+				return project.AccountContents{}, &exitCode{code: notLoggedInCode, msg: "The account is not logged in. Run tele to log in."}
 			}
 		}
 	}

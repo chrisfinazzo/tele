@@ -80,6 +80,10 @@ type Surface interface {
 	// ResolveChat answers with the chat a command named, by id, username or
 	// as me; one nobody holds is PeerNotFound (#181).
 	ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error)
+	// History answers with up to limit messages of a history older than
+	// before, the newest for zero, oldest first, fetching what the store
+	// lacks. It is how a command reads; a window subscribes (#181).
+	History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without asking

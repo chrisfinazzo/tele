@@ -20,9 +20,9 @@ import (
 // (#309).
 func (o *Owner) Start(ctx context.Context) error {
 	o.spawn(func() { o.runLogin(ctx) })
-	err := o.client.Connect(ctx, o.authFlow, o.readyCh, func(userID int64, username string) {
-		o.state.Store().SetOwnerID(userID)
-		o.onAuth(userID, username)
+	err := o.client.Connect(ctx, o.authFlow, o.readyCh, func(self domain.User) {
+		o.state.Store().SetOwnerID(self.ID)
+		o.onAuth(self)
 	})
 	o.connectionEnded(ctx, err)
 	return err

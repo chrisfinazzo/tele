@@ -46,7 +46,7 @@ func TestResolveChat_AnIDNotHeldIsNoChat(t *testing.T) {
 func TestResolveChat_MeIsTheLoggedInUsersChat(t *testing.T) {
 	o, st := newCmdOwner(t, &stubClient{})
 	st.SetChat(domain.Chat{ID: 77, Title: "Saved Messages", Peer: domain.Peer{ID: 77, Type: domain.PeerUser}})
-	o.loggedIn(77, "ada")
+	o.loggedIn(domain.User{ID: 77, Username: "ada"})
 
 	got, err := o.ResolveChat(context.Background(), ChatName{Me: true})
 

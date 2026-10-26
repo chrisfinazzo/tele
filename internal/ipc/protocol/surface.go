@@ -43,6 +43,7 @@ var surface = map[string]any{
 	"Topics":           core.Surface.Topics,
 	"Chat":             core.Surface.Chat,
 	"ResolveChat":      core.Surface.ResolveChat,
+	"History":          core.Surface.History,
 	"FolderFilters":    core.Surface.FolderFilters,
 	"GetParticipants":  core.Surface.GetParticipants,
 	"KnownUser":        core.Surface.KnownUser,

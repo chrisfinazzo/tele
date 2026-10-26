@@ -28,8 +28,8 @@ func newChatsCmd(o *options) *cobra.Command {
 			if archived {
 				q.folder = domain.ArchiveFolderID
 			}
-			return askAccount(cmd.Context(), *o, func(ctx context.Context, acc accountSurface) error {
-				return listChats(ctx, acc, cmd.OutOrStdout(), q)
+			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
+				return listChats(ctx, a, cmd.OutOrStdout(), q)
 			})
 		},
 	}

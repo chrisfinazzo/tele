@@ -291,6 +291,18 @@ var registry = []settings.Entry{
 		Applies: settings.Startup,
 		Min:     0,
 	},
+	{
+		Key:     "cli.sender_width",
+		Process: settings.Client,
+		Group:   "cli",
+		Label:   "Sender width",
+		Help:    "How many columns tele show gives a sender's name before cutting it short. Every message's text starts after the widest name shown, so one long name would push everybody's to the right.",
+		Widget:  settings.Number,
+		Applies: settings.NextUse,
+		Unit:    "columns",
+		Min:     4,
+		Max:     60,
+	},
 }
 
 // excluded names a field of Config that is deliberately not a setting, and says

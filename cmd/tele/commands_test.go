@@ -102,6 +102,10 @@ func TestUsage_AMistakeExitsTwo(t *testing.T) {
 		{"chats", "--archived", "--folder", "3"},
 		{"topics"},
 		{"topics", "Gophers"},
+		{"show"},
+		{"show", "Bob"},
+		{"show", "@bob", "--limit", "0"},
+		{"show", "@bob", "--limit", "201"},
 	} {
 		out, code := runBuilt(t, args...)
 		if code != usageCode {

@@ -23,8 +23,8 @@ func newTopicsCmd(o *options) *cobra.Command {
 			if _, err := parseChatName(args[0]); err != nil {
 				return err
 			}
-			return askAccount(cmd.Context(), *o, func(ctx context.Context, acc accountSurface) error {
-				return listTopics(ctx, acc, cmd.OutOrStdout(), args[0], asJSON)
+			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
+				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], asJSON)
 			})
 		},
 	}

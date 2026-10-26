@@ -91,6 +91,9 @@ type Throttle struct {
 type LoggedInUser struct {
 	ID       int64
 	Username string
+	// Name is the user's first and last name, as a command names the
+	// author of a message the account sent (#181).
+	Name string
 }
 
 // AccountDelta carries the account whole: it is small, and a part of it

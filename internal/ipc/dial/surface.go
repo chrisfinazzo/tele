@@ -156,6 +156,10 @@ func (a *Attachment) ResolveChat(ctx context.Context, name core.ChatName) (proje
 	return ask[project.ChatRow](a, ctx, "ResolveChat", name)
 }
 
+func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
+	return ask[[]domain.Message](a, ctx, "History", h, before, limit)
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return ask[[]domain.FolderFilter](a, ctx, "FolderFilters")
 }

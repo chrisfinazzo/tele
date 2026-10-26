@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -111,9 +113,10 @@ func (o *Owner) loadAccount(ctx context.Context) {
 
 // loggedIn records who the account is logged in as, for every client watching
 // it.
-func (o *Owner) loggedIn(userID int64, username string) {
+func (o *Owner) loggedIn(self domain.User) {
+	name := strings.TrimSpace(self.FirstName + " " + self.LastName)
 	o.updateAccount(func(c *project.AccountContents) {
-		c.LoggedInUser = project.LoggedInUser{ID: userID, Username: username}
+		c.LoggedInUser = project.LoggedInUser{ID: self.ID, Username: self.Username, Name: name}
 	})
 }
 
