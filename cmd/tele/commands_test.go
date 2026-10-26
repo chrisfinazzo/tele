@@ -99,6 +99,7 @@ func TestUsage_AMistakeExitsTwo(t *testing.T) {
 		{"version", "extra"},
 		{"daemon", "status", "--no-such-flag"},
 		{"chats", "extra"},
+		{"chats", "--archived", "--folder", "3"},
 	} {
 		out, code := runBuilt(t, args...)
 		if code != usageCode {

@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -18,8 +20,11 @@ type fakeAccount struct {
 	core.Surface
 	stream chan any
 	// subs are the windows subscribed, in order; the first gets SubID 1.
-	subs  []project.Window
-	chats []project.ChatRow
+	subs []project.Window
+	// chats is what a chat list subscription is answered with, whatever its
+	// folder: which chats a folder holds is the owner's business.
+	chats   []project.ChatRow
+	folders []domain.FolderFilter
 }
 
 func newFakeAccount() *fakeAccount {
@@ -30,10 +35,29 @@ func (f *fakeAccount) Stream() <-chan any { return f.stream }
 
 func (f *fakeAccount) Subscribe(w project.Window) project.SubID {
 	f.subs = append(f.subs, w)
-	return project.SubID(len(f.subs))
+	id := project.SubID(len(f.subs))
+	if _, ok := w.(project.ChatListWindow); ok {
+		f.stream <- project.Delta{Sub: id, ChatList: &project.ChatListDelta{
+			Kind: project.ChatListReset, Total: len(f.chats), Rows: f.chats,
+			Folders: project.FolderCounts{Filters: f.folders},
+		}}
+	}
+	return id
 }
 
-func (f *fakeAccount) Chats(context.Context) ([]project.ChatRow, error) { return f.chats, nil }
+func (f *fakeAccount) Unsubscribe(project.SubID) {}
+
+// folderAsked is the folder the command's chat list subscription asked for.
+func (f *fakeAccount) folderAsked(t *testing.T) int {
+	t.Helper()
+	for _, w := range f.subs {
+		if cw, ok := w.(project.ChatListWindow); ok {
+			return cw.Folder
+		}
+	}
+	t.Fatal("no chat list was subscribed to")
+	return 0
+}
 
 // say puts the account in phase on the stream, addressed to subscription sub.
 func (f *fakeAccount) say(sub project.SubID, phase project.AccountPhase) {
@@ -132,22 +156,25 @@ func TestAwaitReady_ALogOutIsWaitedThrough(t *testing.T) {
 }
 
 // `tele chats` prints the main list in its order, a line per chat with its id,
-// title and badges, and leaves the archived chats out (#181).
+// title and badges. The main list is the one a window shows first, without
+// the archived chats (#181).
 func TestChats_ListsTheMainListWithBadges(t *testing.T) {
 	acc := newFakeAccount()
 	acc.chats = []project.ChatRow{
 		{ID: 42, Title: "Alice", IsUser: true, Unread: 3, Mentions: 1},
-		{ID: 1007, Title: "Old news", Archived: true, Unread: 9},
 		{ID: 7, Title: "Work", Muted: true, Reactions: 2},
 		{ID: 300, Title: "Gophers", IsForum: true, Unread: 1, UnreadMark: true},
 		{ID: 5, Title: "Bob"},
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, false); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{}); err != nil {
 		t.Fatal(err)
 	}
 
+	if got := acc.folderAsked(t); got != 0 {
+		t.Errorf("asked for folder %d, want the main list", got)
+	}
 	want := "" +
 		"42   Alice    3 unread, 1 mention\n" +
 		"7    Work     2 reactions, muted\n" +
@@ -168,7 +195,7 @@ func TestChats_PrintsJSONLines(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, true); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{asJSON: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,5 +204,78 @@ func TestChats_PrintsJSONLines(t *testing.T) {
 		`{"id":300,"title":"Gophers","kind":"group","unread":1,"mentions":0,"reactions":2,"unread_mark":true,"muted":true,"archived":false,"forum":true}` + "\n"
 	if out.String() != want {
 		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// --archived lists the Archive, and --folder one of the account's folders,
+// each as a window shows it (#181).
+func TestChats_ListsTheFolderAskedFor(t *testing.T) {
+	for _, c := range []struct {
+		q      chatsQuery
+		folder int
+	}{
+		{chatsQuery{folder: domain.ArchiveFolderID}, domain.ArchiveFolderID},
+		{chatsQuery{folder: 3}, 3},
+	} {
+		acc := newFakeAccount()
+		acc.folders = []domain.FolderFilter{{ID: 3, Title: "Work"}}
+		acc.chats = []project.ChatRow{{ID: 7, Title: "Team"}}
+		var out bytes.Buffer
+
+		if err := listChats(shortCtx(t), acc, &out, c.q); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := acc.folderAsked(t); got != c.folder {
+			t.Errorf("asked for folder %d, want %d", got, c.folder)
+		}
+		if out.String() != "7  Team\n" {
+			t.Errorf("printed %q", out.String())
+		}
+	}
+}
+
+// A folder the account does not have is said to be missing, with the ones it
+// has, rather than listed as empty (#181).
+func TestChats_AFolderThatIsNotThereIsSaid(t *testing.T) {
+	acc := newFakeAccount()
+	acc.folders = []domain.FolderFilter{{ID: 0, Title: "All Chats"}, {ID: 3, Title: "Work"}, {ID: 4, Title: "Family"}}
+	var out bytes.Buffer
+
+	err := listChats(shortCtx(t), acc, &out, chatsQuery{folder: 9})
+
+	if err == nil {
+		t.Fatal("listed a folder that is not there")
+	}
+	assertSays(t, err.Error(), "9", "3 Work", "4 Family")
+	if out.Len() != 0 {
+		t.Errorf("printed %q", out.String())
+	}
+}
+
+// --unread keeps the chats with something unread, a chat marked unread among
+// them; a forum counts when any of its topics has unread (#181).
+func TestChats_UnreadKeepsTheChatsWithUnread(t *testing.T) {
+	acc := newFakeAccount()
+	acc.chats = []project.ChatRow{
+		{ID: 1, Title: "Read"},
+		{ID: 2, Title: "Unread", Unread: 2},
+		{ID: 3, Title: "Marked", UnreadMark: true},
+		{ID: 4, Title: "Forum", IsForum: true, Unread: 1},
+		{ID: 5, Title: "Quiet forum", IsForum: true},
+	}
+	var out bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{unread: true, asJSON: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	var ids []string
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		ids = append(ids, line[:strings.Index(line, ",")])
+	}
+	want := []string{`{"id":2`, `{"id":3`, `{"id":4`}
+	if strings.Join(ids, " ") != strings.Join(want, " ") {
+		t.Errorf("listed %v, want %v", ids, want)
 	}
 }

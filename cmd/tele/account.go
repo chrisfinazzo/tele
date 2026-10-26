@@ -80,6 +80,29 @@ func askAccount(ctx context.Context, o options, ask func(context.Context, accoun
 	return ask(ctx, att)
 }
 
+// firstDelta subscribes to w and returns what the subscription is answered
+// with first: the window whole, as every subscription begins (#181).
+func firstDelta(ctx context.Context, acc accountSurface, w project.Window) (project.Delta, error) {
+	sub := acc.Subscribe(w)
+	defer acc.Unsubscribe(sub)
+	for {
+		select {
+		case <-ctx.Done():
+			return project.Delta{}, fmt.Errorf("the account did not answer in time: %w", ctx.Err())
+		case msg, ok := <-acc.Stream():
+			if !ok {
+				return project.Delta{}, &exitCode{code: noHostCode, msg: "The tele that holds the account went away."}
+			}
+			if _, ended := msg.(core.AccountEnded); ended {
+				return project.Delta{}, errors.New("the account ended before it answered")
+			}
+			if d, ok := msg.(project.Delta); ok && d.Sub == sub {
+				return d, nil
+			}
+		}
+	}
+}
+
 // notLoggedInCode is what a command exits with when the account is not logged
 // in: logging in takes a person, and a command does not wait for one.
 const notLoggedInCode = 4

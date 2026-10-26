@@ -3,51 +3,106 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // newChatsCmd is `tele chats`: the chats of the account, a line each (#181).
 func newChatsCmd(o *options) *cobra.Command {
-	var asJSON bool
+	var q chatsQuery
+	var archived bool
 	cmd := &cobra.Command{
 		Use:   "chats",
 		Short: "List the chats",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if archived {
+				q.folder = domain.ArchiveFolderID
+			}
 			return askAccount(cmd.Context(), *o, func(ctx context.Context, acc accountSurface) error {
-				return listChats(ctx, acc, cmd.OutOrStdout(), asJSON)
+				return listChats(ctx, acc, cmd.OutOrStdout(), q)
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print a JSON object a chat, as docs/cli.md describes")
+	f := cmd.Flags()
+	f.BoolVar(&q.asJSON, "json", false, "print a JSON object a chat, as docs/cli.md describes")
+	f.BoolVar(&q.unread, "unread", false, "only the chats with something unread")
+	f.BoolVar(&archived, "archived", false, "the archived chats instead of the main list")
+	f.IntVar(&q.folder, "folder", 0, "the chats of the folder with this id instead of the main list")
+	cmd.MarkFlagsMutuallyExclusive("archived", "folder")
 	return cmd
 }
 
-// listChats prints the chats of the main list, in its order: as text, or as
-// JSON Lines.
-func listChats(ctx context.Context, acc accountSurface, out io.Writer, asJSON bool) error {
-	all, err := acc.Chats(ctx)
+// chatsQuery is what `tele chats` was asked for.
+type chatsQuery struct {
+	// folder is the list to print: 0 for the main list,
+	// domain.ArchiveFolderID for the archive, or a folder's id.
+	folder int
+	unread bool
+	asJSON bool
+}
+
+// listChats prints the chats of the list q names, in its order: as text, or
+// as JSON Lines. The list is the one a window would show, folder rules and
+// all, since only the owner holds what they are judged on.
+func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQuery) error {
+	d, err := firstDelta(ctx, acc, project.ChatListWindow{Folder: q.folder, Limit: math.MaxInt32})
 	if err != nil {
 		return err
 	}
+	list := d.ChatList
+	if list == nil {
+		return errors.New("the account answered with something other than its chats")
+	}
+	if q.folder != 0 && q.folder != domain.ArchiveFolderID && !hasFolder(list.Folders.Filters, q.folder) {
+		return fmt.Errorf("there is no folder %d. The folders are:\n%s", q.folder, foldersText(list.Folders.Filters))
+	}
 	var rows []project.ChatRow
-	for _, c := range all {
-		if !c.Archived {
+	for _, c := range list.Rows {
+		if !q.unread || c.Unread > 0 || c.UnreadMark {
 			rows = append(rows, c)
 		}
 	}
-	if asJSON {
+	if q.asJSON {
 		return chatsJSON(out, rows)
 	}
 	_, err = io.WriteString(out, chatsText(rows))
 	return err
+}
+
+func hasFolder(filters []domain.FolderFilter, id int) bool {
+	for _, f := range filters {
+		if f.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// foldersText is a line per folder the account has, its id and title. All
+// Chats and the Archive are not folders here: they are the list and
+// --archived.
+func foldersText(filters []domain.FolderFilter) string {
+	var b strings.Builder
+	for _, f := range filters {
+		if f.ID == 0 || f.ID == domain.ArchiveFolderID {
+			continue
+		}
+		fmt.Fprintf(&b, "  %d %s\n", f.ID, f.Title)
+	}
+	if b.Len() == 0 {
+		return "  none\n"
+	}
+	return b.String()
 }
 
 // chatJSON is a chat as `tele chats --json` prints it. Its fields are a

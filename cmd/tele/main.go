@@ -99,8 +99,9 @@ func newRootCmd() *cobra.Command {
 const usageCode = 2
 
 // usageExits makes every mistake in cmd's command line, and in its
-// subcommands', exit usageCode: a flag tele does not know, and arguments a
-// command does not take, an unknown command among them.
+// subcommands', exit usageCode: a flag tele does not know, arguments a
+// command does not take, an unknown command among them, and flags that cannot
+// go together.
 func usageExits(cmd *cobra.Command) {
 	usage := func(err error) error {
 		if err == nil {
@@ -111,6 +112,14 @@ func usageExits(cmd *cobra.Command) {
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage(err) })
 	if args := cmd.Args; args != nil {
 		cmd.Args = func(c *cobra.Command, a []string) error { return usage(args(c, a)) }
+	}
+	// Cobra checks the flag groups itself only after PreRunE, and returns what
+	// it finds as is; checked here first, a broken group is a usage mistake.
+	cmd.PreRunE = func(c *cobra.Command, _ []string) error {
+		if err := c.ValidateRequiredFlags(); err != nil {
+			return usage(err)
+		}
+		return usage(c.ValidateFlagGroups())
 	}
 	for _, sub := range cmd.Commands() {
 		usageExits(sub)
