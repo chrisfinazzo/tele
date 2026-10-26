@@ -55,6 +55,21 @@ func TestStatusText_SaysHowTheHostIsDoing(t *testing.T) {
 	}
 }
 
+// A host that keeps commands from the account says so, since that is why a
+// script was refused with exit 7; one that lets them in says nothing (#181).
+func TestStatusText_SaysWhenCommandsAreKeptFromTheAccount(t *testing.T) {
+	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", PID: 7, Kept: wire.KeptByService}
+	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev"}
+
+	off := statusText("/s", host, wire.HostStatus{Since: statusNow, AccountCommands: false}, nil, mine, statusNow)
+	on := statusText("/s", host, wire.HostStatus{Since: statusNow, AccountCommands: true}, nil, mine, statusNow)
+
+	assertSays(t, off, "cli.account_commands is off")
+	if strings.Contains(on, "cli.account_commands") {
+		t.Errorf("a host letting commands in says so:\n%s", on)
+	}
+}
+
 // A host that keeps nothing yet says so rather than inventing it.
 func TestStatusText_SaysWhatIsNotThereYet(t *testing.T) {
 	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", PID: 7, Kept: wire.KeptByWindow}

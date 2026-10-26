@@ -38,6 +38,7 @@ func (h *hostEnd) Settings() wire.HostSettings           { return h.settings }
 func (h *hostEnd) Reload() wire.ReloadResult             { return h.reload }
 func (h *hostEnd) Status() wire.HostStatus               { return h.status }
 func (h *hostEnd) Restart() (wire.RestartResult, func()) { return h.restart, nil }
+func (h *hostEnd) AccountCommands() bool                 { return true }
 func (h *hostEnd) Uninstall() wire.UninstallResult {
 	h.mu.Lock()
 	defer h.mu.Unlock()

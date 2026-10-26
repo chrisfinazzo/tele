@@ -109,6 +109,11 @@ type CLIConfig struct {
 	// cutting it short: a sender's in `tele show`, a chat's or topic's in the
 	// listings. One long name would push everything after it to the right.
 	NameWidth int `mapstructure:"name_width"`
+	// AccountCommands is whether commands may act on the account: list its
+	// chats, read and send. It is the host's, since a command could be given
+	// another config, and it stops tele's own command line only, not a
+	// program that reads the state directory (#181).
+	AccountCommands bool `mapstructure:"account_commands"`
 }
 
 type AvatarsConfig struct {

@@ -14,6 +14,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
@@ -88,7 +89,7 @@ func askAccount(ctx context.Context, o options, ask func(context.Context, heldAc
 	if err != nil {
 		return err
 	}
-	return ask(ctx, heldAccount{accountSurface: att, me: acct.LoggedInUser, cfg: s.store.Current()})
+	return commandsOff(ask(ctx, heldAccount{accountSurface: att, me: acct.LoggedInUser, cfg: s.store.Current()}))
 }
 
 // firstDelta subscribes to w and returns what the subscription is answered
@@ -103,6 +104,9 @@ func firstDelta(ctx context.Context, acc accountSurface, w project.Window) (proj
 		case msg, ok := <-acc.Stream():
 			if !ok {
 				return project.Delta{}, &exitCode{code: noHostCode, msg: "The tele that holds the account went away."}
+			}
+			if failure, ok := msg.(core.HostFailure); ok && failure.Err != nil && failure.Err.Kind == telerr.CommandsOff {
+				return project.Delta{}, commandsOff(failure.Err)
 			}
 			if _, ended := msg.(core.AccountEnded); ended {
 				return project.Delta{}, errors.New("the account ended before it answered")
@@ -122,6 +126,21 @@ const notLoggedInCode = 4
 // was given is not there.
 const notFoundCode = 5
 
+// commandsOffCode is what a command exits with when the tele holding the
+// account does not let commands reach it (#181).
+const commandsOffCode = 7
+
+// commandsOff turns the refusal of a tele that does not let commands reach
+// the account into exit 7, naming the setting; any other error is left as it
+// is.
+func commandsOff(err error) error {
+	if telerr.Of(err) != telerr.CommandsOff {
+		return err
+	}
+	return &exitCode{code: commandsOffCode, msg: "The tele holding the account does not let commands reach it: " +
+		"cli.account_commands is off in its config."}
+}
+
 // awaitReady returns once the account is ready to be asked: its chat list is
 // loaded. Connecting and loading pass by themselves and are waited for; a
 // login waits on a person, and ends the command.
@@ -134,6 +153,9 @@ func awaitReady(ctx context.Context, acc accountSurface) (project.AccountContent
 		case msg, ok := <-acc.Stream():
 			if !ok {
 				return project.AccountContents{}, &exitCode{code: noHostCode, msg: "The tele that holds the account went away."}
+			}
+			if failure, ok := msg.(core.HostFailure); ok && failure.Err != nil && failure.Err.Kind == telerr.CommandsOff {
+				return project.AccountContents{}, commandsOff(failure.Err)
 			}
 			if _, ended := msg.(core.AccountEnded); ended {
 				// The subscription ended with its owner; the next owner is

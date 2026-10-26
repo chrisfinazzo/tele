@@ -28,6 +28,9 @@ type Attachment interface {
 	core.Surface
 	SubscribeAs(id project.SubID, w project.Window) error
 	Stream() <-chan any
+	// Tell puts ev on the client's stream, for what the host says to it
+	// rather than what an owner does.
+	Tell(ev any)
 	Detach()
 }
 
@@ -54,6 +57,9 @@ type Host interface {
 	Status() wire.HostStatus
 	Restart() (wire.RestartResult, func())
 	Uninstall() wire.UninstallResult
+	// AccountCommands is cli.account_commands as the host holds it now:
+	// whether a command may act on the account (#181).
+	AccountCommands() bool
 }
 
 // Conn serves att over conn until the client goes, ctx ends, or one side says
@@ -122,6 +128,7 @@ func (c *served) greet(dec *wire.Decoder, host wire.Hello) error {
 	if err := json.Unmarshal(f.Params, &client); err != nil {
 		return fmt.Errorf("%w: hello: %v", wire.ErrProtocol, err)
 	}
+	c.kind = client.Kind
 	if g, ok := c.att.(Greeter); ok {
 		g.Greeted(client)
 	}
@@ -150,6 +157,9 @@ type served struct {
 	att  Attachment
 	host Host
 	enc  *wire.Encoder
+	// kind is what the client said it is in its hello. A command is held to
+	// cli.account_commands and never changes the host's settings (#181).
+	kind wire.ClientKind
 
 	mu sync.Mutex
 	// calls holds what calls off each call still running, by request id.
@@ -241,6 +251,18 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 		}))
 		return nil
 	}
+	if c.kind == wire.KindCommand && !c.host.AccountCommands() {
+		err := &telerr.Error{
+			Kind: telerr.CommandsOff, Op: f.Method,
+			Detail: "cli.account_commands is off for the tele holding the account",
+		}
+		if f.Method == protocol.MethodSubscribe {
+			// Nobody waits on a subscription's reply: its first delta is the
+			// answer, so the refusal is told where that would have come.
+			c.att.Tell(core.HostFailure{Err: err})
+		}
+		return c.fail(f.ID, err)
+	}
 	args, err := call.Args(f.Params)
 	if err != nil {
 		return err
@@ -288,6 +310,17 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 // goroutine, in the order they were asked: each is a read or a write of one
 // file, and a set followed by a reload must find the set done.
 func (c *served) hostCall(f wire.Frame) (answer any, then func(), ok bool, err error) {
+	// A command never changes the host's settings: one that could would turn
+	// cli.account_commands back on (#181).
+	const commandsDoNotSet = "A command does not change the settings of the tele holding the account."
+	if c.kind == wire.KindCommand {
+		switch f.Method {
+		case wire.MethodSet:
+			return wire.SetResult{Refused: commandsDoNotSet}, nil, true, nil
+		case wire.MethodReload:
+			return wire.ReloadResult{Failed: commandsDoNotSet}, nil, true, nil
+		}
+	}
 	switch f.Method {
 	case wire.MethodSettings:
 		return c.host.Settings(), nil, true, nil

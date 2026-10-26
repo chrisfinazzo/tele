@@ -303,6 +303,15 @@ var registry = []settings.Entry{
 		Min:     4,
 		Max:     60,
 	},
+	{
+		Key:     "cli.account_commands",
+		Process: settings.Host,
+		Group:   "cli",
+		Label:   "Commands may act on the account",
+		Help:    "Whether tele chats, tele topics, tele show and tele send may reach your chats. Off, they are refused and exit 7, so a script or an AI agent allowed to run tele cannot read or write your messages through it. It does not stop a program that reads the state directory itself.",
+		Widget:  settings.Toggle,
+		Applies: settings.Immediate,
+	},
 }
 
 // excluded names a field of Config that is deliberately not a setting, and says

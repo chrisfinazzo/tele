@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +128,36 @@ func TestAwaitReady_AHostGoneExitsThree(t *testing.T) {
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != noHostCode {
 		t.Fatalf("got %v, want exit %d", err, noHostCode)
+	}
+}
+
+// A tele that does not let commands reach the account says so on the stream,
+// where the command is waiting; the command exits 7 and names the setting
+// (#181).
+func TestAwaitReady_CommandsTurnedOffExitSeven(t *testing.T) {
+	acc := newFakeAccount()
+	acc.stream <- core.HostFailure{Err: &telerr.Error{Kind: telerr.CommandsOff}}
+
+	_, err := awaitReady(shortCtx(t), acc)
+
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != commandsOffCode {
+		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
+	}
+	assertSays(t, code.msg, "cli.account_commands")
+}
+
+// A call refused the same way exits 7 too, whichever call it was.
+func TestCommandsOff_ARefusedCallExitsSeven(t *testing.T) {
+	err := commandsOff(fmt.Errorf("resolving: %w", &telerr.Error{Kind: telerr.CommandsOff}))
+
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != commandsOffCode {
+		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
+	}
+	other := errors.New("something else")
+	if commandsOff(other) != other {
+		t.Error("another error was taken for a refusal")
 	}
 }
 

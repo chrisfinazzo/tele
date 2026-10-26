@@ -35,6 +35,7 @@ func (helloHost) Reload() wire.ReloadResult                { return wire.ReloadR
 func (helloHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
 func (helloHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (helloHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+func (helloHost) AccountCommands() bool                    { return true }
 
 // noConn is a connection to Telegram nothing in these tests reaches.
 type noConn struct{ internaltg.Client }

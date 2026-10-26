@@ -56,6 +56,9 @@ type HostStatus struct {
 	// asking left out (#213).
 	Windows  int `json:"windows"`
 	Commands int `json:"commands"`
+	// AccountCommands is cli.account_commands: whether the host lets commands
+	// act on the account (#181).
+	AccountCommands bool `json:"account_commands"`
 	// Account is how the account is doing, nil between one account and the
 	// next.
 	Account *AccountStatus `json:"account,omitempty"`

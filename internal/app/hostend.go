@@ -84,6 +84,12 @@ func (e *HostEnd) Restart() (wire.RestartResult, func()) {
 	return wire.RestartResult{}, restart
 }
 
+// AccountCommands is cli.account_commands as the host read it last: whether a
+// command may act on the account (#181).
+func (e *HostEnd) AccountCommands() bool {
+	return e.store.Current().CLI.AccountCommands
+}
+
 // Uninstall takes note that the host, a service, is being uninstalled: the
 // stop its service manager makes next is for good. Any other host is not one
 // to uninstall, and refuses (#182).
@@ -114,7 +120,7 @@ func (e *HostEnd) Status() wire.HostStatus {
 	e.mu.Lock()
 	windows, commands, account := e.windows, e.commands, e.account
 	e.mu.Unlock()
-	s := wire.HostStatus{Since: e.since}
+	s := wire.HostStatus{Since: e.since, AccountCommands: e.AccountCommands()}
 	if windows != nil {
 		s.Windows = windows()
 	}

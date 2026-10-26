@@ -62,6 +62,7 @@ func (r *recorder) SubscribeAs(id project.SubID, w project.Window) error {
 }
 func (r *recorder) Stream() <-chan any { return r.stream }
 func (r *recorder) Detach()            { _ = r.took("Detach") }
+func (r *recorder) Tell(ev any)        { r.stream <- ev }
 
 // held waits, for a method the test blocked, until ctx ends, and tells the
 // test that it did.

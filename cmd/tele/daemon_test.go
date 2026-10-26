@@ -32,6 +32,7 @@ func (heldHost) Reload() wire.ReloadResult                { return wire.ReloadRe
 func (heldHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
 func (heldHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (heldHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+func (heldHost) AccountCommands() bool                    { return true }
 
 // `tele daemon` only ever hosts: with the state directory already hosted by
 // another tele, it stops and names that tele by its pid and version (#208).

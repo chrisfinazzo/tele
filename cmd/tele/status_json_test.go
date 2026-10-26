@@ -30,7 +30,7 @@ func TestStatusJSON_SaysHowTheHostIsDoing(t *testing.T) {
 	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.10"}
 	until := statusNow.Add(32 * time.Second)
 	status := wire.HostStatus{
-		Since: statusNow.Add(-time.Hour), Windows: 2, Commands: 1,
+		Since: statusNow.Add(-time.Hour), Windows: 2, Commands: 1, AccountCommands: false,
 		Account: &wire.AccountStatus{
 			Phase: wire.PhaseReady, User: "ada", Link: wire.LinkUp,
 			LinkSince: statusNow.Add(-time.Minute), LastUpdate: statusNow.Add(-time.Second), Outbox: 3,
@@ -50,9 +50,10 @@ func TestStatusJSON_SaysHowTheHostIsDoing(t *testing.T) {
 			"binary": "2.0.0-beta.9", "protocol": float64(wire.ProtocolVersion), "pid": float64(4242),
 			"kept": "service", "config": "/c.yml",
 		},
-		"since":    statusNow.Add(-time.Hour).Format(time.RFC3339),
-		"windows":  float64(2),
-		"commands": float64(1),
+		"since":            statusNow.Add(-time.Hour).Format(time.RFC3339),
+		"windows":          float64(2),
+		"commands":         float64(1),
+		"account_commands": false,
 		"account": map[string]any{
 			"phase": "ready", "user": "ada", "link": "up",
 			"link_since":  statusNow.Add(-time.Minute).Format(time.RFC3339),
@@ -79,7 +80,7 @@ func TestStatusJSON_LeavesOutWhatIsNotThere(t *testing.T) {
 	}
 	v := decoded(t, raw)
 
-	for _, key := range []string{"since", "windows", "commands", "account", "service_warning"} {
+	for _, key := range []string{"since", "windows", "commands", "account_commands", "account", "service_warning"} {
 		if _, ok := v[key]; ok {
 			t.Errorf("%q is there: %s", key, raw)
 		}

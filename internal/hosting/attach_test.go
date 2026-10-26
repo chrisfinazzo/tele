@@ -29,6 +29,7 @@ func (serviceHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetRe
 func (serviceHost) Reload() wire.ReloadResult                { return wire.ReloadResult{} }
 func (serviceHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
 func (serviceHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+func (serviceHost) AccountCommands() bool                    { return true }
 func (s serviceHost) Restart() (wire.RestartResult, func()) {
 	return wire.RestartResult{}, func() { go s.restart() }
 }

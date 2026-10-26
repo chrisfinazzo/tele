@@ -15,6 +15,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ipc/protocol"
 	"github.com/sorokin-vladimir/tele/internal/ipc/serve"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 var hello = wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", Config: "/tmp/tele/config.yml"}
@@ -29,6 +30,7 @@ func (helloHost) Reload() wire.ReloadResult                { return wire.ReloadR
 func (helloHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
 func (helloHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (helloHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+func (helloHost) AccountCommands() bool                    { return true }
 
 // restartingHost is a service that, asked to restart, stops: it tells the
 // client so and waits until the connection is gone, as a host does when it
@@ -157,6 +159,124 @@ func TestAServiceAnswersARestartBeforeItStops(t *testing.T) {
 
 // A subscription id that does not grow could be read as one already
 // replaced, so the client that sent it is speaking another protocol.
+// commandsHost is a host whose cli.account_commands is on or off.
+type commandsHost struct {
+	helloHost
+	on bool
+}
+
+func (h commandsHost) AccountCommands() bool { return h.on }
+
+func (commandsHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetResult{} }
+
+// serveAs serves a client of kind, before a host whose cli.account_commands
+// is on, and has the client say hello.
+func serveAs(t *testing.T, kind wire.ClientKind, on bool) rawClient {
+	t.Helper()
+	client, host := net.Pipe()
+	t.Cleanup(func() { _ = client.Close() })
+	served := make(chan error, 1)
+	go func() {
+		served <- serve.Conn(context.Background(), host, core.NewAttachment(), commandsHost{on: on})
+	}()
+	c := rawClient{conn: client, dec: wire.NewDecoder(client), enc: wire.NewEncoder(client), served: served}
+	mine := hello
+	mine.Kind = kind
+	raw, err := json.Marshal(mine)
+	require.NoError(t, err)
+	require.NoError(t, c.enc.Encode(wire.Request(1, wire.MethodHello, raw)))
+	_, err = c.dec.Decode()
+	require.NoError(t, err)
+	// A host that never answers fails the test rather than hanging it.
+	require.NoError(t, client.SetReadDeadline(time.Now().Add(2*time.Second)))
+	return c
+}
+
+// ask makes a call with no arguments and reads its answer.
+func (c rawClient) ask(t *testing.T, id uint64, method string) wire.Frame {
+	t.Helper()
+	require.NoError(t, c.enc.Encode(wire.Request(id, method, json.RawMessage("[]"))))
+	for {
+		f, err := c.dec.Decode()
+		require.NoError(t, err)
+		if f.ID == id {
+			return f
+		}
+	}
+}
+
+// With cli.account_commands off, a command is refused everything about the
+// account, and told why. A window is not a command, and is served (#181).
+func TestCommandsOff_ACommandIsRefusedTheAccount(t *testing.T) {
+	command := serveAs(t, wire.KindCommand, false)
+	f := command.ask(t, 2, "Chats")
+	require.NotNil(t, f.Error, "%+v", f)
+	assert.Equal(t, telerr.CommandsOff, f.Error.Kind)
+	assert.Contains(t, f.Error.Error(), "cli.account_commands")
+
+	window := serveAs(t, wire.KindWindow, false)
+	f = window.ask(t, 2, "Chats")
+	if f.Error != nil {
+		assert.NotEqual(t, telerr.CommandsOff, f.Error.Kind, "a window was refused as a command")
+	}
+}
+
+// With it on, a command is served like anybody else.
+func TestCommandsOn_ACommandIsServed(t *testing.T) {
+	command := serveAs(t, wire.KindCommand, true)
+
+	f := command.ask(t, 2, "Chats")
+
+	if f.Error != nil {
+		assert.NotEqual(t, telerr.CommandsOff, f.Error.Kind)
+	}
+}
+
+// A subscription is answered by its first delta, not by a reply a client
+// waits on: the refusal of one is also told on the stream, where a command
+// waiting for the account is reading.
+func TestCommandsOff_ASubscriptionIsRefusedOnTheStream(t *testing.T) {
+	command := serveAs(t, wire.KindCommand, false)
+	params, err := protocol.Calls[protocol.MethodSubscribe].Params(project.SubID(1), project.AccountWindow{})
+	require.NoError(t, err)
+
+	require.NoError(t, command.enc.Encode(wire.Request(2, protocol.MethodSubscribe, params)))
+
+	for {
+		f, err := command.dec.Decode()
+		require.NoError(t, err)
+		if f.Event == "" {
+			continue
+		}
+		ev, err := protocol.Unframe(f)
+		require.NoError(t, err)
+		failure, ok := ev.(core.HostFailure)
+		require.True(t, ok, "%+v", ev)
+		assert.Equal(t, telerr.CommandsOff, failure.Err.Kind)
+		return
+	}
+}
+
+// A command never changes the host's settings, whatever cli.account_commands
+// says: one that could would turn it back on (#181).
+func TestACommandDoesNotChangeTheHostsSettings(t *testing.T) {
+	command := serveAs(t, wire.KindCommand, true)
+
+	raw, err := json.Marshal(wire.SetParams{Key: "cli.account_commands", Value: json.RawMessage("true")})
+	require.NoError(t, err)
+	require.NoError(t, command.enc.Encode(wire.Request(2, wire.MethodSet, raw)))
+	f, err := command.dec.Decode()
+	require.NoError(t, err)
+	var set wire.SetResult
+	require.NoError(t, json.Unmarshal(f.Result, &set))
+	assert.NotEmpty(t, set.Refused)
+
+	f = command.ask(t, 3, wire.MethodReload)
+	var reload wire.ReloadResult
+	require.NoError(t, json.Unmarshal(f.Result, &reload))
+	assert.NotEmpty(t, reload.Failed)
+}
+
 func TestAHostRefusesASubscriptionIDThatDoesNotGrow(t *testing.T) {
 	c := serveRaw(t)
 	c.greet(t)
