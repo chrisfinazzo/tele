@@ -1,6 +1,6 @@
 # 配置
 
-> 本文译自 [configuration.md](../configuration.md)，对应提交 `acedf3a`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [configuration.md](../configuration.md)，对应提交 `a64b8cf`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 `tele` 使用一个 YAML 文件，首次运行时创建：
 
@@ -66,6 +66,7 @@ avatars:
 
 cli:
   name_width: 20 # columns a command gives a name or title before cutting it short
+  account_commands: all # all | read | none: what commands may do with your chats
 
 # keybindings: see keybindings.md
 ```

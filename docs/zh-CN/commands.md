@@ -1,6 +1,6 @@
 # 命令
 
-> 本文译自 [commands.md](../commands.md)，对应提交 `e69280b`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [commands.md](../commands.md)，对应提交 `a64b8cf`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 `tele` 的全部命令及其参数。命令的共同点（如何命名、如何指定聊天、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
 
@@ -9,6 +9,7 @@
 - [`tele chats`](#tele-chats)
 - [`tele topics`](#tele-topics)
 - [`tele show`](#tele-show)
+- [`tele send`](#tele-send)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
 - [`tele theme dump`](#tele-theme-dump)
@@ -92,6 +93,32 @@ tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
 | `--mark-read`   | 把聊天（或话题）标为已读，直到打印出的最后一条消息为止                          |
 | `--json`        | 每条消息输出一个 JSON 对象，见 [cli.md](cli.md#tele-show---json)                |
 
+<a id="tele-send"></a>
+## `tele send`
+
+```console
+tele send CHAT [TEXT...] [--topic ID] [--plain] [--ref KEY] [--timeout D] [--no-wait] [--json]
+echo "the build is green" | tele send @team
+```
+
+发送一条消息：内容是传入的单词，以空格连接；没有传入时，则是从 stdin 读到的内容。标记的解析方式与输入框相同（`**bold**`、`` `code` `` 等）；`--plain` 按原样发送文本。发往论坛时，除非用 `--topic` 指定其他话题，消息会进入 General 话题。
+
+消息先进入队列，和在窗口中输入的消息一样，所以持有账号的 `tele` 重启后它仍然存在。然后 `send` 等待它发出，并打印它成为的那条消息的 id：
+
+- 如果消息不会发出，以退出码 6 结束，并说明原因。消息留在聊天中，等人在窗口里重试或丢弃。
+- 如果时间到了消息仍在队列中，或者失去了所询问的 `tele`，以退出码 75 结束。消息会自行发出。
+
+`--ref` 为这次发送命名。用同一个 `--ref` 再次运行同一个 `tele send` 不会发出第二条消息：它会等待第一条，或者说明它已经发出。在 75 之后或丢失回应之后重试的脚本应使用它。ref 在其消息发出后会被记住 30 天。
+
+| 参数              | 作用                                                                            |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `--topic <id>`    | 发往论坛的哪个话题；不加时为 General                                            |
+| `--plain`         | 按原样发送文本，不解析其中的标记                                                |
+| `--ref <key>`     | 为这次发送命名，这样再次运行同一命令时不会发送两次                              |
+| `--timeout <d>`   | 等待消息发出的时长，默认 `30s`                                                  |
+| `--no-wait`       | 消息进入队列后立即返回，给出它的 ref 和所处状态                                 |
+| `--json`          | 以一个 JSON 对象输出回答，见 [cli.md](cli.md#tele-send---json)                  |
+
 <a id="tele-version"></a>
 ## `tele version`
 
@@ -145,7 +172,7 @@ tele daemon [--service]
 tele daemon status [--json]
 ```
 
-说明持有账号的 `tele`（包括窗口）的运行状况：它的版本与当前版本的对比，是什么让它保持运行（窗口、`tele daemon` 或服务）以及从何时开始，连接到它的窗口和其他命令的数量，账号所处的状态，与 Telegram 的连接是否正常，最近一次更新何时到达，有多少消息等待发送，以及 Telegram 要求的任何等待。如果已安装的服务运行的命令已不存在，或者版本与当前版本不同，它也会发出警告。
+说明持有账号的 `tele`（包括窗口）的运行状况：它的版本与当前版本的对比，是什么让它保持运行（窗口、`tele daemon` 或服务）以及从何时开始，连接到它的窗口和其他命令的数量，账号所处的状态，与 Telegram 的连接是否正常，最近一次更新何时到达，有多少消息等待发送，Telegram 要求的任何等待，以及命令是否受到 [`cli.account_commands`](cli.md#keeping-commands-out-of-your-chats) 的限制。如果已安装的服务运行的命令已不存在，或者版本与当前版本不同，它也会发出警告。
 
 有 `tele` 回应时以退出码 0 结束，没有任何回应时以 3 结束。
 

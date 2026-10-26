@@ -1,6 +1,6 @@
 # Настройка
 
-> Перевод [configuration.md](../configuration.md) на коммит `acedf3a`. Если перевод расходится с английской версией, верна английская.
+> Перевод [configuration.md](../configuration.md) на коммит `a64b8cf`. Если перевод расходится с английской версией, верна английская.
 
 `tele` хранит один файл YAML, который создаётся при первом запуске:
 
@@ -92,6 +92,7 @@ avatars:
 
 cli:
   name_width: 20 # columns a command gives a name or title before cutting it short
+  account_commands: all # all | read | none: what commands may do with your chats
 
 # keybindings: see keybindings.md
 ```
