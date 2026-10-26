@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-26
+
 ### Fixed
 
 - 2.0.1 was tagged but never released: the documentation tests compared paths
