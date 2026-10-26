@@ -1,6 +1,6 @@
 # 命令
 
-> 本文译自 [commands.md](../commands.md)，对应提交 `acedf3a`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [commands.md](../commands.md)，对应提交 `e69280b`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 `tele` 的全部命令及其参数。命令的共同点（如何命名、如何指定聊天、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
 
@@ -44,7 +44,7 @@ tele [-c PATH]
 ## `tele chats`
 
 ```console
-tele chats [--unread] [--archived | --folder ID] [--json]
+tele chats [--unread] [--archived | --folder ID] [--limit N] [--json]
 ```
 
 按聊天列表中的顺序列出聊天，每个聊天一行：聊天的 id、标题和标记（未读、提及、回应、手动标为未读、静音，论坛还会显示有未读的话题数）。标记都从同一列开始，即最长的标题之后；标题宽于 `cli.name_width` 列（默认 20）时会被截断。不加参数时列出主列表，不含已归档的聊天。
@@ -54,20 +54,22 @@ tele chats [--unread] [--archived | --folder ID] [--json]
 | `--unread`      | 只列出有未读内容的聊天，包括手动标为未读的                                      |
 | `--archived`    | 列出已归档的聊天，而不是主列表                                                  |
 | `--folder <id>` | 列出你的某个文件夹中的聊天，与聊天列表中显示的一致。没有这个文件夹时以退出码 5 结束，并列出已有的文件夹 |
+| `--limit <n>`   | 最多列出这么多个，取其他参数筛选后的前几个。不加此参数时全部列出               |
 | `--json`        | 每个聊天输出一个 JSON 对象，见 [cli.md](cli.md#tele-chats---json)               |
 
 <a id="tele-topics"></a>
 ## `tele topics`
 
 ```console
-tele topics CHAT [--json]
+tele topics CHAT [--limit N] [--json]
 ```
 
 按话题列表中的顺序列出论坛的话题，每个话题一行：话题的 id、标题和标记，标题与 `tele chats` 中一样按 `cli.name_width` 截断。聊天不是论坛时以退出码 5 结束。`tele show --topic` 接受的就是这个 id。
 
-| 参数     | 作用                                                                  |
-| -------- | --------------------------------------------------------------------- |
-| `--json` | 每个话题输出一个 JSON 对象，见 [cli.md](cli.md#tele-topics---json)    |
+| 参数          | 作用                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| `--limit <n>` | 最多列出这么多个，取列表的前几个。不加此参数时全部列出                |
+| `--json`      | 每个话题输出一个 JSON 对象，见 [cli.md](cli.md#tele-topics---json)    |
 
 <a id="tele-show"></a>
 ## `tele show`
