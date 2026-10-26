@@ -1,11 +1,14 @@
 # 命令
 
-> 本文译自 [commands.md](../commands.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [commands.md](../commands.md)，对应提交 `608d812`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
-`tele` 的全部命令及其参数。命令的共同点（如何命名、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
+`tele` 的全部命令及其参数。命令的共同点（如何命名、如何指定聊天、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
 
 - [所有命令都接受的参数](#flags-every-command-takes)
 - [`tele`](#tele)
+- [`tele chats`](#tele-chats)
+- [`tele topics`](#tele-topics)
+- [`tele show`](#tele-show)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
 - [`tele theme dump`](#tele-theme-dump)
@@ -36,6 +39,56 @@ tele [-c PATH]
 打开一个显示账号的窗口。如果没有其他 `tele` 持有该账号，就由这个窗口持有，直到窗口关闭；如果已有 `tele` 持有（某个窗口、`tele daemon` 或服务），这个窗口会连接到它并共用它的连接。关闭一个持有账号、且还有其他窗口连接着的窗口时，会先询问，然后把那些窗口一起关闭。
 
 持有账号的 `tele` 第一次在可以安装服务的机器上登录时，会询问一次是否安装服务。参见[无窗口运行](configuration.md#running-without-a-window)。
+
+<a id="tele-chats"></a>
+## `tele chats`
+
+```console
+tele chats [--unread] [--archived | --folder ID] [--json]
+```
+
+按聊天列表中的顺序列出聊天，每个聊天一行：聊天的 id、标题和标记（未读、提及、回应、手动标为未读、静音，论坛还会显示有未读的话题数）。不加参数时列出主列表，不含已归档的聊天。
+
+| 参数            | 作用                                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| `--unread`      | 只列出有未读内容的聊天，包括手动标为未读的                                      |
+| `--archived`    | 列出已归档的聊天，而不是主列表                                                  |
+| `--folder <id>` | 列出你的某个文件夹中的聊天，与聊天列表中显示的一致。没有这个文件夹时以退出码 5 结束，并列出已有的文件夹 |
+| `--json`        | 每个聊天输出一个 JSON 对象，见 [cli.md](cli.md#tele-chats---json)               |
+
+<a id="tele-topics"></a>
+## `tele topics`
+
+```console
+tele topics CHAT [--json]
+```
+
+按话题列表中的顺序列出论坛的话题，每个话题一行：话题的 id、标题和标记。聊天不是论坛时以退出码 5 结束。`tele show --topic` 接受的就是这个 id。
+
+| 参数     | 作用                                                                  |
+| -------- | --------------------------------------------------------------------- |
+| `--json` | 每个话题输出一个 JSON 对象，见 [cli.md](cli.md#tele-topics---json)    |
+
+<a id="tele-show"></a>
+## `tele show`
+
+```console
+tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
+```
+
+按从旧到新的顺序打印聊天的最新消息：每条消息一行，包含时间、发送者和文本；日期变化处有一行日期；回复下方有一行说明它回复的是哪条消息。所有消息的文本都从同一列开始，即最长的发送者名字之后；名字宽于 `cli.sender_width` 列（默认 20）时会被截断。媒体只显示名称，从不下载：`[photo]`、`[voice 0:12]`、`[file report.pdf]`。本地历史中没有的消息会从 Telegram 获取，与在窗口中向上滚动时一样。
+
+除非明确要求，`show` 不做任何改动：加上 `--mark-read` 时，它把聊天标为已读，直到打印出的最后一条消息为止，不会更多。
+
+论坛的消息都在它的话题里：用 `--topic` 指定一个话题，否则 `show` 以退出码 5 结束，并提示使用 `tele topics`。
+
+| 参数            | 作用                                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| `--topic <id>`  | 要显示的论坛话题                                                                |
+| `--limit <n>`   | 显示多少条消息，默认 20，最多 200                                               |
+| `--before <id>` | 显示比这条消息更早的消息，用于向前翻阅历史                                      |
+| `--mark-read`   | 把聊天（或话题）标为已读，直到打印出的最后一条消息为止                          |
+| `--json`        | 每条消息输出一个 JSON 对象，见 [cli.md](cli.md#tele-show---json)                |
 
 <a id="tele-version"></a>
 ## `tele version`
