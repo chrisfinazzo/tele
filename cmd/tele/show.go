@@ -90,7 +90,7 @@ func showMessages(ctx context.Context, a heldAccount, out io.Writer, chat string
 	if q.asJSON {
 		return showJSON(out, msgs, a.me)
 	}
-	_, err = io.WriteString(out, showText(msgs, a.me, a.cfg.CLI.SenderWidth, time.Local))
+	_, err = io.WriteString(out, showText(msgs, a.me, a.cfg.CLI.NameWidth, time.Local))
 	return err
 }
 
@@ -140,7 +140,7 @@ func shownName(m domain.Message, width int) string {
 	case name == "":
 		name = "?"
 	}
-	return ansi.Truncate(name, width, "…")
+	return cutName(name, width)
 }
 
 // quote is what a reply line says of the message replied to: who wrote it and

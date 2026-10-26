@@ -195,6 +195,29 @@ func TestChats_ListsTheMainListWithBadges(t *testing.T) {
 	}
 }
 
+// A title wider than the name width is cut short, as a sender's name is in
+// `tele show`, so one long title does not push everybody's badges to the
+// right. JSON keeps it whole (#181).
+func TestChats_CutsALongTitle(t *testing.T) {
+	acc := newFakeAccount()
+	acc.chats = []project.ChatRow{
+		{ID: 1, Title: "The Very Long Name of a Group", Unread: 2},
+		{ID: 2, Title: "Bob", Muted: true},
+	}
+	var out bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{nameWidth: 10}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "" +
+		"1  The Very…  2 unread\n" +
+		"2  Bob        muted\n"
+	if out.String() != want {
+		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
 // As JSON a chat is an object a line, in the list's order. Every field is there
 // whatever its value, except a username the chat does not have (#181).
 func TestChats_PrintsJSONLines(t *testing.T) {

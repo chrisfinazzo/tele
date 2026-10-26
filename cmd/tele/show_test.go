@@ -34,15 +34,17 @@ type historyAsk struct {
 }
 
 func held(acc *fakeAccount) heldAccount {
-	return heldAccount{accountSurface: acc, me: me, cfg: &config.Config{CLI: config.CLIConfig{SenderWidth: 20}}}
+	return heldAccount{accountSurface: acc, me: me, cfg: &config.Config{CLI: config.CLIConfig{NameWidth: 20}}}
 }
 
-// cli.sender_width is read by each command from its own config as it starts:
-// the next `tele show` cuts names at the width the file names, and at 20 when
-// it names none (#181).
-func TestTakesHold_cli_sender_width(t *testing.T) {
+// cli.name_width is read by each command from its own config as it starts:
+// the next `tele show` cuts a sender's name, and the next `tele chats` a
+// chat's title, at the width the file names, and at 20 when it names none
+// (#181).
+func TestTakesHold_cli_name_width(t *testing.T) {
 	_, cfgPath := isolatedHome(t)
-	shown := func() string {
+	const long = "Alexander Konstantinovich Long"
+	shown := func() (show, chats string) {
 		t.Helper()
 		s, err := newSetup(cfgPath)
 		if err != nil {
@@ -50,22 +52,30 @@ func TestTakesHold_cli_sender_width(t *testing.T) {
 		}
 		acc := newFakeAccount()
 		acc.byName = map[core.ChatName]project.ChatRow{{ID: 42}: {ID: 42, Title: "Group"}}
-		acc.history = []domain.Message{{ID: 1, Date: at(25, 9, 0), SenderName: "Alexander Konstantinovich Long", Text: "hi"}}
-		var out bytes.Buffer
+		acc.history = []domain.Message{{ID: 1, Date: at(25, 9, 0), SenderName: long, Text: "hi"}}
+		acc.chats = []project.ChatRow{{ID: 42, Title: long, Unread: 1}}
 		a := heldAccount{accountSurface: acc, me: me, cfg: s.store.Current()}
-		if err := showMessages(shortCtx(t), a, &out, "42", showQuery{limit: 1}); err != nil {
+		var showOut, chatsOut bytes.Buffer
+		if err := showMessages(shortCtx(t), a, &showOut, "42", showQuery{limit: 1}); err != nil {
 			t.Fatal(err)
 		}
-		return out.String()
+		if err := listChats(shortCtx(t), a, &chatsOut, chatsQuery{nameWidth: a.cfg.CLI.NameWidth}); err != nil {
+			t.Fatal(err)
+		}
+		return showOut.String(), chatsOut.String()
 	}
 
-	assertSays(t, shown(), "Alexander Konstanti…:")
+	show, chats := shown()
+	assertSays(t, show, "Alexander Konstanti…:")
+	assertSays(t, chats, "Alexander Konstanti…  1 unread")
 
-	body := "telegram:\n  api_id: 1\n  api_hash: x\ncli:\n  sender_width: 6\n"
+	body := "telegram:\n  api_id: 1\n  api_hash: x\ncli:\n  name_width: 6\n"
 	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	assertSays(t, shown(), "Alexa…:")
+	show, chats = shown()
+	assertSays(t, show, "Alexa…:")
+	assertSays(t, chats, "Alexa…  1 unread")
 }
 
 // show asks for the history it was named, from before and at most limit, and

@@ -14,7 +14,7 @@ import (
 
 // newTopicsCmd is `tele topics CHAT`: a forum's topics, a line each (#181).
 func newTopicsCmd(o *options) *cobra.Command {
-	var asJSON bool
+	var q topicsQuery
 	cmd := &cobra.Command{
 		Use:   "topics CHAT",
 		Short: "List the topics of a forum",
@@ -24,18 +24,26 @@ func newTopicsCmd(o *options) *cobra.Command {
 				return err
 			}
 			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
-				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], asJSON)
+				q.nameWidth = a.cfg.CLI.NameWidth
+				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], q)
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print a JSON object a topic, as docs/cli.md describes")
+	cmd.Flags().BoolVar(&q.asJSON, "json", false, "print a JSON object a topic, as docs/cli.md describes")
 	return cmd
+}
+
+// topicsQuery is what `tele topics` was asked for.
+type topicsQuery struct {
+	asJSON bool
+	// nameWidth is the columns a title gets before it is cut short.
+	nameWidth int
 }
 
 // listTopics prints the topics of the forum chat names, in the order a window
 // lists them: as text, or as JSON Lines. A chat that is not a forum has none,
 // and exits 5.
-func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat string, asJSON bool) error {
+func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat string, q topicsQuery) error {
 	forum, err := resolveChat(ctx, acc, chat)
 	if err != nil {
 		return err
@@ -47,14 +55,14 @@ func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat str
 	if err != nil {
 		return err
 	}
-	if asJSON {
+	if q.asJSON {
 		return topicsJSON(out, topics)
 	}
 	lines := make([]columnLine, 0, len(topics))
 	for _, t := range topics {
 		lines = append(lines, columnLine{id: fmt.Sprint(t.ID), title: t.Title, badges: topicBadges(t)})
 	}
-	_, err = io.WriteString(out, columnsText(lines))
+	_, err = io.WriteString(out, columnsText(lines, q.nameWidth))
 	return err
 }
 

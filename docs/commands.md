@@ -55,8 +55,10 @@ tele chats [--unread] [--archived | --folder ID] [--json]
 
 Lists the chats in the order the chat list shows them, a line each: the chat's
 id, its title and its badges (unread, mentions, reactions, marked unread,
-muted, and for a forum how many of its topics have unread). With no flag it is
-the main list, without the archived chats.
+muted, and for a forum how many of its topics have unread). The badges start
+in one column, after the widest title; a title wider than `cli.name_width`
+columns (20 by default) is cut short. With no flag it is the main list,
+without the archived chats.
 
 | Flag           | What it does                                                                     |
 | -------------- | -------------------------------------------------------------------------------- |
@@ -72,8 +74,9 @@ tele topics CHAT [--json]
 ```
 
 Lists the topics of a forum in the order the topic list shows them, a line
-each: the topic's id, its title and its badges. A chat that is not a forum
-exits 5. The id is what `tele show --topic` takes.
+each: the topic's id, its title and its badges, a title cut at
+`cli.name_width` as in `tele chats`. A chat that is not a forum exits 5. The id
+is what `tele show --topic` takes.
 
 | Flag     | What it does                                                          |
 | -------- | --------------------------------------------------------------------- |
@@ -89,7 +92,7 @@ Prints the newest messages of a chat, oldest first: a line each with the time,
 the sender and the text, a date line wherever the day changes, and under a
 reply a line with what it answers. Every message's text starts in the same
 column, after the widest sender's name; a name wider than
-`cli.sender_width` columns (20 by default) is cut short. Media is named, never
+`cli.name_width` columns (20 by default) is cut short. Media is named, never
 downloaded: `[photo]`, `[voice 0:12]`, `[file report.pdf]`. What the local
 history lacks is fetched from Telegram, the way scrolling up in a window
 fetches it.

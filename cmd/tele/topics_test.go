@@ -71,7 +71,7 @@ func TestTopics_ListsAForumsTopics(t *testing.T) {
 	}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "@gophers", false); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, "@gophers", topicsQuery{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,13 +84,29 @@ func TestTopics_ListsAForumsTopics(t *testing.T) {
 	}
 }
 
+// A topic's title is cut at the name width too.
+func TestTopics_CutsALongTitle(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	acc.topics = map[int64][]project.TopicRow{300: {{ID: 17, Title: "Releases and everything around them", Unread: 4}}}
+	var out bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{nameWidth: 8}); err != nil {
+		t.Fatal(err)
+	}
+
+	if out.String() != "17  Release…  4 unread\n" {
+		t.Errorf("printed %q", out.String())
+	}
+}
+
 func TestTopics_PrintsJSONLines(t *testing.T) {
 	acc := newFakeAccount()
 	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
 	acc.topics = map[int64][]project.TopicRow{300: {{ID: 17, Title: "Releases", Unread: 4, Muted: true, Closed: true}}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "300", true); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{asJSON: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +123,7 @@ func TestTopics_AChatThatIsNotAForumExitsFive(t *testing.T) {
 	acc.byName = map[core.ChatName]project.ChatRow{{Username: "bob"}: {ID: 5, Title: "Bob"}}
 	var out bytes.Buffer
 
-	err := listTopics(shortCtx(t), acc, &out, "@bob", false)
+	err := listTopics(shortCtx(t), acc, &out, "@bob", topicsQuery{})
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != notFoundCode {

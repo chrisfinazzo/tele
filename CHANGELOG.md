@@ -23,8 +23,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   not among your chats is asked of Telegram (#181).
 - A command waits up to 30 seconds for the account to be ready, and exits 4
   when it is waiting for someone to log in (#181).
-- `cli.sender_width` (20 by default) is how many columns `tele show` gives a
-  sender's name before cutting it short (#181).
+- `cli.name_width` (20 by default) is how many columns a command gives a name
+  or title before cutting it short: a sender's in `tele show`, a chat's or a
+  topic's in `tele chats` and `tele topics` (#181).
 
 ### Changed
 

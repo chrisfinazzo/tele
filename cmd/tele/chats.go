@@ -29,6 +29,7 @@ func newChatsCmd(o *options) *cobra.Command {
 				q.folder = domain.ArchiveFolderID
 			}
 			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
+				q.nameWidth = a.cfg.CLI.NameWidth
 				return listChats(ctx, a, cmd.OutOrStdout(), q)
 			})
 		},
@@ -49,6 +50,8 @@ type chatsQuery struct {
 	folder int
 	unread bool
 	asJSON bool
+	// nameWidth is the columns a title gets before it is cut short.
+	nameWidth int
 }
 
 // listChats prints the chats of the list q names, in its order: as text, or
@@ -76,7 +79,7 @@ func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQu
 	if q.asJSON {
 		return chatsJSON(out, rows)
 	}
-	_, err = io.WriteString(out, chatsText(rows))
+	_, err = io.WriteString(out, chatsText(rows, q.nameWidth))
 	return err
 }
 
@@ -141,12 +144,22 @@ func chatsJSON(out io.Writer, rows []project.ChatRow) error {
 }
 
 // chatsText is a line per chat: its id, its title and its badges, in columns.
-func chatsText(rows []project.ChatRow) string {
+func chatsText(rows []project.ChatRow, nameWidth int) string {
 	lines := make([]columnLine, 0, len(rows))
 	for _, c := range rows {
 		lines = append(lines, columnLine{id: fmt.Sprint(c.ID), title: c.Title, badges: chatBadges(c)})
 	}
-	return columnsText(lines)
+	return columnsText(lines, nameWidth)
+}
+
+// cutName cuts a name or title wider than width columns short, so one long
+// one does not push everything after it to the right. The ellipsis follows
+// the last word cut rather than a space. A width of zero cuts nothing.
+func cutName(name string, width int) string {
+	if width <= 0 || ansi.StringWidth(name) <= width {
+		return name
+	}
+	return strings.TrimRight(ansi.Truncate(name, width-1, ""), " ") + "…"
 }
 
 // columnLine is one line of a listing: what it lists by id and title, and its
@@ -155,13 +168,15 @@ type columnLine struct {
 	id, title, badges string
 }
 
-// columnsText lays lines out in columns, measured as the terminal draws them.
-// A line with no badges ends at its title, so none carries trailing spaces.
-func columnsText(lines []columnLine) string {
+// columnsText lays lines out in columns, measured as the terminal draws them,
+// with each title cut at nameWidth. A line with no badges ends at its title,
+// so none carries trailing spaces.
+func columnsText(lines []columnLine, nameWidth int) string {
 	idW, titleW := 0, 0
-	for _, l := range lines {
+	for i, l := range lines {
+		lines[i].title = cutName(l.title, nameWidth)
 		idW = max(idW, len(l.id))
-		titleW = max(titleW, ansi.StringWidth(l.title))
+		titleW = max(titleW, ansi.StringWidth(lines[i].title))
 	}
 	var b strings.Builder
 	for _, l := range lines {

@@ -105,10 +105,10 @@ type PhotosConfig struct {
 // competing with scrolled-past video thumbnails (#223, ADR 0007).
 // CLIConfig is how the commands print what they answer with (#181).
 type CLIConfig struct {
-	// SenderWidth is how many columns `tele show` gives a sender's name before
-	// cutting it short, so one long name does not push everybody's text to
-	// the right.
-	SenderWidth int `mapstructure:"sender_width"`
+	// NameWidth is how many columns a command gives a name or title before
+	// cutting it short: a sender's in `tele show`, a chat's or topic's in the
+	// listings. One long name would push everything after it to the right.
+	NameWidth int `mapstructure:"name_width"`
 }
 
 type AvatarsConfig struct {
