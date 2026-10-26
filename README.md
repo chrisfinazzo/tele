@@ -401,6 +401,10 @@ More, including which Homebrew formula carries which key:
 | Command                   | Description                                                                                     |
 | ------------------------- | ----------------------------------------------------------------------------------------------- |
 | `tele`                    | Open a window on the account                                                                    |
+| `tele chats`              | List the chats, all of them or the unread, archived or in a folder                              |
+| `tele topics CHAT`        | List a forum's topics                                                                           |
+| `tele show CHAT`          | Print a chat's newest messages, a page at a time with `--before`                                |
+| `tele send CHAT [TEXT]`   | Send a message, from the words given or from stdin, and wait for it to go                       |
 | `tele version`            | Print the version                                                                               |
 | `tele theme check [NAME]` | Say which theme each slot resolved to and where its tokens came from, or of one theme by name   |
 | `tele theme dump [NAME]`  | Print a slot's theme, or a named one, as a complete theme file (`tele theme dump light`)        |
@@ -419,6 +423,30 @@ Every command and flag in full: [docs/commands.md](docs/commands.md). Exit
 codes, JSON output and the rules commands are named by:
 [docs/cli.md](docs/cli.md). Running without a window:
 [docs/configuration.md](docs/configuration.md#running-without-a-window).
+
+### For AI agents
+
+An AI agent you let run `tele` can read your chats and send messages for you.
+`tele help agents` prints the guide it should follow, written for the `tele`
+you have installed. The `tele` skill points an agent there by itself:
+
+| Agent              | Install the skill                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Claude Code        | `/plugin install tele --marketplace sorokin-vladimir/tele`                              |
+| GitHub Copilot CLI | `copilot plugin marketplace add sorokin-vladimir/tele`, then `copilot plugin install tele@tele` |
+| OpenAI Codex       | `npx skills add sorokin-vladimir/tele -a codex`                                         |
+| Cursor             | `npx skills add sorokin-vladimir/tele -a cursor`                                        |
+| Gemini CLI         | `npx skills add sorokin-vladimir/tele -a gemini-cli`                                    |
+
+On a Claude Code older than 2.1.275, add the marketplace first:
+`claude plugin marketplace add sorokin-vladimir/tele`, then
+`claude plugin install tele@tele`. `npx skills add sorokin-vladimir/tele`
+with no `-a` asks which of the agents it knows to install into, OpenCode and
+others among them.
+
+`cli.account_commands` decides how far it may go: `read` lets it read and not
+send, `none` keeps it out. See
+[docs/cli.md](docs/cli.md#keeping-commands-out-of-your-chats).
 
 ---
 

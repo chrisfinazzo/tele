@@ -36,6 +36,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   with your chats, for a script or an AI agent you let run `tele`. What it
   does not allow exits 7. It is the setting of the `tele` holding the account,
   and `tele daemon status` shows it (#181).
+- `tele help agents` prints how an AI agent should use the commands, from the
+  binary, so it matches the `tele` installed. A `tele` skill points an agent
+  there: a plugin for Claude Code and GitHub Copilot CLI, from this
+  repository as their marketplace, and `npx skills add sorokin-vladimir/tele`
+  for Codex, Cursor, Gemini CLI and other agents. The README says how for each
+  (#323).
 
 ### Changed
 
