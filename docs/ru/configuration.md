@@ -1,6 +1,6 @@
 # Настройка
 
-> Перевод [configuration.md](../configuration.md) на коммит `608d812`. Если перевод расходится с английской версией, верна английская.
+> Перевод [configuration.md](../configuration.md) на коммит `acedf3a`. Если перевод расходится с английской версией, верна английская.
 
 `tele` хранит один файл YAML, который создаётся при первом запуске:
 
@@ -91,7 +91,7 @@ avatars:
   disk_cache_size: 16777216 # 16 MB of people's pictures, budgeted separately
 
 cli:
-  sender_width: 20 # columns tele show gives a sender's name before cutting it short
+  name_width: 20 # columns a command gives a name or title before cutting it short
 
 # keybindings: see keybindings.md
 ```

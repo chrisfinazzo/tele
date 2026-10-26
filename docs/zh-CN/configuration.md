@@ -1,6 +1,6 @@
 # 配置
 
-> 本文译自 [configuration.md](../configuration.md)，对应提交 `608d812`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [configuration.md](../configuration.md)，对应提交 `acedf3a`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 `tele` 使用一个 YAML 文件，首次运行时创建：
 
@@ -65,7 +65,7 @@ avatars:
   disk_cache_size: 16777216 # 16 MB of people's pictures, budgeted separately
 
 cli:
-  sender_width: 20 # columns tele show gives a sender's name before cutting it short
+  name_width: 20 # columns a command gives a name or title before cutting it short
 
 # keybindings: see keybindings.md
 ```
