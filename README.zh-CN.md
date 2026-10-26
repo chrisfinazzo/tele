@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [README.md](README.md)，对应提交 `01d0ee5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 ```
   _            _
@@ -332,6 +332,10 @@ telegram:
 | 命令                      | 说明                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------- |
 | `tele`                    | 打开一个显示账号的窗口                                                                          |
+| `tele chats`              | 列出聊天：全部、未读、已归档或某个文件夹中的                                                    |
+| `tele topics CHAT`        | 列出论坛的话题                                                                                  |
+| `tele show CHAT`          | 打印聊天的最新消息，用 `--before` 一页一页往前翻                                                |
+| `tele send CHAT [TEXT]`   | 发送一条消息，内容来自传入的单词或 stdin，并等待它发出                                          |
 | `tele version`            | 打印版本号                                                                                      |
 | `tele theme check [NAME]` | 说明每个槽位解析成了哪个主题以及 token 来自何处，或者对按名称指定的一个主题做同样检查           |
 | `tele theme dump [NAME]`  | 把槽位的主题或指定名称的主题输出为完整的主题文件（`tele theme dump light`）                     |
@@ -347,6 +351,23 @@ telegram:
 | `--trace`               | 记录敏感元数据（对方 id、消息长度）。切勿在共享或同步的文件系统上使用                          |
 
 所有命令和参数的完整说明：[docs/zh-CN/commands.md](docs/zh-CN/commands.md)。退出码、JSON 输出和命令的命名规则：[docs/zh-CN/cli.md](docs/zh-CN/cli.md)。无窗口运行：[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md#running-without-a-window)。
+
+<a id="for-ai-agents"></a>
+### 面向 AI 代理
+
+你允许运行 `tele` 的 AI 代理可以替你读取聊天、发送消息。`tele help agents` 会打印它应当遵循的指南，这份指南对应你安装的 `tele` 版本。`tele` 技能会自动把代理引向这份指南：
+
+| 代理               | 安装技能                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Claude Code        | `/plugin install tele --marketplace sorokin-vladimir/tele`                              |
+| GitHub Copilot CLI | `copilot plugin marketplace add sorokin-vladimir/tele`，然后 `copilot plugin install tele@tele` |
+| OpenAI Codex       | `npx skills add sorokin-vladimir/tele -a codex`                                         |
+| Cursor             | `npx skills add sorokin-vladimir/tele -a cursor`                                        |
+| Gemini CLI         | `npx skills add sorokin-vladimir/tele -a gemini-cli`                                    |
+
+Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace add sorokin-vladimir/tele`，然后 `claude plugin install tele@tele`。不带 `-a` 运行 `npx skills add sorokin-vladimir/tele` 时，它会询问要安装到它所知道的哪些代理中，包括 OpenCode 等。
+
+代理能做到哪一步由 `cli.account_commands` 决定：设为 `read` 时它可以读取但不能发送，设为 `none` 时它什么也拿不到。见 [docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)。
 
 ---
 

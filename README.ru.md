@@ -1,6 +1,6 @@
 # tele
 
-> Перевод [README.md](README.md) на коммит `ba129a5`. Если перевод расходится с английской версией, верна английская.
+> Перевод [README.md](README.md) на коммит `01d0ee5`. Если перевод расходится с английской версией, верна английская.
 
 ```
   _            _
@@ -423,6 +423,10 @@ telegram:
 | Команда                   | Что делает                                                                                      |
 | ------------------------- | ----------------------------------------------------------------------------------------------- |
 | `tele`                    | Открыть окно с аккаунтом                                                                        |
+| `tele chats`              | Перечислить чаты: все, непрочитанные, архивные или из папки                                     |
+| `tele topics CHAT`        | Перечислить темы форума                                                                         |
+| `tele show CHAT`          | Напечатать последние сообщения чата, страница за страницей через `--before`                     |
+| `tele send CHAT [TEXT]`   | Отправить сообщение из переданных слов или из stdin и дождаться, пока оно уйдёт                 |
 | `tele version`            | Напечатать версию                                                                               |
 | `tele theme check [NAME]` | Показать, во что развернулся каждый слот и откуда взялись его токены, или то же для одной темы по имени |
 | `tele theme dump [NAME]`  | Вывести тему слота или тему по имени как полный файл темы (`tele theme dump light`)             |
@@ -441,6 +445,32 @@ telegram:
 завершения, вывод JSON и правила, по которым названы команды:
 [docs/ru/cli.md](docs/ru/cli.md). Работа без окна:
 [docs/ru/configuration.md](docs/ru/configuration.md#running-without-a-window).
+
+<a id="for-ai-agents"></a>
+### Для ИИ-агентов
+
+ИИ-агент, которому вы разрешили запускать `tele`, может читать ваши чаты и
+отправлять сообщения за вас. `tele help agents` печатает инструкцию, которой он
+должен следовать, написанную для установленного у вас `tele`. Навык `tele` сам
+отправляет агента к ней:
+
+| Агент              | Как установить навык                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Claude Code        | `/plugin install tele --marketplace sorokin-vladimir/tele`                              |
+| GitHub Copilot CLI | `copilot plugin marketplace add sorokin-vladimir/tele`, затем `copilot plugin install tele@tele` |
+| OpenAI Codex       | `npx skills add sorokin-vladimir/tele -a codex`                                         |
+| Cursor             | `npx skills add sorokin-vladimir/tele -a cursor`                                        |
+| Gemini CLI         | `npx skills add sorokin-vladimir/tele -a gemini-cli`                                    |
+
+В Claude Code старше 2.1.275 сначала добавьте маркетплейс:
+`claude plugin marketplace add sorokin-vladimir/tele`, затем
+`claude plugin install tele@tele`. `npx skills add sorokin-vladimir/tele` без
+`-a` спросит, в каких из известных ему агентов поставить навык, в том числе в
+OpenCode и других.
+
+Насколько далеко агент может зайти, решает `cli.account_commands`: с `read` он
+читает, но не отправляет, с `none` не получает ничего. См.
+[docs/ru/cli.md](docs/ru/cli.md#keeping-commands-out-of-your-chats).
 
 ---
 
