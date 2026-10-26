@@ -30,14 +30,14 @@ func TestHostEnd_StatusCountsWindowsAndCommandsButTheOneAsking(t *testing.T) {
 	assert.Nil(t, got.Account, "between accounts there is no account to tell of")
 }
 
-// The host says whether it lets commands reach the account, so that a script
+// The host says what it lets commands do with the account, so that a script
 // refused with exit 7 can be told why (#181).
-func TestHostEnd_StatusSaysWhetherCommandsMayActOnTheAccount(t *testing.T) {
-	on, _, _ := hostEndAt(t, "")
-	off, _, _ := hostEndAt(t, "cli:\n  account_commands: false\n")
+func TestHostEnd_StatusSaysWhatCommandsMayDo(t *testing.T) {
+	all, _, _ := hostEndAt(t, "")
+	none, _, _ := hostEndAt(t, "cli:\n  account_commands: none\n")
 
-	assert.True(t, on.Status().AccountCommands)
-	assert.False(t, off.Status().AccountCommands)
+	assert.Equal(t, wire.CommandsAll, all.Status().AccountCommands)
+	assert.Equal(t, wire.CommandsNone, none.Status().AccountCommands)
 }
 
 // Asked before anything is there to count, the host says what it knows.

@@ -186,8 +186,11 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 	}
 
 	fmt.Fprintf(&b, "Windows: %d, commands: %d\n", status.Windows, status.Commands)
-	if !status.AccountCommands {
-		b.WriteString("Commands may not act on the account: cli.account_commands is off.\n")
+	switch status.AccountCommands {
+	case wire.CommandsRead:
+		b.WriteString("Commands may read the account and change nothing: cli.account_commands is read.\n")
+	case wire.CommandsNone:
+		b.WriteString("Commands may not act on the account: cli.account_commands is none.\n")
 	}
 	a := status.Account
 	if a == nil {

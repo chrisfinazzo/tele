@@ -30,7 +30,7 @@ func TestStatusJSON_SaysHowTheHostIsDoing(t *testing.T) {
 	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.10"}
 	until := statusNow.Add(32 * time.Second)
 	status := wire.HostStatus{
-		Since: statusNow.Add(-time.Hour), Windows: 2, Commands: 1, AccountCommands: false,
+		Since: statusNow.Add(-time.Hour), Windows: 2, Commands: 1, AccountCommands: wire.CommandsRead,
 		Account: &wire.AccountStatus{
 			Phase: wire.PhaseReady, User: "ada", Link: wire.LinkUp,
 			LinkSince: statusNow.Add(-time.Minute), LastUpdate: statusNow.Add(-time.Second), Outbox: 3,
@@ -53,7 +53,7 @@ func TestStatusJSON_SaysHowTheHostIsDoing(t *testing.T) {
 		"since":            statusNow.Add(-time.Hour).Format(time.RFC3339),
 		"windows":          float64(2),
 		"commands":         float64(1),
-		"account_commands": false,
+		"account_commands": "read",
 		"account": map[string]any{
 			"phase": "ready", "user": "ada", "link": "up",
 			"link_since":  statusNow.Add(-time.Minute).Format(time.RFC3339),

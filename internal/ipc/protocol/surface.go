@@ -55,3 +55,34 @@ var surface = map[string]any{
 	"FetchAvatar":      core.Surface.FetchAvatar,
 	"InvalidateAvatar": core.Surface.InvalidateAvatar,
 }
+
+// Reads are the calls that change nothing about the account: what it holds,
+// what Telegram says of it, and the caches it is drawn from. Writes are the
+// rest, the ones that change something - in Telegram, in the queue, or in
+// what the owner thinks somebody is looking at. Every call is one or the
+// other; a test holds them to Calls, so a call added later is placed on
+// purpose (#181).
+var (
+	Reads = set(
+		"Subscribe", "MoveWindow", "Unsubscribe", "LogOutPreview",
+		"SearchContacts", "Chats", "Topics", "Chat", "ResolveChat", "History",
+		"FolderFilters", "GetParticipants", "KnownUser", "GetUser",
+		"FetchMedia", "SaveMedia", "InvalidateMedia", "FetchAvatar", "InvalidateAvatar",
+		"AwaitSend",
+	)
+	Writes = set(
+		"LogOut", "EndAccount", "AnswerLogin",
+		"SetMuted", "SetArchived", "SetUnreadMark", "AddToFolder",
+		"MarkRead", "SetFocus", "ReadReactions", "ReadMentions",
+		"EditMessage", "DeleteMessages", "SendReaction", "Forward", "SetTyping", "SaveDraft",
+		"Send", "SendMedia", "RetryOutbox", "DiscardOutbox",
+	)
+)
+
+func set(names ...string) map[string]struct{} {
+	s := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		s[n] = struct{}{}
+	}
+	return s
+}

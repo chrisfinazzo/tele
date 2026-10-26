@@ -127,7 +127,8 @@ const notLoggedInCode = 4
 const notFoundCode = 5
 
 // commandsOffCode is what a command exits with when the tele holding the
-// account does not let commands reach it (#181).
+// account does not let commands do what it asked: anything, or anything but
+// read (#181).
 const commandsOffCode = 7
 
 // commandsOff turns the refusal of a tele that does not let commands reach
@@ -137,8 +138,8 @@ func commandsOff(err error) error {
 	if telerr.Of(err) != telerr.CommandsOff {
 		return err
 	}
-	return &exitCode{code: commandsOffCode, msg: "The tele holding the account does not let commands reach it: " +
-		"cli.account_commands is off in its config."}
+	return &exitCode{code: commandsOffCode, msg: "The tele holding the account does not let commands do this: " +
+		"cli.account_commands in its config says what they may do."}
 }
 
 // awaitReady returns once the account is ready to be asked: its chat list is

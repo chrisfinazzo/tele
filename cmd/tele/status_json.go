@@ -18,9 +18,9 @@ type (
 		Since    *time.Time `json:"since,omitempty"`
 		Windows  *int       `json:"windows,omitempty"`
 		Commands *int       `json:"commands,omitempty"`
-		// AccountCommands is a pointer so that a host never asked leaves it
-		// out rather than saying false.
-		AccountCommands *bool       `json:"account_commands,omitempty"`
+		// AccountCommands is all, read or none; left out for a host never
+		// asked.
+		AccountCommands string      `json:"account_commands,omitempty"`
 		Account         *accountDoc `json:"account,omitempty"`
 		This            thisDoc     `json:"this"`
 		ServiceWarning  string      `json:"service_warning,omitempty"`
@@ -67,7 +67,7 @@ func statusJSON(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 	}
 	if mismatch == nil {
 		doc.Since, doc.Windows, doc.Commands = &status.Since, &status.Windows, &status.Commands
-		doc.AccountCommands = &status.AccountCommands
+		doc.AccountCommands = string(status.AccountCommands)
 		if a := status.Account; a != nil {
 			acct := accountDoc{
 				Phase: string(a.Phase), User: a.User, Ended: a.Ended, Link: string(a.Link),

@@ -84,10 +84,10 @@ func (e *HostEnd) Restart() (wire.RestartResult, func()) {
 	return wire.RestartResult{}, restart
 }
 
-// AccountCommands is cli.account_commands as the host read it last: whether a
-// command may act on the account (#181).
-func (e *HostEnd) AccountCommands() bool {
-	return e.store.Current().CLI.AccountCommands
+// AccountCommands is cli.account_commands as the host read it last: what a
+// command may do with the account (#181).
+func (e *HostEnd) AccountCommands() wire.CommandAccess {
+	return wire.CommandAccess(e.store.Current().CLI.AccountCommands)
 }
 
 // Uninstall takes note that the host, a service, is being uninstalled: the

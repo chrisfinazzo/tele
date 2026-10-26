@@ -57,9 +57,9 @@ type Host interface {
 	Status() wire.HostStatus
 	Restart() (wire.RestartResult, func())
 	Uninstall() wire.UninstallResult
-	// AccountCommands is cli.account_commands as the host holds it now:
-	// whether a command may act on the account (#181).
-	AccountCommands() bool
+	// AccountCommands is cli.account_commands as the host holds it now: what
+	// a command may do with the account (#181).
+	AccountCommands() wire.CommandAccess
 }
 
 // Conn serves att over conn until the client goes, ctx ends, or one side says
@@ -251,10 +251,10 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 		}))
 		return nil
 	}
-	if c.kind == wire.KindCommand && !c.host.AccountCommands() {
+	if access := c.host.AccountCommands(); c.kind == wire.KindCommand && !commandMay(access, f.Method) {
 		err := &telerr.Error{
 			Kind: telerr.CommandsOff, Op: f.Method,
-			Detail: "cli.account_commands is off for the tele holding the account",
+			Detail: fmt.Sprintf("cli.account_commands is %s for the tele holding the account", access),
 		}
 		if f.Method == protocol.MethodSubscribe {
 			// Nobody waits on a subscription's reply: its first delta is the
@@ -303,6 +303,21 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 		_ = c.reply(f.ID, call, outs)
 	})
 	return nil
+}
+
+// commandMay reports whether a command may make the call method under access:
+// any with all, a read with read, none with none. A value the host does not
+// know lets nothing through.
+func commandMay(access wire.CommandAccess, method string) bool {
+	switch access {
+	case wire.CommandsAll:
+		return true
+	case wire.CommandsRead:
+		_, read := protocol.Reads[method]
+		return read
+	default:
+		return false
+	}
 }
 
 // hostCall makes f when it is a call about the host, and reports whether it
