@@ -25,6 +25,9 @@ func newChatsCmd(o *options) *cobra.Command {
 		Short: "List the chats",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := listLimit(cmd, q.limit); err != nil {
+				return err
+			}
 			if archived {
 				q.folder = domain.ArchiveFolderID
 			}
@@ -39,6 +42,7 @@ func newChatsCmd(o *options) *cobra.Command {
 	f.BoolVar(&q.unread, "unread", false, "only the chats with something unread")
 	f.BoolVar(&archived, "archived", false, "the archived chats instead of the main list")
 	f.IntVar(&q.folder, "folder", 0, "the chats of the folder with this id instead of the main list")
+	f.IntVar(&q.limit, "limit", 0, "how many chats at most, the first of the list; all when left out")
 	cmd.MarkFlagsMutuallyExclusive("archived", "folder")
 	return cmd
 }
@@ -50,8 +54,28 @@ type chatsQuery struct {
 	folder int
 	unread bool
 	asJSON bool
+	// limit is how many chats to print at most, of what the other flags
+	// leave; 0 prints them all.
+	limit int
 	// nameWidth is the columns a title gets before it is cut short.
 	nameWidth int
+}
+
+// firstOf is the first limit of rows, every one for a limit of 0.
+func firstOf[T any](rows []T, limit int) []T {
+	if limit > 0 && len(rows) > limit {
+		return rows[:limit]
+	}
+	return rows
+}
+
+// listLimit refuses a --limit below 1 as a mistake in the command line. Left
+// out, it lists everything.
+func listLimit(cmd *cobra.Command, n int) error {
+	if cmd.Flags().Changed("limit") && n < 1 {
+		return &exitCode{code: usageCode, msg: "--limit is 1 or more; leave it out for all of them."}
+	}
+	return nil
 }
 
 // listChats prints the chats of the list q names, in its order: as text, or
@@ -76,6 +100,7 @@ func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQu
 			rows = append(rows, c)
 		}
 	}
+	rows = firstOf(rows, q.limit)
 	if q.asJSON {
 		return chatsJSON(out, rows)
 	}

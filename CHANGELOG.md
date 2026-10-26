@@ -14,8 +14,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 ### Added
 
 - Commands that act on the account, asking the `tele` that holds it:
-  `tele chats` lists the chats, with `--unread`, `--archived` and
-  `--folder ID`; `tele topics CHAT` lists a forum's topics; `tele show CHAT`
+  `tele chats` lists the chats, with `--unread`, `--archived`,
+  `--folder ID` and `--limit`; `tele topics CHAT` lists a forum's topics, with
+  `--limit`; `tele show CHAT`
   prints its newest messages, with `--topic`, `--limit`, `--before` and
   `--mark-read`, fetching what the local history lacks. Each prints JSON
   Lines with `--json`. [docs/cli.md](docs/cli.md) describes them (#181).

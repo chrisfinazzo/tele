@@ -50,7 +50,7 @@ the service could be installed, it asks once whether to install it. See
 ## `tele chats`
 
 ```console
-tele chats [--unread] [--archived | --folder ID] [--json]
+tele chats [--unread] [--archived | --folder ID] [--limit N] [--json]
 ```
 
 Lists the chats in the order the chat list shows them, a line each: the chat's
@@ -65,12 +65,13 @@ without the archived chats.
 | `--unread`     | Only the chats with something unread, the ones marked unread among them          |
 | `--archived`   | The archived chats instead of the main list                                      |
 | `--folder <id>` | The chats of one of your folders, as the chat list shows it. A folder you do not have exits 5 and lists the ones you do |
+| `--limit <n>`  | At most this many, the first of what the other flags leave. All of them when left out |
 | `--json`       | A JSON object a chat, described in [cli.md](cli.md#tele-chats---json)            |
 
 ## `tele topics`
 
 ```console
-tele topics CHAT [--json]
+tele topics CHAT [--limit N] [--json]
 ```
 
 Lists the topics of a forum in the order the topic list shows them, a line
@@ -78,9 +79,10 @@ each: the topic's id, its title and its badges, a title cut at
 `cli.name_width` as in `tele chats`. A chat that is not a forum exits 5. The id
 is what `tele show --topic` takes.
 
-| Flag     | What it does                                                          |
-| -------- | --------------------------------------------------------------------- |
-| `--json` | A JSON object a topic, described in [cli.md](cli.md#tele-topics---json) |
+| Flag          | What it does                                                          |
+| ------------- | --------------------------------------------------------------------- |
+| `--limit <n>` | At most this many, the first of the list. All of them when left out   |
+| `--json`      | A JSON object a topic, described in [cli.md](cli.md#tele-topics---json) |
 
 ## `tele show`
 

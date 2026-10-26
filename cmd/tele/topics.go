@@ -23,6 +23,9 @@ func newTopicsCmd(o *options) *cobra.Command {
 			if _, err := parseChatName(args[0]); err != nil {
 				return err
 			}
+			if err := listLimit(cmd, q.limit); err != nil {
+				return err
+			}
 			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
 				q.nameWidth = a.cfg.CLI.NameWidth
 				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], q)
@@ -30,12 +33,15 @@ func newTopicsCmd(o *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&q.asJSON, "json", false, "print a JSON object a topic, as docs/cli.md describes")
+	cmd.Flags().IntVar(&q.limit, "limit", 0, "how many topics at most, the first of the list; all when left out")
 	return cmd
 }
 
 // topicsQuery is what `tele topics` was asked for.
 type topicsQuery struct {
 	asJSON bool
+	// limit is how many topics to print at most; 0 prints them all.
+	limit int
 	// nameWidth is the columns a title gets before it is cut short.
 	nameWidth int
 }
@@ -55,6 +61,7 @@ func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat str
 	if err != nil {
 		return err
 	}
+	topics = firstOf(topics, q.limit)
 	if q.asJSON {
 		return topicsJSON(out, topics)
 	}

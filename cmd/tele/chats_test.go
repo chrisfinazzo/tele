@@ -218,6 +218,30 @@ func TestChats_CutsALongTitle(t *testing.T) {
 	}
 }
 
+// --limit keeps the first chats of what the other flags leave: the first two
+// with unread, here, and not the first two of the list (#181).
+func TestChats_LimitKeepsTheFirstOfWhatIsLeft(t *testing.T) {
+	acc := newFakeAccount()
+	acc.chats = []project.ChatRow{
+		{ID: 1, Title: "Read"},
+		{ID: 2, Title: "One", Unread: 1},
+		{ID: 3, Title: "Two", Unread: 2},
+		{ID: 4, Title: "Three", Unread: 3},
+	}
+	var out bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{unread: true, limit: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "" +
+		"2  One  1 unread\n" +
+		"3  Two  2 unread\n"
+	if out.String() != want {
+		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
 // As JSON a chat is an object a line, in the list's order. Every field is there
 // whatever its value, except a username the chat does not have (#181).
 func TestChats_PrintsJSONLines(t *testing.T) {

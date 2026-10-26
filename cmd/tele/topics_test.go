@@ -100,6 +100,22 @@ func TestTopics_CutsALongTitle(t *testing.T) {
 	}
 }
 
+// --limit keeps the first topics of the list.
+func TestTopics_LimitKeepsTheFirst(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	acc.topics = map[int64][]project.TopicRow{300: {{ID: 1, Title: "General"}, {ID: 17, Title: "Releases"}, {ID: 23, Title: "Old"}}}
+	var out bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{limit: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	if out.String() != "1   General\n17  Releases\n" {
+		t.Errorf("printed %q", out.String())
+	}
+}
+
 func TestTopics_PrintsJSONLines(t *testing.T) {
 	acc := newFakeAccount()
 	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
