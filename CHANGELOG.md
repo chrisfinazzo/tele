@@ -11,6 +11,27 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Commands that act on the account, asking the `tele` that holds it:
+  `tele chats` lists the chats, with `--unread`, `--archived` and
+  `--folder ID`; `tele topics CHAT` lists a forum's topics; `tele show CHAT`
+  prints its newest messages, with `--topic`, `--limit`, `--before` and
+  `--mark-read`, fetching what the local history lacks. Each prints JSON
+  Lines with `--json`. [docs/cli.md](docs/cli.md) describes them (#181).
+- A command names a chat by its id, its `@username` or `me`. A username that is
+  not among your chats is asked of Telegram (#181).
+- A command waits up to 30 seconds for the account to be ready, and exits 4
+  when it is waiting for someone to log in (#181).
+- `cli.sender_width` (20 by default) is how many columns `tele show` gives a
+  sender's name before cutting it short (#181).
+
+### Changed
+
+- `tele` 2.1 and 2.0 speak different protocols: a 2.1 command or window
+  restarts a 2.0 service on its own, and a 2.0 window has to be quit before a
+  2.1 one can join the account (#181).
+
 ## [2.0.0] - 2026-10-23 — One tele for the account, and a service to keep it
 
 ### Upgrading from 1.11

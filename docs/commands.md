@@ -1,12 +1,15 @@
 # Commands
 
 Every command `tele` has, with its flags. What the commands have in common
-(how they are named, what they exit with, what their JSON looks like) is in
-[cli.md](cli.md). `tele help COMMAND`, or `--help` after any command, prints
+(how they are named, how they name a chat, what they exit with, what their
+JSON looks like) is in [cli.md](cli.md). `tele help COMMAND`, or `--help` after any command, prints
 the same from the binary itself.
 
 - [Flags every command takes](#flags-every-command-takes)
 - [`tele`](#tele)
+- [`tele chats`](#tele-chats)
+- [`tele topics`](#tele-topics)
+- [`tele show`](#tele-show)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
 - [`tele theme dump`](#tele-theme-dump)
@@ -43,6 +46,67 @@ first, and closes them too.
 The first time a `tele` that holds the account is logged in on a machine where
 the service could be installed, it asks once whether to install it. See
 [Running without a window](configuration.md#running-without-a-window).
+
+## `tele chats`
+
+```console
+tele chats [--unread] [--archived | --folder ID] [--json]
+```
+
+Lists the chats in the order the chat list shows them, a line each: the chat's
+id, its title and its badges (unread, mentions, reactions, marked unread,
+muted, and for a forum how many of its topics have unread). With no flag it is
+the main list, without the archived chats.
+
+| Flag           | What it does                                                                     |
+| -------------- | -------------------------------------------------------------------------------- |
+| `--unread`     | Only the chats with something unread, the ones marked unread among them          |
+| `--archived`   | The archived chats instead of the main list                                      |
+| `--folder <id>` | The chats of one of your folders, as the chat list shows it. A folder you do not have exits 5 and lists the ones you do |
+| `--json`       | A JSON object a chat, described in [cli.md](cli.md#tele-chats---json)            |
+
+## `tele topics`
+
+```console
+tele topics CHAT [--json]
+```
+
+Lists the topics of a forum in the order the topic list shows them, a line
+each: the topic's id, its title and its badges. A chat that is not a forum
+exits 5. The id is what `tele show --topic` takes.
+
+| Flag     | What it does                                                          |
+| -------- | --------------------------------------------------------------------- |
+| `--json` | A JSON object a topic, described in [cli.md](cli.md#tele-topics---json) |
+
+## `tele show`
+
+```console
+tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
+```
+
+Prints the newest messages of a chat, oldest first: a line each with the time,
+the sender and the text, a date line wherever the day changes, and under a
+reply a line with what it answers. Every message's text starts in the same
+column, after the widest sender's name; a name wider than
+`cli.sender_width` columns (20 by default) is cut short. Media is named, never
+downloaded: `[photo]`, `[voice 0:12]`, `[file report.pdf]`. What the local
+history lacks is fetched from Telegram, the way scrolling up in a window
+fetches it.
+
+`show` changes nothing unless asked: with `--mark-read` it marks the chat read
+up to the last message it printed, and no further.
+
+A forum's messages are its topics': name one with `--topic`, or `show` exits
+5 and points to `tele topics`.
+
+| Flag           | What it does                                                                     |
+| -------------- | -------------------------------------------------------------------------------- |
+| `--topic <id>` | The topic of a forum to show                                                     |
+| `--limit <n>`  | How many messages, 20 by default and 200 at most                                 |
+| `--before <id>` | The messages older than this message, to page back through a history             |
+| `--mark-read`  | Mark the chat (or the topic) read up to the last message printed                 |
+| `--json`       | A JSON object a message, described in [cli.md](cli.md#tele-show---json)          |
 
 ## `tele version`
 

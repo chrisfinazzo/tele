@@ -17,6 +17,24 @@ A command running is not someone looking at the account: it does not stop a
 desktop notification from being shown, and quitting a window does not count
 it among the windows it would close.
 
+A command that acts on the account waits for it to be ready: while the `tele`
+holding it connects, loads the chat list, or starts the next account after a
+log out. It waits 30 seconds at most. An account waiting for someone to log in
+exits 4 at once: logging in is done in a window.
+
+## Naming a chat
+
+A command names a chat in one of three ways, the same in every command:
+
+| Name        | Which chat                                                                     |
+| ----------- | ------------------------------------------------------------------------------ |
+| `42`        | The chat with that id, as `tele chats` prints it                               |
+| `@username` | The user, bot or channel with that username, in any case. One that is not among your chats is asked of Telegram |
+| `me`        | Your own chat, Saved Messages                                                  |
+
+A title names nothing: titles change, and two chats can share one. Anything
+else exits 2, and a name that is no chat exits 5.
+
 ## How commands are named
 
 1. The top level acts on Telegram; the `daemon` subtree acts on the `tele`
@@ -42,13 +60,13 @@ it among the windows it would close.
 | 2    | The command line could not be read: an unknown flag, command or argument        |
 | 3    | No `tele` holds the account to ask                                              |
 | 4    | The account is not logged in                                                    |
-| 5    | No such chat or topic                                                           |
+| 5    | No such chat, topic or folder                                                   |
 | 6    | A message could not be sent, and trying again will not change that              |
 | 75   | Gave up waiting while a message was still queued, or Telegram asked to wait; it may work later |
 
-4, 5, 6 and 75 are reserved for the commands that act on the account
-(listing chats, reading and sending), which come in a later release. A script
-will be able to tell 75, worth trying again later, from 6, which is not.
+6 and 75 are reserved for sending messages, which comes in a later release. A
+script will be able to tell 75, worth trying again later, from 6, which is
+not.
 
 ## JSON
 
@@ -63,12 +81,65 @@ will be able to tell 75, worth trying again later, from 6, which is not.
   none is renamed or removed before tele 3.
 - When a command fails, stdout stays empty: the exit code and stderr say why.
 
+## `tele chats --json`
+
+```json
+{"id":42,"title":"Bob","username":"bob","kind":"user","unread":3,"mentions":1,"reactions":0,"unread_mark":false,"muted":false,"archived":false,"forum":false}
+{"id":300,"title":"Gophers","kind":"group","unread":1,"mentions":0,"reactions":2,"unread_mark":true,"muted":true,"archived":false,"forum":true}
+```
+
+| Field         | What it is                                                                             |
+| ------------- | -------------------------------------------------------------------------------------- |
+| `id`          | What names the chat in every command                                                   |
+| `title`       | The chat's title, or the person's name                                                 |
+| `username`    | Its public username, without the `@`; left out when it has none                        |
+| `kind`        | `user`, `bot`, `group` or `channel`                                                    |
+| `unread`      | How many messages are unread; for a forum, how many of its topics have unread          |
+| `mentions`    | How many unread messages mention you                                                   |
+| `reactions`   | How many reactions to your messages you have not seen                                  |
+| `unread_mark` | Whether the chat is marked unread by hand                                              |
+| `muted`       | Whether its notifications are off                                                      |
+| `archived`    | Whether it is in the archive                                                           |
+| `forum`       | Whether it is a forum, whose messages are in its topics                                |
+
+## `tele topics --json`
+
+```json
+{"id":17,"title":"Releases","unread":4,"mentions":1,"reactions":0,"muted":true,"pinned":false,"closed":false}
+```
+
+| Field       | What it is                                                         |
+| ----------- | ------------------------------------------------------------------ |
+| `id`        | What `tele show --topic` takes                                     |
+| `title`     | The topic's title                                                  |
+| `unread`, `mentions`, `reactions` | As for a chat, counted in this topic         |
+| `muted`     | Whether the topic is muted, by its own setting or its forum's      |
+| `pinned`    | Whether it is pinned to the top of the list                        |
+| `closed`    | Whether only admins may write in it                                |
+
+## `tele show --json`
+
+```json
+{"id":512,"date":"2026-10-25T09:12:00+03:00","sender_id":77,"sender":"Ada Lovelace","out":true,"text":"morning!","reply_to":511}
+{"id":513,"date":"2026-10-25T09:13:00+03:00","sender_id":42,"sender":"Bob","out":false,"media":{"kind":"voice","duration":12}}
+```
+
+| Field       | What it is                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `id`        | The message's id, what `--before` takes                                                     |
+| `date`      | When it was sent                                                                            |
+| `sender_id`, `sender` | Who sent it, by id and by name; your own messages carry yours. In a channel, the channel |
+| `out`       | Whether you sent it                                                                         |
+| `text`      | Its text, or a media message's caption; left out when there is none                         |
+| `reply_to`  | The id of the message it answers; left out when it answers none                             |
+| `media`     | What media it carries, left out when it carries none: `kind` (`photo`, `video`, `round_video`, `voice`, `audio`, `sticker`, `gif`, `file`, `location` or `other`) and what the media says about itself: `duration` in seconds, `file_name`, `size` in bytes, `title`, `performer`, `emoji`. Never where a file is: nothing is downloaded |
+
 ## `tele daemon status --json`
 
 ```json
 {
   "state_dir": "/home/ada/.local/state/tele",
-  "host": {"binary": "2.0.0", "protocol": 5, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
+  "host": {"binary": "2.1.0", "protocol": 6, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
@@ -81,7 +152,7 @@ will be able to tell 75, worth trying again later, from 6, which is not.
     "outbox": 0,
     "throttle": {"method": "messages.getHistory", "until": "2026-10-21T12:41:42Z"}
   },
-  "this": {"binary": "2.0.0", "protocol": 5},
+  "this": {"binary": "2.1.0", "protocol": 6},
   "service_warning": "The service runs /opt/homebrew/bin/tele, which is not there any more."
 }
 ```

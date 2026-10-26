@@ -83,6 +83,9 @@ photos:
 avatars:
   disk_cache_size: 16777216 # 16 MB of people's pictures, budgeted separately
 
+cli:
+  sender_width: 20 # columns tele show gives a sender's name before cutting it short
+
 # keybindings: see keybindings.md
 ```
 
