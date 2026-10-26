@@ -107,6 +107,10 @@ func firstDelta(ctx context.Context, acc accountSurface, w project.Window) (proj
 // in: logging in takes a person, and a command does not wait for one.
 const notLoggedInCode = 4
 
+// notFoundCode is what a command exits with when the chat, topic or folder it
+// was given is not there.
+const notFoundCode = 5
+
 // awaitReady returns once the account is ready to be asked: its chat list is
 // loaded. Connecting and loading pass by themselves and are waited for; a
 // login waits on a person, and ends the command.

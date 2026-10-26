@@ -397,6 +397,10 @@ func (a *Attachment) Chat(ctx context.Context, chatID int64) (project.ChatRow, b
 	return f.row, f.ok, err
 }
 
+func (a *Attachment) ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (project.ChatRow, error) { return s.ResolveChat(ctx, name) })
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.FolderFilter, error) { return s.FolderFilters(ctx) })
 }

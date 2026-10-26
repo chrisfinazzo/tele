@@ -64,7 +64,8 @@ func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQu
 		return errors.New("the account answered with something other than its chats")
 	}
 	if q.folder != 0 && q.folder != domain.ArchiveFolderID && !hasFolder(list.Folders.Filters, q.folder) {
-		return fmt.Errorf("there is no folder %d. The folders are:\n%s", q.folder, foldersText(list.Folders.Filters))
+		return &exitCode{code: notFoundCode, msg: fmt.Sprintf(
+			"There is no folder %d. The folders are:\n%s", q.folder, strings.TrimSuffix(foldersText(list.Folders.Filters), "\n"))}
 	}
 	var rows []project.ChatRow
 	for _, c := range list.Rows {
@@ -140,22 +141,36 @@ func chatsJSON(out io.Writer, rows []project.ChatRow) error {
 }
 
 // chatsText is a line per chat: its id, its title and its badges, in columns.
-// A chat with no badges ends at its title, so no line carries trailing spaces.
 func chatsText(rows []project.ChatRow) string {
-	idW, titleW := 0, 0
+	lines := make([]columnLine, 0, len(rows))
 	for _, c := range rows {
-		idW = max(idW, len(fmt.Sprint(c.ID)))
-		titleW = max(titleW, ansi.StringWidth(c.Title))
+		lines = append(lines, columnLine{id: fmt.Sprint(c.ID), title: c.Title, badges: chatBadges(c)})
+	}
+	return columnsText(lines)
+}
+
+// columnLine is one line of a listing: what it lists by id and title, and its
+// badges.
+type columnLine struct {
+	id, title, badges string
+}
+
+// columnsText lays lines out in columns, measured as the terminal draws them.
+// A line with no badges ends at its title, so none carries trailing spaces.
+func columnsText(lines []columnLine) string {
+	idW, titleW := 0, 0
+	for _, l := range lines {
+		idW = max(idW, len(l.id))
+		titleW = max(titleW, ansi.StringWidth(l.title))
 	}
 	var b strings.Builder
-	for _, c := range rows {
-		id := fmt.Sprint(c.ID)
-		b.WriteString(id)
-		b.WriteString(strings.Repeat(" ", idW-len(id)+2))
-		b.WriteString(c.Title)
-		if badges := chatBadges(c); badges != "" {
-			b.WriteString(strings.Repeat(" ", titleW-ansi.StringWidth(c.Title)+2))
-			b.WriteString(badges)
+	for _, l := range lines {
+		b.WriteString(l.id)
+		b.WriteString(strings.Repeat(" ", idW-len(l.id)+2))
+		b.WriteString(l.title)
+		if l.badges != "" {
+			b.WriteString(strings.Repeat(" ", titleW-ansi.StringWidth(l.title)+2))
+			b.WriteString(l.badges)
 		}
 		b.WriteByte('\n')
 	}

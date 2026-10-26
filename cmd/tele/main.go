@@ -89,7 +89,7 @@ func newRootCmd() *cobra.Command {
 	_ = f.MarkHidden("theme-check")
 	_ = f.MarkHidden("theme-dump")
 
-	root.AddCommand(newChatsCmd(&o), newDaemonCmd(&o), newVersionCmd(), newThemeCmd(&o))
+	root.AddCommand(newChatsCmd(&o), newTopicsCmd(&o), newDaemonCmd(&o), newVersionCmd(), newThemeCmd(&o))
 	usageExits(root)
 	return root
 }

@@ -77,6 +77,9 @@ type Surface interface {
 	Topics(ctx context.Context, chatID int64) ([]project.TopicRow, error)
 	// Chat is one chat the owner holds; false for a person it can only address.
 	Chat(ctx context.Context, chatID int64) (project.ChatRow, bool, error)
+	// ResolveChat answers with the chat a command named, by id, username or
+	// as me; one nobody holds is PeerNotFound (#181).
+	ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without asking

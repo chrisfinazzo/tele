@@ -23,6 +23,11 @@ type stubClient struct {
 	internaltg.Client
 	err error
 
+	// byUsername is what ResolveUsername answers with; resolved is every
+	// username it was asked.
+	byUsername domain.Chat
+	resolved   []string
+
 	mutedWith     *bool
 	archivedWith  *bool
 	unreadWith    *bool

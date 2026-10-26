@@ -152,6 +152,10 @@ func (a *Attachment) Chat(ctx context.Context, chatID int64) (project.ChatRow, b
 	return ask2[project.ChatRow, bool](a, ctx, "Chat", chatID)
 }
 
+func (a *Attachment) ResolveChat(ctx context.Context, name core.ChatName) (project.ChatRow, error) {
+	return ask[project.ChatRow](a, ctx, "ResolveChat", name)
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return ask[[]domain.FolderFilter](a, ctx, "FolderFilters")
 }

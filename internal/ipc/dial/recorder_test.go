@@ -189,6 +189,10 @@ func (r *recorder) Chat(_ context.Context, chatID int64) (project.ChatRow, bool,
 	err := r.took("Chat", chatID)
 	return result[project.ChatRow](r, "Chat", 0), result[bool](r, "Chat", 1), err
 }
+func (r *recorder) ResolveChat(_ context.Context, name core.ChatName) (project.ChatRow, error) {
+	err := r.took("ResolveChat", name)
+	return result[project.ChatRow](r, "ResolveChat", 0), err
+}
 func (r *recorder) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	err := r.took("FolderFilters")
 	return result[[]domain.FolderFilter](r, "FolderFilters", 0), err

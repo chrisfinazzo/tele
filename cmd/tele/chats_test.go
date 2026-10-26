@@ -25,6 +25,10 @@ type fakeAccount struct {
 	// folder: which chats a folder holds is the owner's business.
 	chats   []project.ChatRow
 	folders []domain.FolderFilter
+	// byName is what each chat name resolves to; named is every name asked.
+	byName map[core.ChatName]project.ChatRow
+	named  []core.ChatName
+	topics map[int64][]project.TopicRow
 }
 
 func newFakeAccount() *fakeAccount {
@@ -244,8 +248,9 @@ func TestChats_AFolderThatIsNotThereIsSaid(t *testing.T) {
 
 	err := listChats(shortCtx(t), acc, &out, chatsQuery{folder: 9})
 
-	if err == nil {
-		t.Fatal("listed a folder that is not there")
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != notFoundCode {
+		t.Fatalf("got %v, want exit %d", err, notFoundCode)
 	}
 	assertSays(t, err.Error(), "9", "3 Work", "4 Family")
 	if out.Len() != 0 {

@@ -231,6 +231,11 @@ func (o *ownerStub) Chats(_ context.Context) ([]project.ChatRow, error) {
 	return rows, o.err
 }
 
+// ResolveChat is for commands; no window names a chat this way.
+func (o *ownerStub) ResolveChat(context.Context, core.ChatName) (project.ChatRow, error) {
+	return project.ChatRow{}, o.err
+}
+
 func (o *ownerStub) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
 	c, ok := o.state.Store().GetChat(chatID)
 	if !ok {
