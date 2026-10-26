@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-26
+
 ### Added
 
 - Commands that act on the account, asking the `tele` that holds it:
