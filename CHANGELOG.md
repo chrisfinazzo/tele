@@ -27,6 +27,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - `cli.name_width` (20 by default) is how many columns a command gives a name
   or title before cutting it short: a sender's in `tele show`, a chat's or a
   topic's in `tele chats` and `tele topics` (#181).
+- `tele send CHAT [TEXT...]` sends a message, from the words given or from
+  stdin, with its markup read as the composer reads it, and waits for it to
+  go. It exits 6 when the message will not go and 75 when it is still queued;
+  `--ref` keeps a retry from sending it twice, and `--no-wait` returns once it
+  is queued (#181).
+- `cli.account_commands` (`all`, `read` or `none`) says what commands may do
+  with your chats, for a script or an AI agent you let run `tele`. What it
+  does not allow exits 7. It is the setting of the `tele` holding the account,
+  and `tele daemon status` shows it (#181).
 
 ### Changed
 

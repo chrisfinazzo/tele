@@ -85,6 +85,7 @@ avatars:
 
 cli:
   name_width: 20 # columns a command gives a name or title before cutting it short
+  account_commands: all # all | read | none: what commands may do with your chats
 
 # keybindings: see keybindings.md
 ```

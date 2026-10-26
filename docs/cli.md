@@ -35,6 +35,29 @@ A command names a chat in one of three ways, the same in every command:
 A title names nothing: titles change, and two chats can share one. Anything
 else exits 2, and a name that is no chat exits 5.
 
+## Keeping commands out of your chats
+
+`cli.account_commands` in the config of the `tele` holding the account says
+what commands may do with it:
+
+| Value  | What commands may do                                                           |
+| ------ | ------------------------------------------------------------------------------ |
+| `all`  | Everything, the default                                                        |
+| `read` | List and show, and change nothing: `tele send` and `tele show --mark-read` are refused |
+| `none` | Nothing: every command acting on the account is refused                        |
+
+What is refused exits 7. It is meant for a script or an AI agent you let run
+`tele`: with `read` it can read your chats and not write to them, with `none`
+it gets nothing. It is the setting of the `tele` holding the account, not of
+the command, so a command given another config file is held to it all the
+same, and a command can never change the settings of the `tele` it asks.
+`tele daemon status` says what is allowed. Windows are not held to it.
+
+It keeps your chats from `tele`'s own commands, and no more. A program running
+as you can read the state directory itself, where the history and the session
+are, or talk to the `tele` holding the account as a window would. Keeping a
+program away from those is the job of file permissions or a sandbox.
+
 ## How commands are named
 
 1. The top level acts on Telegram; the `daemon` subtree acts on the `tele`
@@ -62,11 +85,13 @@ else exits 2, and a name that is no chat exits 5.
 | 4    | The account is not logged in                                                    |
 | 5    | No such chat, topic or folder                                                   |
 | 6    | A message could not be sent, and trying again will not change that              |
+| 7    | The `tele` holding the account does not let commands do this: see `cli.account_commands` |
 | 75   | Gave up waiting while a message was still queued, or Telegram asked to wait; it may work later |
 
-6 and 75 are reserved for sending messages, which comes in a later release. A
-script will be able to tell 75, worth trying again later, from 6, which is
-not.
+A script tells 75, worth trying again later, from 6, which is not. A message
+that got 75 is queued and goes on its own; running the same `tele send` with
+the same `--ref` waits for it again and does not send it twice. One that got
+6 stays in the chat, for a person to retry or discard in a window.
 
 ## JSON
 
@@ -134,6 +159,35 @@ not.
 | `reply_to`  | The id of the message it answers; left out when it answers none                             |
 | `media`     | What media it carries, left out when it carries none: `kind` (`photo`, `video`, `round_video`, `voice`, `audio`, `sticker`, `gif`, `file`, `location` or `other`) and what the media says about itself: `duration` in seconds, `file_name`, `size` in bytes, `title`, `performer`, `emoji`. Never where a file is: nothing is downloaded |
 
+## `tele send --json`
+
+Once the message went:
+
+```json
+{"chat_id":42,"message_id":512,"date":"2026-10-25T09:30:00+03:00"}
+```
+
+| Field        | What it is                                                                      |
+| ------------ | ------------------------------------------------------------------------------- |
+| `chat_id`    | The chat it went to                                                             |
+| `topic_id`   | The topic of a forum it went to; left out outside a forum                       |
+| `message_id` | The message it became; left out in the rare case Telegram named none            |
+| `date`       | When it went                                                                    |
+
+With `--no-wait`, once the message is queued:
+
+```json
+{"ref":"nightly-report","state":"queued"}
+```
+
+| Field   | What it is                                                                         |
+| ------- | ---------------------------------------------------------------------------------- |
+| `ref`   | What names the send: the `--ref` given, or one made up                             |
+| `state` | `queued`, `sending`, `failed`, or `sent` when the same ref had gone before          |
+
+A message that did not go prints nothing: the exit code (6 or 75) and stderr
+say why.
+
 ## `tele daemon status --json`
 
 ```json
@@ -143,6 +197,7 @@ not.
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
+  "account_commands": "all",
   "account": {
     "phase": "ready",
     "user": "ada",
@@ -164,6 +219,7 @@ not.
 | `since`            | When that `tele` started                                                                       |
 | `windows`          | How many windows are joined to it                                                              |
 | `commands`         | How many other commands are asking it right now                                                |
+| `account_commands` | What commands may do with the account: `all`, `read` or `none`, as [`cli.account_commands`](#keeping-commands-out-of-your-chats) says |
 | `account`          | The account, left out between one and the next                                                 |
 | `account.phase`    | `connecting`, `logging_in`, `loading` or `ready`                                               |
 | `account.user`     | The logged-in user's username, left out until Telegram has said or when there is none         |

@@ -10,6 +10,7 @@ the same from the binary itself.
 - [`tele chats`](#tele-chats)
 - [`tele topics`](#tele-topics)
 - [`tele show`](#tele-show)
+- [`tele send`](#tele-send)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
 - [`tele theme dump`](#tele-theme-dump)
@@ -113,6 +114,41 @@ A forum's messages are its topics': name one with `--topic`, or `show` exits
 | `--mark-read`  | Mark the chat (or the topic) read up to the last message printed                 |
 | `--json`       | A JSON object a message, described in [cli.md](cli.md#tele-show---json)          |
 
+## `tele send`
+
+```console
+tele send CHAT [TEXT...] [--topic ID] [--plain] [--ref KEY] [--timeout D] [--no-wait] [--json]
+echo "the build is green" | tele send @team
+```
+
+Sends a message: the words given, joined by spaces, or with none what comes on
+stdin. Its markup is read as the composer reads it (`**bold**`, `` `code` ``
+and the rest); `--plain` sends the text as it is. A forum is written to in its
+General topic unless `--topic` names another.
+
+The message is queued first, as one typed in a window is, so it survives the
+`tele` holding the account restarting. `send` then waits for it to go and
+prints the id of the message it became:
+
+- It exits 6 when the message will not go, saying why. The message stays in
+  the chat, for a person to retry or discard in a window.
+- It exits 75 when the time is up and the message is still queued, or when it
+  lost the `tele` it asked. The message goes on its own.
+
+`--ref` names the send. The same `tele send` run again with the same `--ref`
+does not send a second message: it waits for the first, or says it went. A
+script retrying after 75, or after losing the answer, uses it. A ref is
+remembered for 30 days after its message went.
+
+| Flag              | What it does                                                                    |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `--topic <id>`    | The topic of a forum to send to; General when left out                          |
+| `--plain`         | Send the text as it is, with no markup read in it                               |
+| `--ref <key>`     | Name the send, so that running the same command again does not send it twice    |
+| `--timeout <d>`   | How long to wait for the message to go, `30s` by default                        |
+| `--no-wait`       | Return once the message is queued, with its ref and where it stands             |
+| `--json`          | The answer as one JSON object, described in [cli.md](cli.md#tele-send---json)   |
+
 ## `tele version`
 
 ```console
@@ -182,9 +218,11 @@ Says how the `tele` holding the account is doing, a window's included: its
 version against this one's, what keeps it running (a window, `tele daemon` or
 the service) and since when, how many windows and other commands are joined
 to it, where the account stands, whether the link to Telegram is up, when the
-last update arrived, how many messages are waiting to be sent, and any wait
-Telegram asked for. It also warns when the installed service runs a command
-that is gone, or another version than this one.
+last update arrived, how many messages are waiting to be sent, any wait
+Telegram asked for, and whether commands are held back by
+[`cli.account_commands`](cli.md#keeping-commands-out-of-your-chats). It also
+warns when the installed service runs a command that is gone, or another
+version than this one.
 
 Exits 0 when a `tele` answers, and 3 when none does.
 
