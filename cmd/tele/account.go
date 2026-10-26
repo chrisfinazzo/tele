@@ -72,24 +72,27 @@ type heldAccount struct {
 }
 
 // askAccount runs ask against the account held for the config o names, once
-// it is ready. Reaching it, waiting and asking share readyTimeout.
-func askAccount(ctx context.Context, o options, ask func(context.Context, heldAccount) error) error {
+// it is ready. Reaching it and waiting for it share readyTimeout; ask has
+// within of its own, since a send waits on top of that.
+func askAccount(ctx context.Context, o options, within time.Duration, ask func(context.Context, heldAccount) error) error {
 	s, err := newSetup(o.cfgPath)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, readyTimeout)
-	defer cancel()
-	att, err := reachAccount(ctx, s)
+	readyCtx, cancelReady := context.WithTimeout(ctx, readyTimeout)
+	defer cancelReady()
+	att, err := reachAccount(readyCtx, s)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = att.Close() }()
-	acct, err := awaitReady(ctx, att)
+	acct, err := awaitReady(readyCtx, att)
 	if err != nil {
 		return err
 	}
-	return commandsOff(ask(ctx, heldAccount{accountSurface: att, me: acct.LoggedInUser, cfg: s.store.Current()}))
+	askCtx, cancelAsk := context.WithTimeout(ctx, within)
+	defer cancelAsk()
+	return commandsOff(ask(askCtx, heldAccount{accountSurface: att, me: acct.LoggedInUser, cfg: s.store.Current()}))
 }
 
 // firstDelta subscribes to w and returns what the subscription is answered

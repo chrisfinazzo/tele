@@ -38,7 +38,7 @@ func newShowCmd(o *options) *cobra.Command {
 			if q.limit < 1 || q.limit > maxShowLimit {
 				return &exitCode{code: usageCode, msg: fmt.Sprintf("--limit is from 1 to %d.", maxShowLimit)}
 			}
-			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
+			return askAccount(cmd.Context(), *o, readyTimeout, func(ctx context.Context, a heldAccount) error {
 				return showMessages(ctx, a, cmd.OutOrStdout(), args[0], q)
 			})
 		},

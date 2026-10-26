@@ -26,7 +26,7 @@ func newTopicsCmd(o *options) *cobra.Command {
 			if err := listLimit(cmd, q.limit); err != nil {
 				return err
 			}
-			return askAccount(cmd.Context(), *o, func(ctx context.Context, a heldAccount) error {
+			return askAccount(cmd.Context(), *o, readyTimeout, func(ctx context.Context, a heldAccount) error {
 				q.nameWidth = a.cfg.CLI.NameWidth
 				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], q)
 			})

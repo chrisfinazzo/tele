@@ -36,6 +36,11 @@ type fakeAccount struct {
 	historyAsked []historyAsk
 	markedRead   []historyAsk
 	markErr      error
+	// sent is every send queued; outcomes are what AwaitSend answers, in
+	// turn, and awaited how long it was asked to wait each time.
+	sent     []core.SendRequest
+	outcomes []outcome
+	awaited  []time.Duration
 }
 
 func newFakeAccount() *fakeAccount {
