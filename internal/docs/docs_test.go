@@ -5,6 +5,7 @@ package docs
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -39,22 +40,25 @@ var indexes = []string{"README.md", "docs/README.md"}
 // languages lists the translations by the code their files are named with.
 var languages = []string{"ru", "zh-CN"}
 
+// A document is named by its path from the repository with slashes, the way
+// links name it, on every OS: filepath comes in only to open it.
+
 // translation is where a language keeps its copy of an English document.
 func translation(english, lang string) string {
 	if english == "README.md" {
 		return "README." + lang + ".md"
 	}
-	return filepath.Join("docs", lang, strings.TrimPrefix(english, "docs/"))
+	return path.Join("docs", lang, strings.TrimPrefix(english, "docs/"))
 }
 
 func TestEveryDocumentIsTranslated(t *testing.T) {
 	for _, lang := range languages {
 		var want []string
 		for _, english := range translated {
-			path := translation(english, lang)
-			assert.FileExists(t, filepath.Join(root, path), "%s has no %s translation", english, lang)
-			if strings.HasPrefix(path, "docs/") {
-				want = append(want, filepath.Base(path))
+			doc := translation(english, lang)
+			assert.FileExists(t, filepath.Join(root, doc), "%s has no %s translation", english, lang)
+			if strings.HasPrefix(doc, "docs/") {
+				want = append(want, path.Base(doc))
 			}
 		}
 
@@ -75,10 +79,11 @@ var commitRe = regexp.MustCompile("`[0-9a-f]{7,40}`")
 func TestATranslationNamesItsOriginalAndCommit(t *testing.T) {
 	for _, lang := range languages {
 		for _, english := range translated {
-			path := translation(english, lang)
-			text := read(t, path)
-			original, err := filepath.Rel(filepath.Dir(path), english)
+			doc := translation(english, lang)
+			text := read(t, doc)
+			original, err := filepath.Rel(path.Dir(doc), english)
 			require.NoError(t, err)
+			original = filepath.ToSlash(original)
 
 			found := false
 			for _, line := range strings.Split(text, "\n") {
@@ -87,7 +92,7 @@ func TestATranslationNamesItsOriginalAndCommit(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "%s does not name %s and the commit it was translated at", path, original)
+			assert.True(t, found, "%s does not name %s and the commit it was translated at", doc, original)
 		}
 	}
 }
@@ -97,10 +102,10 @@ func TestATranslationNamesItsOriginalAndCommit(t *testing.T) {
 func TestATranslationKeepsEveryEnglishAnchor(t *testing.T) {
 	for _, lang := range languages {
 		for _, english := range translated {
-			path := translation(english, lang)
-			have := anchors(read(t, path))
+			doc := translation(english, lang)
+			have := anchors(read(t, doc))
 			for _, anchor := range anchors(read(t, english))[1:] {
-				assert.Contains(t, have, anchor, "%s has no section under %q, which %s has", path, anchor, english)
+				assert.Contains(t, have, anchor, "%s has no section under %q, which %s has", doc, anchor, english)
 			}
 		}
 	}
@@ -116,13 +121,13 @@ func TestIndexesLinkEveryOtherLanguage(t *testing.T) {
 	}
 	for _, english := range indexes {
 		for _, lang := range all {
-			path := in(english, lang)
-			targets := linkTargets(read(t, path), path)
+			doc := in(english, lang)
+			targets := linkTargets(read(t, doc), doc)
 			for _, other := range all {
 				if other == lang {
 					continue
 				}
-				assert.Contains(t, targets, in(english, other), "%s does not link its %q counterpart", path, other)
+				assert.Contains(t, targets, in(english, other), "%s does not link its %q counterpart", doc, other)
 			}
 		}
 	}
@@ -138,28 +143,28 @@ func TestLinksResolve(t *testing.T) {
 		}
 	}
 
-	for _, path := range docs {
-		text := read(t, path)
+	for _, doc := range docs {
+		text := read(t, doc)
 		for _, link := range links(text) {
 			file, anchor, _ := strings.Cut(link, "#")
-			target := path
+			target := doc
 			if file != "" {
-				target = filepath.Join(filepath.Dir(path), file)
+				target = path.Join(path.Dir(doc), file)
 			}
-			if _, err := os.Stat(filepath.Join(root, target)); !assert.NoError(t, err, "%s links %s", path, link) {
+			if _, err := os.Stat(filepath.Join(root, target)); !assert.NoError(t, err, "%s links %s", doc, link) {
 				continue
 			}
-			if anchor == "" || filepath.Ext(target) != ".md" {
+			if anchor == "" || path.Ext(target) != ".md" {
 				continue
 			}
-			assert.Contains(t, anchors(read(t, target)), anchor, "%s links %s, and %s has no such section", path, link, target)
+			assert.Contains(t, anchors(read(t, target)), anchor, "%s links %s, and %s has no such section", doc, link, target)
 		}
 	}
 }
 
-func read(t *testing.T, path string) string {
+func read(t *testing.T, doc string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(root, path))
+	b, err := os.ReadFile(filepath.Join(root, doc))
 	require.NoError(t, err)
 	return string(b)
 }
@@ -191,12 +196,12 @@ func links(text string) []string {
 }
 
 // linkTargets lists the files a document links, as paths from the repository.
-func linkTargets(text, path string) []string {
+func linkTargets(text, doc string) []string {
 	var out []string
 	for _, link := range links(text) {
 		file, _, _ := strings.Cut(link, "#")
 		if file != "" {
-			out = append(out, filepath.Join(filepath.Dir(path), file))
+			out = append(out, path.Join(path.Dir(doc), file))
 		}
 	}
 	return out

@@ -11,6 +11,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- 2.0.1 was tagged but never released: the documentation tests compared paths
+  with `\` on Windows and failed the release build. Everything listed under
+  2.0.1 ships in this release.
+
 ## [2.0.1] - 2026-10-26
 
 ### Added
