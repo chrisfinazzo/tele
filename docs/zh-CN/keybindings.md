@@ -1,6 +1,6 @@
 # 快捷键
 
-> 本文译自 [keybindings.md](../keybindings.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [keybindings.md](../keybindings.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 <a id="global"></a>
 ## 全局

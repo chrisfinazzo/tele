@@ -1,6 +1,6 @@
 # 命令行
 
-> 本文译自 [cli.md](../cli.md)，对应提交 `a64b8cf`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [cli.md](../cli.md)，对应提交 `33ee054`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 不带命令运行 `tele` 会打开一个窗口。所有命令及其参数见 [commands.md](commands.md)。本页说明所有命令共同遵守的约定：如何命名、以什么退出码结束、JSON 输出是什么样子。
 
@@ -171,7 +171,7 @@
 ```json
 {
   "state_dir": "/home/ada/.local/state/tele",
-  "host": {"binary": "2.1.0", "protocol": 6, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
+  "host": {"binary": "2.0.2", "protocol": 6, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
@@ -185,7 +185,7 @@
     "outbox": 0,
     "throttle": {"method": "messages.getHistory", "until": "2026-10-21T12:41:42Z"}
   },
-  "this": {"binary": "2.1.0", "protocol": 6},
+  "this": {"binary": "2.0.2", "protocol": 6},
   "service_warning": "The service runs /opt/homebrew/bin/tele, which is not there any more."
 }
 ```
