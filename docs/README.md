@@ -6,6 +6,7 @@ Installation and a quick tour live in the [root README](../README.md).
 
 ## Using tele
 
+- [Getting started](getting-started.md): the first launch, the service, the app key, upgrading from 1.11
 - [Commands](commands.md): every command and its flags
 - [Command line](cli.md): what commands exit with, their JSON, and how they are named
 - [Configuration](configuration.md): the config file, the settings overlay, Telegram's limits, notifications, photo and avatar caches

@@ -13,7 +13,7 @@ and never adds to it, and where the two disagree, the English one is right.
 | `docs/<name>.md`        | `docs/ru/<name>.md`        | `docs/zh-CN/<name>.md`        |
 
 The `docs/<name>.md` row covers `app-key`, `cli`, `commands`, `configuration`,
-`keybindings`, `media` and `themes`. The documents for those working on `tele`
+`getting-started`, `keybindings`, `media` and `themes`. The documents for those working on `tele`
 (this one, `development.md`, `gotd-workarounds.md`, `CONTRIBUTING.md`, the
 changelog) stay in English, and a translation links the English one.
 

@@ -29,6 +29,7 @@ var translated = []string{
 	"docs/cli.md",
 	"docs/commands.md",
 	"docs/configuration.md",
+	"docs/getting-started.md",
 	"docs/keybindings.md",
 	"docs/media.md",
 	"docs/themes.md",

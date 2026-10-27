@@ -14,6 +14,15 @@ inside them.
 Press `o` to open the full-quality image in an in-app modal viewer, with sender
 and timestamp on the border, or `O` to open it in an external viewer.
 
+### Photos on Windows
+
+Photos are block art on Windows. Inline images need a terminal that draws
+Kitty images through Unicode placeholder cells, and no Windows terminal does
+that yet. [WezTerm](https://wezterm.org) has the Kitty graphics protocol but
+not the placeholders ([wezterm#7924](https://github.com/wezterm/wezterm/pull/7924)).
+Once a terminal gains them, `photos.mode: kitty` turns inline images on before
+auto-detection learns to recognize it.
+
 ## Voice messages
 
 An amplitude waveform with duration, and in-app playback on `p` with an animated
