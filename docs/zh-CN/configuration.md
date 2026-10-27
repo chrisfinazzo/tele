@@ -1,6 +1,6 @@
 # 配置
 
-> 本文译自 [configuration.md](../configuration.md)，对应提交 `a64b8cf`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [configuration.md](../configuration.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 使用一个 YAML 文件，首次运行时创建：
 

@@ -1,6 +1,6 @@
 # 媒体
 
-> 本文译自 [media.md](../media.md)，对应提交 `33ee054`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [media.md](../media.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 在聊天中直接显示什么、自己播放什么、交给外部程序处理什么。相关设置都位于 `photos:` 下，见 [configuration.md](configuration.md#photos)。
 

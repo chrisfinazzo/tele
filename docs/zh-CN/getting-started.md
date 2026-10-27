@@ -1,6 +1,6 @@
 # 快速上手
 
-> 本文译自 [getting-started.md](../getting-started.md)，对应提交 `0eb84d9`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [getting-started.md](../getting-started.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 第一次运行 `tele` 时会发生什么，以及从 1.11 升级时有哪些变化。安装方法见 [README](../../README.zh-CN.md#installation)。
 

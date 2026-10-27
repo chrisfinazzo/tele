@@ -1,6 +1,6 @@
 # 应用密钥
 
-> 本文译自 [app-key.md](../app-key.md)，对应提交 `33ee054`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [app-key.md](../app-key.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 通过应用密钥连接 Telegram。应用密钥是一对 `api_id` 和 `api_hash`，它标识的是应用程序，而不是你本人。你不需要为它做任何事：每个构建都自带一个，登录可以直接进行。
 

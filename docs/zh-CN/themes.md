@@ -1,6 +1,6 @@
 # 主题
 
-> 本文译自 [themes.md](../themes.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [themes.md](../themes.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 tele 绘制的每种颜色都对应一个有名字的 token。**主题**为这些 token 赋值，你也可以编写自己的主题。
 
