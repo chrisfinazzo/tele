@@ -39,8 +39,8 @@ To bake your own key into a binary instead of reading it from the config, see
 ### Install an official build
 
 Official builds carry a key of their own: the Homebrew tap, the install script,
-apt, dnf, apk, Snap, Scoop and winget all ship binaries built by `tele`'s
-release pipeline.
+apt, dnf, apk, Scoop and winget all ship binaries built by `tele`'s release
+pipeline.
 
 ## Which formula is which
 

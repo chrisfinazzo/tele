@@ -31,8 +31,8 @@ backticks:
 ```
 
 The Simplified Chinese line also says that no native speaker has reviewed the
-translation yet and that corrections are welcome. Drop that sentence once one
-has.
+translation yet, and asks a reader who notices a mistake to open an issue. Drop
+those sentences once one has.
 
 The link and the commit stay on one line. When you bring a translation up to
 date, translate what changed since that commit (`git diff <commit> --

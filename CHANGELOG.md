@@ -55,9 +55,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Changed
 
-- `tele` 2.1 and 2.0 speak different protocols: a 2.1 command or window
-  restarts a 2.0 service on its own, and a 2.0 window has to be quit before a
-  2.1 one can join the account (#181).
+- `tele` 2.0.1 and 2.0.0 speak different protocols: a 2.0.1 command or window
+  restarts a 2.0.0 service on its own, and a 2.0.0 window has to be quit before
+  a 2.0.1 one can join the account (#181).
 
 ## [2.0.0] - 2026-10-23 — One tele for the account, and a service to keep it
 

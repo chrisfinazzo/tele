@@ -193,7 +193,7 @@ say why.
 ```json
 {
   "state_dir": "/home/ada/.local/state/tele",
-  "host": {"binary": "2.1.0", "protocol": 6, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
+  "host": {"binary": "2.0.2", "protocol": 6, "pid": 4242, "kept": "service", "config": "/home/ada/.config/tele/config.yml"},
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
@@ -207,7 +207,7 @@ say why.
     "outbox": 0,
     "throttle": {"method": "messages.getHistory", "until": "2026-10-21T12:41:42Z"}
   },
-  "this": {"binary": "2.1.0", "protocol": 6},
+  "this": {"binary": "2.0.2", "protocol": 6},
   "service_warning": "The service runs /opt/homebrew/bin/tele, which is not there any more."
 }
 ```

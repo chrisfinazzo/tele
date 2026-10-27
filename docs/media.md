@@ -60,7 +60,8 @@ split into separate albums automatically.
 voice messages or round videos (кружки) in-app, and it does not do real-time
 voice or video calls. As a terminal-native, cgo-free client it has no microphone
 or camera capture stack. This is an architectural boundary, not a missing
-feature on the roadmap.
+feature on the roadmap: recording is not planned, and the backlog does not hold
+it either.
 
 ## Optional dependency: `ffmpeg`
 

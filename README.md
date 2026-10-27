@@ -410,7 +410,7 @@ minor lines (`v1.11`, `v2.0`, …); patch releases ship incrementally within a l
 | `v2.0` _(done)_     | Single owner of the Telegram connection: windows that join one `tele`, a service that keeps it running at login, notifications with no window open, one budget for calls to Telegram; in 2.0.1, commands that list chats and topics, read a chat and send to it, and a guide for AI agents |
 | `v2.1`              | Rendering and layout: rich messages (tables, headings, lists), names with emoji drawn at their real width, a focused pane that takes the whole screen, an emoji picker in the composer                                                 |
 | `v2.2`              | More of the command line: logging in, search, sending files and reactions, following a chat as messages arrive                                                                                                                          |
-| `Backlog`           | Power-user & platform: search (full-text history, command palette, in-chat grep), voice and round-video messages, scheduled sending, bot commands & inline keyboards, secret chats, polls, extended vim motions, notification click routing |
+| `Backlog`           | Power-user & platform: search (full-text history, command palette, in-chat grep), scheduled sending, bot commands & inline keyboards, secret chats, polls, extended vim motions, notification click routing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.
