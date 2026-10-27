@@ -1,6 +1,6 @@
 # tele 文档
 
-> 本文译自 [README.md](../README.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [README.md](../README.md)，对应提交 `0eb84d9`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 [🇬🇧 English](../README.md) · [🇷🇺 Русский](../ru/README.md)
 
@@ -9,6 +9,7 @@
 <a id="using-tele"></a>
 ## 使用 tele
 
+- [快速上手](getting-started.md)：首次启动、服务、应用密钥、从 1.11 升级
 - [命令](commands.md)：所有命令及其参数
 - [命令行](cli.md)：命令的退出码、JSON 输出以及命名规则
 - [配置](configuration.md)：配置文件、设置面板、Telegram 的频率限制、通知、图片和头像缓存

@@ -1,6 +1,6 @@
 # 媒体
 
-> 本文译自 [media.md](../media.md)，对应提交 `04bd26c`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [media.md](../media.md)，对应提交 `0eb84d9`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 `tele` 在聊天中直接显示什么、自己播放什么、交给外部程序处理什么。相关设置都位于 `photos:` 下，见 [configuration.md](configuration.md#photos)。
 
@@ -10,6 +10,11 @@
 在 kitty、Ghostty 和 iTerm2 3.7.0 及以上版本中，图片通过 Kitty 图形协议以高画质直接显示在聊天中，其他终端则以 ANSI 字符块画回退显示。tmux 和 screen 不转发该协议，因此在它们中间图片显示为字符块画。
 
 按 `o` 在应用内的查看器中打开原画质图片，边框上显示发送者和时间；按 `O` 在外部查看器中打开。
+
+<a id="photos-on-windows"></a>
+### Windows 上的图片
+
+在 Windows 上图片显示为字符块画。聊天内图片需要终端能通过 Unicode 占位符单元格绘制 Kitty 图片，而目前还没有 Windows 终端能做到。[WezTerm](https://wezterm.org) 支持 Kitty 图形协议，但不支持占位符（[wezterm#7924](https://github.com/wezterm/wezterm/pull/7924)）。一旦有终端支持了它们，在自动检测学会识别该终端之前，`photos.mode: kitty` 就能开启聊天内图片。
 
 <a id="voice-messages"></a>
 ## 语音消息

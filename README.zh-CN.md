@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `01d0ee5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
+> 本文译自 [README.md](README.md)，对应提交 `0eb84d9`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校，欢迎提交修正。
 
 ```
   _            _
@@ -14,19 +14,15 @@
 
 <p align="center"><a href="README.md">🇬🇧 English</a> · <a href="README.ru.md">🇷🇺 Русский</a></p>
 
-[![Go](https://img.shields.io/badge/go-1.26+-blue)](https://go.dev)
-[![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sorokin-vladimir/tele)](https://github.com/sorokin-vladimir/tele/releases)
 [![Downloads](https://img.shields.io/github/downloads/sorokin-vladimir/tele/total?color=blue)](https://github.com/sorokin-vladimir/tele/releases)
-[![Stars](https://img.shields.io/github/stars/sorokin-vladimir/tele?style=flat)](https://github.com/sorokin-vladimir/tele/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/sorokin-vladimir/tele)](https://github.com/sorokin-vladimir/tele/commits/main)
+[![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)](#installation)
 
 <p align="center">
   <a href="#features">功能</a> •
+  <a href="#command-line-and-ai-agents">命令行</a> •
   <a href="#installation">安装</a> •
-  <a href="#why-tele">为什么选 tele？</a> •
-  <a href="#compared-to-other-terminal-clients">与其他 TUI 客户端对比</a> •
   <a href="#keybindings">快捷键</a> •
   <a href="#roadmap">路线图</a> •
   <a href="#documentation">文档</a>
@@ -36,73 +32,91 @@
 
 ![tele demo](./assets/demo.gif)
 
-> **状态：** 一个完整的终端 Telegram 客户端，作者每天都在使用：聊天、群组、频道和论坛、媒体、反应、文件夹，以及在没有打开窗口时也能收到的通知。尚未支持的功能列在[路线图](#roadmap)中。
-
 ---
 
 <a id="why-tele"></a>
 ## 为什么选 `tele`？
 
-Telegram Desktop、网页版和手机应用都是围绕鼠标操作设计的。
+Telegram Desktop、网页版和手机应用都是围绕鼠标设计的。如果你的日常工作都在终端里，用着 Neovim、yazi、k9s 或 tmux，切换到图形界面的聊天软件会打断你的节奏。
 
-如果你的日常工作都在终端里，用着 Neovim、yazi、k9s 或 tmux 这样的工具，切换到图形界面的聊天软件会打断你的节奏。
+`tele` 让 Telegram 留在终端里。你可以像用 lazygit 一样用键盘操作它，它能通过 SSH 使用，空闲时只占约 50 MB 内存，而桌面客户端要占几百 MB。作者每天都在用它。
 
-`tele` 让你留在终端里。
-
-它为以下场景而做：
-
-- 用键盘导航
-- 快速切换聊天
-- 通过 SSH 远程工作
-- 不受干扰地聊天
-
-如果你觉得 lazygit 这类工具用着顺手，`tele` 也会如此。
-
-它还很轻量：空闲时通常只占约 50MB RSS，而桌面客户端要占几百 MB。
-
----
-
-<a id="compared-to-other-terminal-clients"></a>
-## 与其他终端客户端对比
-
-几乎所有终端 Telegram 客户端都构建在 Telegram 的 C++ 库 TDLib 之上，要么直接链接，要么通过 Python 运行时调用。`tele` 通过 [gotd/td](https://github.com/gotd/td) 自己实现 MTProto，并且不依赖 cgo 构建，所以不需要下载或编译 C++ 库，不需要在机器上保留解释器，也不需要在应用完全可用之前安装一连串可选的辅助程序。
-
-|                  | `tele`                                                           | [tgt](https://github.com/FedericoBruzzone/tgt)                                                                  | [tg](https://github.com/paul-nameless/tg) · [tuigram](https://codeberg.org/Yehoslav/tuigram)                              |
-| ---------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 语言             | Go                                                               | Rust                                                                                                            | Python                                                                                                                    |
-| Telegram 后端    | gotd/td，纯 Go 实现的 MTProto                                    | TDLib                                                                                                           | 通过 `python-telegram` 使用 TDLib                                                                                         |
-| 需要安装什么     | 一个静态二进制文件                                               | `cargo install`，加上下载或自行构建的 TDLib；语音消息需要 CMake；聊天内图片需要系统安装的 `chafa`               | Python 3.9+/3.10+ 运行时加 TDLib；完整功能还需要 `ffmpeg`、`terminal-notifier`、`urlview`、`ranger`/`fzf`                 |
-| 软件包           | brew、apt、dnf、zypper、apk、nix、scoop、winget、签名的 deb/rpm  | crates.io、AUR、nix、Docker                                                                                     | PyPI、AUR、Docker                                                                                                         |
-| 聊天内图片       | Kitty 图形协议原画质显示，回退为 ANSI 字符块画                   | `chafa` 字符块画，需开启可选的构建特性                                                                          | 通过 mailcap 交给外部查看器                                                                                               |
-| Windows          | 二进制文件、Scoop、winget                                        | 支持                                                                                                            | 实际不可用                                                                                                                |
-| 无窗口时         | 从登录起作为服务运行；没有窗口也能收到通知                       | 只在它的终端打开时运行；未声明支持桌面通知                                                                      | 只在它的终端打开时运行；通过外部命令通知（`terminal-notifier`、`dunst`）                                                  |
-| 发布节奏         | 每周发布稳定版，另有独立的测试版渠道                             | 最新版本为 `v1.0.0-rc1`；最近的提交都是依赖更新                                                                 | `tg` 隔几个月集中发布一次；`tuigram` 是一个分叉的分叉                                                                     |
-
-除了打包方式，`tele` 还支持现代 Telegram 中这三者都没有声明支持的部分：反应、聊天文件夹、以相册形式发送，以及视频、圆形视频和 GIF 的聊天内预览。语音消息在应用内播放，带有波形和移动的播放位置，不需要外部播放器，也不需要用 CMake 构建 Opus 解码器。聊天从本地 SQLite 历史中即时打开；主题以八个内置调色板的形式提供，会随着终端背景在深色和浅色之间切换（`tele theme check` 可以检查对比度）；每个按键都能按上下文重新绑定，包括组合键序列。
-
-它们领先的地方：`tg` 和 `tuigram` 可以录制语音消息（通过 `ffmpeg`），并支持私密聊天。前者不在 `tele` 的范围内（[原因](docs/zh-CN/media.md#recording-is-out-of-scope)），后者在 [待办列表](https://github.com/sorokin-vladimir/tele/issues/234)中。全文消息搜索也还在[路线图](#roadmap)上。
-
-已完全停止维护的项目没有列入表格：`TelegramTUI`（已标记为弃用，最后一次修改在 2022 年）、`arigram`（已归档）、`tg-tui`（2018 年）、`Telegram-TUI`、`tg9` 和 `ithil`（早期原型）。
+同一个 `tele` 也能在命令行中使用：你，或者你允许运行它的 AI 代理，可以列出聊天、读取聊天并发送消息，而无需打开窗口。
 
 ---
 
 <a id="features"></a>
 ## 功能
 
-- **键盘优先**：vim 风格的导航（`gg/G`、插入模式），还有逐条消息移动的光标（`j/k`），它在气泡间逐个跳转，是上下文菜单和消息操作的作用对象。鼠标支持是可选的：可以点击聊天或面板，用滚轮滚动。
-- **没有窗口也能收到通知**：`tele daemon install` 让 `tele` 从登录系统起保持运行（launchd、systemd 用户单元或任务计划程序），所以关闭窗口后账号仍然在线，桌面通知照常到达。再次打开 `tele` 时，它会连接到正在运行的那个，而不是再建立一次连接；在两个终端中打开，两边显示的是同一个账号：[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md#running-without-a-window)
-- **完整的 Telegram 支持**：私聊、群组、频道、论坛话题、回复、反应、编辑、转发，以及与 Telegram 同步的每个聊天的草稿。
-- **聊天内图片**：在 kitty、Ghostty 和 iTerm2 3.7.0+ 中通过 Kitty 图形协议以原画质显示，其他终端用 ANSI 字符块画显示。`o` 在应用内查看器中打开图片。
-- **语音消息**：带时长的波形，按 `p` 在应用内播放，并有移动的播放位置。无需外部播放器，也不依赖 cgo。
-- **视频、圆形视频和 GIF**：聊天内的缩略图，选中的 GIF 会在原位循环播放。
-- **发送媒体**：用 `u` 附加文件；再按一次可以添加更多文件，作为一个相册发送。
-- **和官方客户端一样的代理**：MTProto 代理（服务器、端口以及 `tg://proxy` 链接中的 secret，包括 fake-TLS）或 SOCKS5 代理，只在配置中为 `tele` 设置，而不是为整个 shell 设置，并且每个连接都会使用它，包括下载：[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md#proxy)
-- **终端原生设计**：从一开始就为终端工作流编写，而不是从图形客户端移植过来。单个静态 Go 二进制文件，启动快，内存占用低。
-- **简单的配置**：一个带合理默认值的 YAML 文件，以及按 `,` 打开的设置面板，它编辑的就是同一个文件，注释等内容都会保留。
+- **键盘优先。** vim 风格的导航，以及在消息之间逐条移动的光标。鼠标是可选的。
+- **没有窗口也能收到通知。** `tele daemon install` 让账号从登录系统起保持在线。
+- **一个账号，多个窗口。** 第二个 `tele` 会连接到正在运行的那个，而不是重新建立连接。
+- **聊天、群组、频道和论坛**，支持文件夹、回复、反应、编辑、转发，以及与 Telegram 同步的草稿。
+- **聊天内图片**：在 kitty、Ghostty 和 iTerm2 3.7.0+ 中以原画质显示，其他终端中显示为字符块画。
+- **语音消息在应用内播放**，带有波形和移动的播放位置。
+- **视频、圆形视频和 GIF** 在聊天中显示预览。选中的 GIF 会在原位循环播放。
+- **相册。** 用 `u` 添加多个文件，作为一个相册发送。
+- **和官方客户端一样的代理**：MTProto（包括 fake-TLS）或 SOCKS5。
+- **命令行**，用于读取和发送消息，并附有给 AI 代理的指南。
+- **主题**随终端在深色和浅色之间切换。二进制文件中附带八个主题。
+- **单个静态二进制文件。** 不需要 TDLib，不依赖 cgo，也不需要安装运行时。
 
-> **不支持录制。** `tele` 可以*发送*预先录好的音频或视频文件，但不能录制语音消息或圆形视频，也不支持语音或视频通话：作为不依赖 cgo 的终端原生客户端，它没有采集麦克风或摄像头的能力。这是架构上的边界，路线图中也没有相关计划。
+`tele` 不能录制语音或视频，也不能通话：[原因](docs/zh-CN/media.md#recording-is-out-of-scope)。各种媒体类型的详细说明：[docs/zh-CN/media.md](docs/zh-CN/media.md)。
 
-各种媒体类型、应用内播放以及可选依赖 `ffmpeg` 的详细说明：[docs/zh-CN/media.md](docs/zh-CN/media.md)
+---
+
+<a id="command-line-and-ai-agents"></a>
+## 命令行与 AI 代理
+
+命令作用于正在运行的 `tele` 所持有的账号，无论它是窗口还是服务：
+
+```sh
+tele chats --unread          # 有未读消息的聊天
+tele show me --limit 5       # 收藏夹中的最新消息
+tele send me "buy milk"      # 发送，并等待 Telegram 收到
+```
+
+给任意命令加上 `--json` 即可输出 JSON Lines。所有命令：[docs/zh-CN/commands.md](docs/zh-CN/commands.md)。退出码和 JSON：[docs/zh-CN/cli.md](docs/zh-CN/cli.md)。
+
+`tele help agents` 会打印给 AI 代理的指南，这份指南对应你安装的 `tele` 版本。`tele` 技能会把代理引向这份指南。
+
+<details>
+<summary>安装技能</summary>
+
+| 代理               | 安装技能                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| Claude Code        | `/plugin install tele --marketplace sorokin-vladimir/tele`                                      |
+| GitHub Copilot CLI | `copilot plugin marketplace add sorokin-vladimir/tele`，然后 `copilot plugin install tele@tele` |
+| OpenAI Codex       | `npx skills add sorokin-vladimir/tele -a codex`                                                 |
+| Cursor             | `npx skills add sorokin-vladimir/tele -a cursor`                                                |
+| Gemini CLI         | `npx skills add sorokin-vladimir/tele -a gemini-cli`                                            |
+
+Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace add sorokin-vladimir/tele`，然后 `claude plugin install tele@tele`。不带 `-a` 运行 `npx skills add sorokin-vladimir/tele` 时，它会询问要安装到它所知道的哪些代理中，包括 OpenCode 等。
+
+</details>
+
+命令能做到哪一步由 `cli.account_commands` 决定：设为 `read` 时它们可以读取但不能发送，设为 `none` 时它们什么也拿不到。[docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)
+
+---
+
+<a id="compared-to-other-terminal-clients"></a>
+## 与其他终端客户端对比
+
+几乎所有终端 Telegram 客户端都构建在 Telegram 的 C++ 库 TDLib 之上，要么直接链接，要么通过 Python 调用。`tele` 通过 [gotd/td](https://github.com/gotd/td) 自己实现 MTProto，并且不依赖 cgo 构建。
+
+|                  | `tele`                                         | [tgt](https://github.com/FedericoBruzzone/tgt)                              | [tg](https://github.com/paul-nameless/tg) · [tuigram](https://codeberg.org/Yehoslav/tuigram) |
+| ---------------- | ---------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Telegram 后端    | gotd/td，纯 Go 实现的 MTProto                  | TDLib                                                                       | 通过 `python-telegram` 使用 TDLib                                                             |
+| 需要安装什么     | 一个静态二进制文件                             | `cargo install` 加 TDLib；语音消息需要 CMake；聊天内图片需要 `chafa`        | Python 3.9+/3.10+ 加 TDLib；`ffmpeg`、`terminal-notifier`、`urlview`、`ranger`/`fzf`          |
+| 聊天内图片       | Kitty 图形协议原画质显示，字符块画             | `chafa` 字符块画，需开启可选的构建特性                                      | 通过 mailcap 交给外部查看器                                                                   |
+| 无窗口时         | 从登录起作为服务运行；没有窗口也能收到通知     | 只在它的终端打开时运行                                                      | 只在它的终端打开时运行                                                                        |
+| Windows          | 二进制文件、Scoop、winget                      | 支持                                                                        | 实际不可用                                                                                    |
+
+`tele` 还有这三者都没有声明支持的功能：反应、聊天文件夹、以相册形式发送、视频、圆形视频和 GIF 的聊天内预览，以及无需外部播放器的语音播放。
+
+`tg` 和 `tuigram` 可以录制语音消息，`tele` 不做这件事（[原因](docs/zh-CN/media.md#recording-is-out-of-scope)）；它们还支持私密聊天，这在 `tele` 的[待办列表](https://github.com/sorokin-vladimir/tele/issues/234)中。
+
+已停止维护的项目没有列入对比：`TelegramTUI`、`arigram`、`tg-tui`、`Telegram-TUI`、`tg9` 和 `ithil`。
 
 ---
 
@@ -144,10 +158,10 @@ brew trust sorokin-vladimir/tap
 brew install sorokin-vladimir/tap/tele
 ```
 
-两个 formula 都特意写了全名。添加 tap 之后，直接运行 `brew install tele` 会选用 tap 中的 formula，而且只用一行 `Warning: tele shadows homebrew/core/tele` 提示，很容易在滚动时错过。两者有一处值得了解的区别，见[应用密钥](#app-key)。
+两个 formula 都特意写了全名。添加 tap 之后，直接运行 `brew install tele` 会选用 tap 中的 formula，而且只用一行 `Warning: tele shadows homebrew/core/tele` 提示，很容易在滚动时错过。两者有一处值得了解的区别，见 [docs/zh-CN/app-key.md](docs/zh-CN/app-key.md#which-formula-is-which)。
 
-<a id="macos--linux---homebrew-beta-channel"></a>
-### macOS / Linux：Homebrew（测试版渠道）
+<details>
+<summary>测试版渠道</summary>
 
 想比每周的稳定版更早用上最新合并的改动，可以从同一个 tap 安装测试版。它是一个独立的 `tele-beta` 二进制文件，有自己的配置和状态（`~/.config/tele-beta`），所以可以和稳定版并存：
 
@@ -160,8 +174,13 @@ brew upgrade tele-beta   # 有新测试版时拉取更新
 
 测试版来自预发布标签（`vX.Y.Z-beta.N`），在 GitHub 上以预发布版本发布，所以永远不会显示为“最新”版本。用 `tele-beta` 运行。
 
-<a id="linux---binary"></a>
-### Linux：二进制文件
+</details>
+
+<a id="other-platforms"></a>
+### 其他平台
+
+<details>
+<summary>Linux：二进制文件</summary>
 
 ```sh
 curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-linux-amd64 \
@@ -170,8 +189,10 @@ curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-
 
 arm64 上把 `amd64` 换成 `arm64`。
 
-<a id="debian--ubuntu--mint---apt"></a>
-### Debian / Ubuntu / Mint：apt
+</details>
+
+<details>
+<summary>Debian / Ubuntu / Mint：apt</summary>
 
 ```sh
 echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
@@ -179,8 +200,12 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-<a id="fedora--rhel--opensuse---dnf--zypper"></a>
-### Fedora / RHEL / openSUSE：dnf / zypper
+每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.deb` 文件。
+
+</details>
+
+<details>
+<summary>Fedora / RHEL / openSUSE：dnf / zypper</summary>
 
 ```sh
 sudo tee /etc/yum.repos.d/tele.repo <<'EOF'
@@ -193,22 +218,33 @@ EOF
 sudo dnf install tele   # 或：sudo zypper install tele
 ```
 
-<a id="alpine---apk"></a>
-### Alpine：apk
+每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.rpm` 文件。
+
+</details>
+
+<details>
+<summary>Alpine：apk</summary>
 
 ```sh
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
 
-> 每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.deb` 和 `.rpm` 文件。
+</details>
 
-> AUR 和 Snap 软件包已在计划中，但尚未发布。
+<details>
+<summary>Windows：Scoop、winget 或二进制文件</summary>
 
-<a id="windows---binary"></a>
-### Windows：二进制文件
+通过 [Scoop](https://scoop.sh) 或 [winget](https://learn.microsoft.com/windows/package-manager/)：
 
-用 PowerShell 下载可执行文件（以普通用户身份运行）：
+```powershell
+scoop bucket add tele https://github.com/sorokin-vladimir/scoop-tele
+scoop install tele
+# 或
+winget install sorokin-vladimir.tele
+```
+
+或者用 PowerShell 下载可执行文件（以普通用户身份运行）：
 
 ```powershell
 $dir = "$Env:LOCALAPPDATA\Programs\tele"
@@ -218,21 +254,14 @@ Invoke-WebRequest `
   -OutFile "$dir\tele.exe"
 ```
 
-arm64 上把 `amd64` 换成 `arm64`。把 `$dir` 加入 `PATH`（或者用完整路径运行 `tele.exe`），然后在任意终端中启动。在 Windows 上图片显示为 ANSI 字符块画：聊天内图片需要终端能通过 Unicode 占位符单元格绘制 Kitty 图片，而目前还没有 Windows 终端能做到。[WezTerm](https://wezterm.org) 支持 Kitty 图形协议，但不支持占位符（[wezterm#7924](https://github.com/wezterm/wezterm/pull/7924)）。一旦有终端支持了它们，在自动检测学会识别该终端之前，`photos.mode: kitty` 就能开启聊天内图片。
+arm64 上把 `amd64` 换成 `arm64`。把 `$dir` 加入 `PATH`（或者用完整路径运行 `tele.exe`），然后在任意终端中启动。每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带一个包含 `tele.exe` 的 `.zip`（`tele_windows_amd64.zip`）。
 
-> 每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)都附带一个包含 `tele.exe` 的 `.zip`（`tele_windows_amd64.zip`）。
+目前在 Windows 上图片显示为字符块画：[docs/zh-CN/media.md](docs/zh-CN/media.md#photos-on-windows)。
 
-> 通过包管理器安装：[Scoop](https://scoop.sh) 或 [winget](https://learn.microsoft.com/windows/package-manager/)：
->
-> ```powershell
-> scoop bucket add tele https://github.com/sorokin-vladimir/scoop-tele
-> scoop install tele
-> # 或
-> winget install sorokin-vladimir.tele
-> ```
+</details>
 
-<a id="nix--nixos"></a>
-### Nix / NixOS
+<details>
+<summary>Nix / NixOS</summary>
 
 `tele` 提供了一个 flake。无需安装即可试用：
 
@@ -268,106 +297,18 @@ environment.systemPackages = [
 ];
 ```
 
-仓库中还提供了用于本地开发的 `nix develop` 环境（go、golangci-lint、lefthook）。
+</details>
+
+AUR 和 Snap 软件包已在计划中，但尚未发布。
 
 ---
 
-<a id="first-launch"></a>
-## 首次启动
+<a id="getting-started"></a>
+## 快速上手
 
-```sh
-tele
-```
+运行 `tele`，用手机号、Telegram 发给你的验证码以及两步验证密码（如果设置了）登录。之后 `tele` 会询问一次是否作为服务继续运行。
 
-首次运行时，`tele` 会创建：
-
-```text
-~/.config/tele/config.yml
-```
-
-然后依次询问：
-
-- 手机号
-- 短信验证码
-- 两步验证密码（如果设置了）
-
-登录后，`tele` 会询问一次是否作为服务在后台持续运行。回答 `y`，关闭窗口后账号仍然在线，通知照常到达；回答 `n` 或按 Esc，`tele` 只在窗口打开时运行，和以前一样。之后可以用 `tele daemon install` 或 `tele daemon uninstall` 改变主意。在无法安装服务的地方，或者服务已经安装时，不会询问。
-
-<a id="upgrading-from-111"></a>
-### 从 1.11 升级
-
-- 在已有 `tele` 运行时再打开一个，不会再报错：第二个会作为同一账号的另一个窗口连接到第一个。
-- 登录后，`tele` 会询问一次是否作为服务运行（见上文）。
-- 参数现在使用两个短横线（`--config`、`--debug`）；短参数 `-e` 仍然可用。版本号和主题工具改成了命令：`tele version`、`tele theme check`、`tele theme dump`。
-- 1.11 和 2.0 不能同时使用同一个账号：启动 2.0 前请先退出 1.11。
-
-完整的变更记录（英文）：[CHANGELOG.md](CHANGELOG.md)
-
-<a id="app-key"></a>
-### 应用密钥
-
-`tele` 通过应用密钥连接 Telegram。应用密钥是一对 `api_id` 和 `api_hash`，它标识的是应用程序，而不是你本人。你不需要为它做任何事：每个构建都自带一个，上面的登录可以直接进行。
-
-从公开源码编译的构建（homebrew-core、Nix flake、BSD 移植版、你自己的 `go build`）共用同一个密钥。Telegram 可能会拒绝它认为被过多人共用的密钥，这时 `tele` 会提示 `app key blocked by Telegram`，而不会误报你已退出登录。有两种解决办法，选更省事的那种即可。
-
-在 [my.telegram.org](https://my.telegram.org) 注册自己的密钥，然后写入 `~/.config/tele/config.yml`。你提供的密钥总是优先于内置密钥：
-
-```yaml
-telegram:
-  api_id: 123456
-  api_hash: "your api hash"
-```
-
-两项要么都填，要么都不填：如果配置中只写了一项，`tele` 在启动时就会停止。
-
-或者安装自带独立密钥的官方构建：上面的 Homebrew tap、安装脚本、apt、dnf、apk、Snap、Scoop 和 winget 提供的都是由 `tele` 发布流水线构建的二进制文件。
-
-更多内容，包括哪个 Homebrew formula 带哪个密钥：[docs/zh-CN/app-key.md](docs/zh-CN/app-key.md)
-
----
-
-<a id="commands"></a>
-## 命令
-
-| 命令                      | 说明                                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------------------- |
-| `tele`                    | 打开一个显示账号的窗口                                                                          |
-| `tele chats`              | 列出聊天：全部、未读、已归档或某个文件夹中的                                                    |
-| `tele topics CHAT`        | 列出论坛的话题                                                                                  |
-| `tele show CHAT`          | 打印聊天的最新消息，用 `--before` 一页一页往前翻                                                |
-| `tele send CHAT [TEXT]`   | 发送一条消息，内容来自传入的单词或 stdin，并等待它发出                                          |
-| `tele version`            | 打印版本号                                                                                      |
-| `tele theme check [NAME]` | 说明每个槽位解析成了哪个主题以及 token 来自何处，或者对按名称指定的一个主题做同样检查           |
-| `tele theme dump [NAME]`  | 把槽位的主题或指定名称的主题输出为完整的主题文件（`tele theme dump light`）                     |
-| `tele daemon`             | 在没有窗口的情况下持有账号，保持连接和通知；窗口可以连接到它                                    |
-| `tele daemon status`      | 说明持有账号的 `tele` 的运行状况（`--json` 供脚本使用）；没有时以退出码 3 结束                  |
-| `tele daemon install`     | 让 `tele` 作为服务在每次登录时运行：launchd、systemd 用户单元或任务计划程序                     |
-| `tele daemon uninstall`   | 停止并删除服务；状态和配置保持不变                                                              |
-
-| 参数                    | 说明                                                                                           |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `-c`, `--config <path>` | 配置文件路径（默认 `~/.config/tele/config.yml`）                                               |
-| `-e`, `--debug`         | 启用调试日志                                                                                   |
-| `--trace`               | 记录敏感元数据（对方 id、消息长度）。切勿在共享或同步的文件系统上使用                          |
-
-所有命令和参数的完整说明：[docs/zh-CN/commands.md](docs/zh-CN/commands.md)。退出码、JSON 输出和命令的命名规则：[docs/zh-CN/cli.md](docs/zh-CN/cli.md)。无窗口运行：[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md#running-without-a-window)。
-
-<a id="for-ai-agents"></a>
-### 面向 AI 代理
-
-你允许运行 `tele` 的 AI 代理可以替你读取聊天、发送消息。`tele help agents` 会打印它应当遵循的指南，这份指南对应你安装的 `tele` 版本。`tele` 技能会自动把代理引向这份指南：
-
-| 代理               | 安装技能                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| Claude Code        | `/plugin install tele --marketplace sorokin-vladimir/tele`                              |
-| GitHub Copilot CLI | `copilot plugin marketplace add sorokin-vladimir/tele`，然后 `copilot plugin install tele@tele` |
-| OpenAI Codex       | `npx skills add sorokin-vladimir/tele -a codex`                                         |
-| Cursor             | `npx skills add sorokin-vladimir/tele -a cursor`                                        |
-| Gemini CLI         | `npx skills add sorokin-vladimir/tele -a gemini-cli`                                    |
-
-Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace add sorokin-vladimir/tele`，然后 `claude plugin install tele@tele`。不带 `-a` 运行 `npx skills add sorokin-vladimir/tele` 时，它会询问要安装到它所知道的哪些代理中，包括 OpenCode 等。
-
-代理能做到哪一步由 `cli.account_commands` 决定：设为 `read` 时它可以读取但不能发送，设为 `none` 时它什么也拿不到。见 [docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)。
+首次启动、服务、应用密钥以及从 1.11 升级：[docs/zh-CN/getting-started.md](docs/zh-CN/getting-started.md)
 
 ---
 
@@ -403,54 +344,11 @@ Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace ad
 <a id="configuration"></a>
 ## 配置
 
-所有配置都在一个 YAML 文件 `~/.config/tele/config.yml` 中，首次运行时创建。
+所有配置都在 `~/.config/tele/config.yml` 中。按 `,` 打开设置面板：其中列出所有设置项，修改会写入同一个文件，并保留你的注释。[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md)
 
-按 `,` 打开设置面板：其中列出 `tele` 的所有设置项，顺序和分组与文件一致，并显示每项的当前值以及修改何时生效。修改会直接写入 `config.yml`，保留你的注释和空行，所以手动编辑文件和在面板中编辑是一回事。
+`tele` 同时持有一个深色主题和一个浅色主题，并随终端背景的变化在它们之间切换。二进制文件中附带八个主题，你自己的主题是只设置它要改的颜色的文件。[docs/zh-CN/themes.md](docs/zh-CN/themes.md)
 
-最常修改的设置：
-
-```yaml
-ui:
-  history_limit: 50 # messages fetched per chat on open
-  confirm_quit: false # ask before q/ctrl+c/ctrl+q closes tele
-  # theme: # omit for the built-in tele-dark / tele-light
-  #   dark: my-dark # ~/.config/tele/themes/my-dark.yml
-  #   light: my-light
-
-  notifications:
-    desktop: true # hand it to the OS notification service
-    toast: true # draw it in a corner of tele's own window
-    preview: true # set false to send the sender's name and no message text
-
-photos:
-  mode: auto # auto | kitty | blocks - inline image renderer
-  disk_cache_size: 268435456 # 256 MB of fetched chat media kept between runs
-```
-
-其他所有键及其作用：[docs/zh-CN/configuration.md](docs/zh-CN/configuration.md)
-
-<a id="themes"></a>
-### 主题
-
-`tele` 同时持有两个主题，并随终端背景的变化在它们之间切换：`ui.theme.dark` 和 `ui.theme.light`。不设置 `ui.theme` 时，使用内置的 `tele-dark` 和 `tele-light`。
-
-二进制文件中附带了八个现成的主题：Catppuccin Macchiato、Dracula、Gruvbox Dark、Nord、Tokyo Night（Night、Moon 和 Day）和 Seoul256 Light。无需安装或复制任何东西：写上名字就能用。
-
-```yaml
-ui:
-  theme: tokyonight-night
-```
-
-你自己的主题是 `~/.config/tele/themes/` 中的文件，主题只需设置它关心的 token，其余的会继承。随附主题的源文件带有详细注释，说明每个主题移植自哪个调色板，位于 [`themes/`](themes/)。
-
-编写主题、所有 token 以及对比度检查：[docs/zh-CN/themes.md](docs/zh-CN/themes.md)
-
-<a id="customizing-keybindings"></a>
-### 自定义快捷键
-
-在配置文件的 `keybindings:` 一节中覆盖默认按键。生成的配置中已经以注释形式列出了每个操作及其当前默认按键，并按上下文分组。
-
-按键语法、组合键序列、冲突的处理方式以及完整的操作名列表：[docs/zh-CN/keybindings.md](docs/zh-CN/keybindings.md#customizing-keybindings)
+每个按键都能在配置的 `keybindings:` 一节中按上下文重新绑定，包括组合键序列。[docs/zh-CN/keybindings.md](docs/zh-CN/keybindings.md#customizing-keybindings)
 
 ---
 
@@ -462,8 +360,9 @@ ui:
 | 版本                | 重点                                                                                                                                                                                                                                     |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.11` _(已完成)_  | 设置与用户：应用内设置面板、用户资料面板、头像、内置于二进制文件的主题，以及遗留的分发和审查问题                                                                                                                                         |
-| `v2.0` _(已完成)_   | Telegram 连接的唯一持有者：连接到同一个 `tele` 的多个窗口、从登录起保持其运行的服务、没有窗口也能收到的通知、对 Telegram 调用的统一额度                                                                                                  |
-| `v2.1`              | 脚本化：列出聊天和话题、读取聊天并向其发送消息的命令，支持 JSON 输出；之后是富文本消息                                                                                                                                                   |
+| `v2.0` _(已完成)_   | Telegram 连接的唯一持有者：连接到同一个 `tele` 的多个窗口、从登录起保持其运行的服务、没有窗口也能收到的通知、对 Telegram 调用的统一额度；2.0.1 加入了列出聊天和话题、读取聊天并向其发送消息的命令，以及给 AI 代理的指南                 |
+| `v2.1`              | 渲染与布局：富文本消息（表格、标题、列表）、按实际宽度显示含 emoji 的名字、让聚焦的面板占满整个屏幕、撰写消息时选择 emoji                                                                                                               |
+| `v2.2`              | 更多命令行功能：登录、搜索、发送文件和反应、随新消息到达持续跟踪聊天                                                                                                                                                                     |
 | `Backlog`           | 进阶用户与平台：搜索（全文历史搜索、命令面板、聊天内搜索）、语音和圆形视频消息、定时发送、机器人命令和内联键盘、私密聊天、投票、更多 vim 动作、点击通知跳转                                                                              |
 
 工作还按看板上的 **Theme** 字段分类（Security & Reliability、Architecture & Performance、Feature Completeness、Power User & Polish）。
@@ -473,7 +372,7 @@ ui:
 <a id="build-from-source"></a>
 ## 从源码构建
 
-需要 Go 1.26+。这样构建出的二进制文件带有[应用密钥](#app-key)中描述的共用密钥，因此无需注册任何东西就能运行：
+需要 Go 1.26+。这样构建出的二进制文件带有 [docs/zh-CN/app-key.md](docs/zh-CN/app-key.md) 中描述的共用密钥，因此无需注册任何东西就能运行：
 
 ```sh
 git clone https://github.com/sorokin-vladimir/tele
@@ -488,6 +387,7 @@ go build -o tele ./cmd/tele/
 <a id="documentation"></a>
 ## 文档
 
+- [快速上手](docs/zh-CN/getting-started.md)：首次启动、服务、应用密钥、从 1.11 升级
 - [命令](docs/zh-CN/commands.md)：所有命令及其参数
 - [命令行](docs/zh-CN/cli.md)：命令的退出码、JSON 输出以及命名规则
 - [配置](docs/zh-CN/configuration.md)：配置文件、设置面板、通知、图片和头像缓存
