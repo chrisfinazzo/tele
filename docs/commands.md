@@ -49,7 +49,9 @@ See [Running without a window](configuration.md#running-without-a-window).
 tele chats [--unread] [--archived | --folder ID] [--limit N] [--json]
 ```
 
-Lists the chats in the order the chat list shows them, a line each: the chat's id, its title and its badges (unread, mentions, reactions, marked unread, muted, and for a forum how many of its topics have unread).
+Lists the chats in the order the chat list shows them, a line each: the chat's id, its @username, its title and its badges (unread, mentions, reactions, marked unread, muted, and for a forum how many of its topics have unread).
+A chat with no username leaves that column blank, and when no chat in the list has one the column is left out.
+A username is never cut short, so it can be pasted into a command as it is.
 The badges start in one column, after the widest title; a title wider than `cli.name_width` columns (20 by default) is cut short.
 With no flag it is the main list, without the archived chats.
 

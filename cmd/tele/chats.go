@@ -172,7 +172,11 @@ func chatsJSON(out io.Writer, rows []project.ChatRow) error {
 func chatsText(rows []project.ChatRow, nameWidth int) string {
 	lines := make([]columnLine, 0, len(rows))
 	for _, c := range rows {
-		lines = append(lines, columnLine{id: fmt.Sprint(c.ID), title: c.Title, badges: chatBadges(c)})
+		l := columnLine{id: fmt.Sprint(c.ID), title: c.Title, badges: chatBadges(c)}
+		if c.Username != "" {
+			l.username = "@" + c.Username
+		}
+		lines = append(lines, l)
 	}
 	return columnsText(lines, nameWidth)
 }
@@ -187,26 +191,33 @@ func cutName(name string, width int) string {
 	return strings.TrimRight(ansi.Truncate(name, width-1, ""), " ") + "…"
 }
 
-// columnLine is one line of a listing: what it lists by id and title, and its
-// badges.
+// columnLine is one line of a listing: what it lists by id, username and
+// title, and its badges.
 type columnLine struct {
-	id, title, badges string
+	id, username, title, badges string
 }
 
 // columnsText lays lines out in columns, measured as the terminal draws them,
-// with each title cut at nameWidth. A line with no badges ends at its title,
-// so none carries trailing spaces.
+// with each title cut at nameWidth. A username is never cut, since a cut one
+// cannot be pasted into a command, and its column is left out when no line
+// has one. A line with no badges ends at its title, so none carries trailing
+// spaces.
 func columnsText(lines []columnLine, nameWidth int) string {
-	idW, titleW := 0, 0
+	idW, userW, titleW := 0, 0, 0
 	for i, l := range lines {
 		lines[i].title = cutName(l.title, nameWidth)
 		idW = max(idW, len(l.id))
+		userW = max(userW, len(l.username))
 		titleW = max(titleW, ansi.StringWidth(lines[i].title))
 	}
 	var b strings.Builder
 	for _, l := range lines {
 		b.WriteString(l.id)
 		b.WriteString(strings.Repeat(" ", idW-len(l.id)+2))
+		if userW > 0 {
+			b.WriteString(l.username)
+			b.WriteString(strings.Repeat(" ", userW-len(l.username)+2))
+		}
 		b.WriteString(l.title)
 		if l.badges != "" {
 			b.WriteString(strings.Repeat(" ", titleW-ansi.StringWidth(l.title)+2))

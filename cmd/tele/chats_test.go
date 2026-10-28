@@ -254,6 +254,31 @@ func TestChats_CutsALongTitle(t *testing.T) {
 	}
 }
 
+// A chat's @username has its own column between the id and the title, so the
+// name a command takes is on screen. It is never cut, since a cut one cannot
+// be pasted, and a chat with none leaves the column blank (#328).
+func TestChats_ShowsTheUsername(t *testing.T) {
+	acc := newFakeAccount()
+	acc.chats = []project.ChatRow{
+		{ID: 42, Title: "Bob", Username: "bob", Unread: 3},
+		{ID: 100500, Title: "Julia"},
+		{ID: 7, Title: "Gophers", Username: "golang_gophers_chat", Muted: true},
+	}
+	var out bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, chatsQuery{nameWidth: 10}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "" +
+		"42      @bob                  Bob      3 unread\n" +
+		"100500                        Julia\n" +
+		"7       @golang_gophers_chat  Gophers  muted\n"
+	if out.String() != want {
+		t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
 // --limit keeps the first chats of what the other flags leave: the first two
 // with unread, here, and not the first two of the list (#181).
 func TestChats_LimitKeepsTheFirstOfWhatIsLeft(t *testing.T) {
